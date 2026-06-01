@@ -31,8 +31,14 @@
 <div class="submit-bar">
   <button id="submit-toggle" class="submit-toggle">+ Add a listing</button>
   <div id="submit-form" class="submit-form hidden">
-    <input type="url" id="submit-url" placeholder="Paste Airbnb, VRBO, or Booking.com URL…" autocomplete="off">
-    <input type="text" id="submit-price-input" placeholder="5-night price you see (e.g. 5022) — optional" title="Paste the total price shown for Aug 18–23 on the listing page">
+    <div class="submit-url-row">
+      <input type="url" id="submit-url" placeholder="Paste Airbnb, VRBO, or Booking.com URL…" autocomplete="off">
+      <a id="submit-open-link" class="submit-open-link hidden" target="_blank" rel="noopener" title="Opens listing with Aug 18–23 dates so you can see the price">Open with trip dates →</a>
+    </div>
+    <div class="submit-price-row">
+      <input type="text" id="submit-price-input" placeholder="Total price for Aug 18–23 (paste from listing)">
+      <span class="submit-price-hint">Copy from the listing page after clicking the link above</span>
+    </div>
     <input type="text" id="submit-name-input" placeholder="Your name (optional)" maxlength="60">
     <button id="submit-btn">Submit</button>
     <span id="submit-msg" class="submit-msg"></span>

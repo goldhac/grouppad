@@ -372,6 +372,26 @@ document.getElementById('f-split').addEventListener('input', (e) => {
 })();
 
 // ── Submit form ───────────────────────────────────────────────────────────────
+
+// Live "open with trip dates" helper link
+document.getElementById('submit-url').addEventListener('input', (e) => {
+  const raw  = e.target.value.trim();
+  const link = document.getElementById('submit-open-link');
+  if (!raw) { link.classList.add('hidden'); return; }
+  let dated = null;
+  const abM = raw.match(/airbnb\.com\/rooms\/(\d+)/i);
+  const vbM = raw.match(/vrbo\.com\/(\d+)/i);
+  if (abM) {
+    dated = `https://www.airbnb.com/rooms/${abM[1]}?check_in=2026-08-18&check_out=2026-08-23&adults=14`;
+  } else if (vbM) {
+    dated = `https://www.vrbo.com/${vbM[1]}?startDate=2026-08-18&endDate=2026-08-23&adults=14`;
+  } else if (/booking\.com\/hotel/i.test(raw)) {
+    dated = raw.split('?')[0] + '?checkin=2026-08-18&checkout=2026-08-23&group_adults=14';
+  }
+  if (dated) { link.href = dated; link.classList.remove('hidden'); }
+  else        { link.classList.add('hidden'); }
+});
+
 document.getElementById('submit-toggle').addEventListener('click', () => {
   const form = document.getElementById('submit-form');
   form.classList.toggle('hidden');
