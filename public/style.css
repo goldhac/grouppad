@@ -233,6 +233,28 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
 .vote-btn:hover { color: var(--text); }
 .vote-btn .count { font-weight: 600; min-width: 12px; }
 
+/* Admin */
+.admin-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); font-size: 12px; padding: 4px 12px;
+  border-radius: 6px; cursor: pointer; white-space: nowrap;
+  transition: color .15s, border-color .15s;
+}
+.admin-btn:hover { color: var(--text); border-color: #4a525f; }
+.admin-btn.admin-active { color: var(--warn); border-color: rgba(240,180,64,0.4); }
+
+.delete-btn {
+  background: rgba(244,112,112,0.1); color: var(--danger);
+  border: 1px solid rgba(244,112,112,0.3);
+  border-radius: 5px; padding: 2px 8px; font-size: 11px;
+  cursor: pointer; white-space: nowrap; font-weight: 600;
+  transition: background .15s;
+}
+.delete-btn:hover { background: rgba(244,112,112,0.2); }
+.delete-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.submitted-by-line { font-size: 11px; color: var(--muted); margin-top: -4px; }
+
 /* Community submissions */
 .submitted-section { margin-top: 0; }
 .submitted-section.hidden { display: none; }
