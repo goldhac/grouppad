@@ -214,19 +214,82 @@ function vrboPhotosFromHtml(html) {
 }
 
 function extractPrice(html, source) {
-  if (source === 'Airbnb') {
-    const m = html.match(/"price"\s*:\s*\{\s*"amount"\s*:\s*(\d+(?:\.\d+)?)/);
-    if (m) return Math.round(+m[1]);
+  // Ordered from most-specific to least-specific
+  const patterns = [
+    // Airbnb SSR accessibility label: "$5,022 total" (appears in __NEXT_DATA__ when dates provided)
+    { re: /"accessibilityLabel"\s*:\s*"\\?\$([\d,]+)(?:\.\d+)?\s+total"/i,     scale: 1 },
+    // Airbnb: totalAmount.amount (JSON object form)
+    { re: /"totalAmount"\s*:\s*\{\s*"[a-z]+"\s*:\s*(\d+(?:\.\d+)?)\s*\}/i,     scale: 1 },
+    // Airbnb: amountMicros (divide by 1,000,000)
+    { re: /"totalAmount"[^}]{0,80}"amountMicros"\s*:\s*"(\d+)"/i,               scale: 1e-6 },
+    { re: /"total"[^}]{0,80}"amountMicros"\s*:\s*"(\d+)"/i,                     scale: 1e-6 },
+    // Airbnb: flat totalAmount number
+    { re: /"totalAmount"\s*:\s*(\d{4,6}(?:\.\d+)?)\b/,                          scale: 1 },
+    // VRBO
+    { re: /"totalRent"\s*:\s*(\d+(?:\.\d+)?)/i,                                 scale: 1 },
+    { re: /"rentalAmount"\s*:\s*(\d+(?:\.\d+)?)/i,                              scale: 1 },
+    { re: /"lodgingPrice"\s*:\s*\{\s*"[a-z]+"\s*:\s*(\d+(?:\.\d+)?)/i,         scale: 1 },
+    // Generic: "$5,022 total" anywhere on page
+    { re: /\$\s*([\d,]+(?:\.\d{2})?)\s+total\b/i,                               scale: 1 },
+    // Generic: "$X,XXX for 5 nights"
+    { re: /\$\s*([\d,]+)\s+for\s+5\s+nights?/i,                                 scale: 1 },
+  ];
+
+  for (const { re, scale } of patterns) {
+    const m = html.match(re);
+    if (m) {
+      const val = Math.round(parseFloat(m[1].replace(/,/g, '')) * scale);
+      if (val >= 1000 && val <= 150000) return val;
+    }
   }
-  const vb = html.match(/"(?:totalRent|rentalAmount|totalPrice|total_price)"\s*:\s*(\d+(?:\.\d+)?)/);
-  if (vb) return Math.round(+vb[1]);
-  const gen = html.match(/\$\s*([\d,]+(?:\.\d{2})?)\s*(?:total|for 5 nights|\/5 nights)/i);
-  if (gen) return Math.round(parseFloat(gen[1].replace(/,/g, '')));
   return null;
 }
 
+// Airbnb calendar API: nightly base rates only (no cleaning/service fees)
+// Used as last-resort fallback when HTML price extraction fails
+async function fetchAirbnbCalendarPrice(listingId) {
+  try {
+    const key = 'd306zoyjsyarp7ufs3il2wss7kmpq5fz'; // Airbnb public frontend key
+    const url = `https://www.airbnb.com/api/v2/calendar_months?currency=USD&key=${key}` +
+                `&listing_id=${listingId}&month=8&year=2026&count=1`;
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 6000);
+    const res  = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible)', 'X-Airbnb-Api-Key': key },
+    });
+    clearTimeout(tid);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const days       = data?.calendar_months?.[0]?.days || [];
+    const checkDates = new Set(['2026-08-18','2026-08-19','2026-08-20','2026-08-21','2026-08-22']);
+    let total = 0, found = 0;
+    for (const d of days) {
+      if (checkDates.has(d.date) && d.price?.native_amount) {
+        total += d.price.native_amount;
+        found++;
+      }
+    }
+    return found === 5 ? Math.round(total) : null;
+  } catch { return null; }
+}
+
+// Trip dates — fixed for Aug 18-23, 2026
+const TRIP = { checkin: '2026-08-18', checkout: '2026-08-23', adults: 14 };
+
+function urlWithDates(cleanUrl, source) {
+  if (source === 'Airbnb') {
+    return `${cleanUrl}?check_in=${TRIP.checkin}&check_out=${TRIP.checkout}&adults=${TRIP.adults}`;
+  }
+  if (source === 'VRBO') {
+    return `${cleanUrl}?startDate=${TRIP.checkin}&endDate=${TRIP.checkout}&adults=${TRIP.adults}`;
+  }
+  return cleanUrl;
+}
+
 async function scrapeListingDetails(cleanUrl, parsed) {
-  const html = await fetchHtml(cleanUrl);
+  // Fetch with trip dates so the server returns price-specific HTML
+  const html = await fetchHtml(urlWithDates(cleanUrl, parsed.source));
 
   const result = {
     name: null, area: 'Los Angeles area', photos: [],
@@ -328,7 +391,16 @@ async function scrapeListingDetails(cleanUrl, parsed) {
 
   // ── Price ─────────────────────────────────────────────────────────────────
   const rawPrice = extractPrice(html, parsed.source);
-  if (rawPrice && rawPrice > 500 && rawPrice < 200000) result.displayed_5n = rawPrice;
+  if (rawPrice) {
+    result.displayed_5n = rawPrice;
+  } else if (parsed.source === 'Airbnb') {
+    // Fallback: Airbnb calendar API gives nightly base rates (no cleaning/service)
+    const calPrice = await fetchAirbnbCalendarPrice(parsed.id);
+    if (calPrice) {
+      result.displayed_5n = calPrice;
+      result.priceIsBaseOnly = true; // flag so the note reflects this
+    }
+  }
 
   result.photos = result.photos.slice(0, 8);
   if (!result.name) result.name = `${parsed.source} listing ${parsed.id}`;
@@ -441,7 +513,9 @@ app.post('/api/submit', async (req, res) => {
     submitted_by:  by,
     submitted_at:  new Date().toISOString().slice(0, 10),
     note: est5n
-      ? `Community submission by ${by}. Auto-detected price — verify at booking step.`
+      ? scraped.priceIsBaseOnly
+        ? `Community submission by ${by}. Price shows base nightly rates only (excl. cleaning & service fees) — verify total at booking step.`
+        : `Community submission by ${by}. Auto-detected price — verify total at booking step.`
       : `Community submission by ${by}. Price not auto-detected — check listing for pricing.`,
   };
 
