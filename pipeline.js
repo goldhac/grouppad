@@ -323,7 +323,7 @@ async function discoverAirbnb() {
   });
   console.log(`  Returned ${items.length} items`);
 
-  return items
+  const mapped = items
     .filter(item => item && item.id)   // guard: skip rows with no id (avoids PK collisions)
     .map(item => {
       const { bedrooms, beds } = parseAirbnbSubtitles(item.subtitles);
@@ -351,6 +351,15 @@ async function discoverAirbnb() {
         price_total: parsePrice(item.pricing?.price || item.pricing?.label),
       };
     });
+
+  // Region guard: the scraper sometimes bleeds in out-of-area results
+  // (Houston, Atlantic City, etc.). Drop anything whose known coordinates put
+  // it well outside greater LA. Keep rows with unknown distance (null).
+  const REGION_MAX_MI = 150;
+  const inRegion = mapped.filter(r => r.distance_mi == null || r.distance_mi <= REGION_MAX_MI);
+  const dropped = mapped.length - inRegion.length;
+  if (dropped > 0) console.log(`  Dropped ${dropped} out-of-region listings (>${REGION_MAX_MI}mi from DTLA)`);
+  return inRegion;
 }
 
 // ── Stage 2 — Upsert ──────────────────────────────────────────────────────────
