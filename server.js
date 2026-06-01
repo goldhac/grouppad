@@ -103,12 +103,97 @@ function flattenJsonLd(nodes) {
   return out;
 }
 
-function airbnbPhotosFromNextData(html) {
+// Airbnb og:title: "Home in Los Angeles · ★4.67 · 7 bedrooms · 7 beds · 6.5 private baths"
+function parseAirbnbTitle(title, result) {
+  const parts = title.split('·').map(s => s.trim()).filter(Boolean);
+  if (!parts.length) return;
+
+  // First segment: "Home in Los Angeles" or "Entire home in Los Angeles"
+  result.name = parts[0];
+  const areaM = parts[0].match(/\bin\s+(.+)$/i);
+  if (areaM) result.area = areaM[1].trim();
+
+  for (const part of parts.slice(1)) {
+    if (!result.rating) {
+      const rM = part.match(/^★([\d.]+)$/);
+      if (rM) { result.rating = +rM[1]; continue; }
+    }
+    if (!result.bd) {
+      const bdM = part.match(/^(\d+)\s*bedroom/i);
+      if (bdM) { result.bd = +bdM[1]; continue; }
+    }
+    if (!result.ba) {
+      const baM = part.match(/^([\d.]+)\s*(?:private\s+)?bath/i);
+      if (baM) { result.ba = parseFloat(baM[1]); continue; }
+    }
+    if (!result.sleeps) {
+      const slM = part.match(/^(\d+)\s*guests?$/i);
+      if (slM) { result.sleeps = +slM[1]; continue; }
+    }
+  }
+}
+
+// VRBO og:title: "Property Name | 7 bedrooms, 5 baths, sleeps 16 | VRBO"
+function parseVrboTitle(title, result) {
+  const clean = title.replace(/\s*\|\s*vrbo\s*$/i, '').trim();
+  const segs  = clean.split('|').map(s => s.trim()).filter(Boolean);
+  if (segs[0]) result.name = segs[0];
+
+  for (const seg of segs) {
+    if (!result.bd) {
+      const bdM = seg.match(/(\d+)\s*(?:bd|bedroom)/i);
+      if (bdM) result.bd = +bdM[1];
+    }
+    if (!result.ba) {
+      const baM = seg.match(/([\d.]+)\s*ba(?:th)?/i);
+      if (baM) result.ba = parseFloat(baM[1]);
+    }
+    if (!result.sleeps) {
+      const slM = seg.match(/sleeps?\s*(\d+)/i);
+      if (slM) result.sleeps = +slM[1];
+    }
+  }
+}
+
+// Detect pool/parking from raw JSON patterns embedded in HTML
+function detectAmenities(html, result) {
+  if (result.pool === 'unknown') {
+    if (/["'](?:Pool|Private pool|Swimming pool|Outdoor pool|Indoor pool)["']/i.test(html) ||
+        /"(?:has_pool|private_pool|pool_available)"\s*:\s*true/i.test(html) ||
+        /"pool"\s*:\s*(?:true|"yes")/i.test(html)) {
+      result.pool = 'yes';
+    }
+  }
+  if (result.parking === 'unknown') {
+    if (/["'](?:Free parking|Paid parking|Driveway|Garage|Street parking|Parking available|Free street parking)["']/i.test(html) ||
+        /"(?:has_parking|free_parking|parking_available)"\s*:\s*true/i.test(html)) {
+      result.parking = 'yes';
+    }
+  }
+}
+
+// Extract review count from various JSON patterns in the HTML
+function extractReviewCount(html) {
+  const patterns = [
+    /"reviewCount"\s*:\s*"?(\d+)"?/i,
+    /"review_count"\s*:\s*(\d+)/i,
+    /"reviewsCount"\s*:\s*(\d+)/i,
+    /"ratingCount"\s*:\s*(\d+)/i,
+    /"numberOfRatings"\s*:\s*(\d+)/i,
+    /"numReviews"\s*:\s*(\d+)/i,
+  ];
+  for (const p of patterns) {
+    const m = html.match(p);
+    if (m && +m[1] > 0) return +m[1];
+  }
+  return null;
+}
+
+function airbnbPhotosFromHtml(html) {
   const photos = [];
-  // Grab all muscache CDN image URLs from the page source
-  const re = /"(https?:\/\/a0\.muscache\.com\/im\/pictures\/[^"?]+\.jpeg)"/g;
-  let m;
+  const re   = /"(https?:\/\/a0\.muscache\.com\/im\/pictures\/[^"?]+\.jpeg)"/g;
   const seen = new Set();
+  let m;
   while ((m = re.exec(html)) !== null) {
     if (!seen.has(m[1])) { seen.add(m[1]); photos.push(m[1]); }
     if (photos.length >= 8) break;
@@ -118,9 +203,9 @@ function airbnbPhotosFromNextData(html) {
 
 function vrboPhotosFromHtml(html) {
   const photos = [];
-  const re = /"(https?:\/\/media\.vrbo\.com\/lodging\/[^"?]+\.jpg)"/g;
-  let m;
+  const re   = /"(https?:\/\/media\.vrbo\.com\/lodging\/[^"?]+\.jpg)"/g;
   const seen = new Set();
+  let m;
   while ((m = re.exec(html)) !== null) {
     if (!seen.has(m[1])) { seen.add(m[1]); photos.push(m[1]); }
     if (photos.length >= 8) break;
@@ -128,18 +213,15 @@ function vrboPhotosFromHtml(html) {
   return photos;
 }
 
-// Try to extract a nightly price or 5-night total from the page
 function extractPrice(html, source) {
-  // Look for JSON price data patterns
-  // Airbnb: "price":{"amount":XXX
-  const ab = html.match(/"price"\s*:\s*\{\s*"amount"\s*:\s*(\d+(?:\.\d+)?)/);
-  if (ab && source === 'Airbnb') return Math.round(+ab[1]);
-  // VRBO: "totalRent":XXX or "rentalAmount":XXX
-  const vb = html.match(/"(?:totalRent|rentalAmount|totalPrice)"\s*:\s*(\d+(?:\.\d+)?)/);
+  if (source === 'Airbnb') {
+    const m = html.match(/"price"\s*:\s*\{\s*"amount"\s*:\s*(\d+(?:\.\d+)?)/);
+    if (m) return Math.round(+m[1]);
+  }
+  const vb = html.match(/"(?:totalRent|rentalAmount|totalPrice|total_price)"\s*:\s*(\d+(?:\.\d+)?)/);
   if (vb) return Math.round(+vb[1]);
-  // Generic: $X,XXX or $X,XXX.XX
-  const generic = html.match(/\$\s*([\d,]+(?:\.\d{2})?)\s*(?:total|for 5 nights|\/5 nights)/i);
-  if (generic) return Math.round(parseFloat(generic[1].replace(/,/g, '')));
+  const gen = html.match(/\$\s*([\d,]+(?:\.\d{2})?)\s*(?:total|for 5 nights|\/5 nights)/i);
+  if (gen) return Math.round(parseFloat(gen[1].replace(/,/g, '')));
   return null;
 }
 
@@ -156,54 +238,61 @@ async function scrapeListingDetails(cleanUrl, parsed) {
 
   if (!html) return result;
 
-  // og: tags baseline
+  // ── Source-specific og:title parsing ──────────────────────────────────────
   const ogTitle = ogTag(html, 'title');
-  if (ogTitle) result.name = ogTitle.replace(/\s*[|\-–—].*$/, '').trim();
+  if (ogTitle) {
+    if (parsed.source === 'Airbnb') {
+      parseAirbnbTitle(ogTitle, result);
+    } else if (parsed.source === 'VRBO') {
+      parseVrboTitle(ogTitle, result);
+    } else {
+      result.name = ogTitle.replace(/\s*[|·\-–—].*$/, '').trim();
+    }
+  }
+
+  // og:image as first photo
   const ogImg = ogTag(html, 'image');
-  if (ogImg) result.photos.push(ogImg);
+  if (ogImg && !result.photos.includes(ogImg)) result.photos.push(ogImg);
 
-  // og:description often has "X bedroom · X bathroom · sleeps X"
+  // og:description / meta description for additional clues
   const desc = ogTag(html, 'description') || metaTag(html, 'description') || '';
-  const bdM  = desc.match(/(\d+)\s*bed(?:room)?s?/i);
-  const baM  = desc.match(/(\d+)\s*bath(?:room)?s?/i);
-  const slM  = desc.match(/sleeps?\s*(\d+)/i);
-  if (bdM) result.bd = +bdM[1];
-  if (baM) result.ba = +baM[1];
-  if (slM) result.sleeps = +slM[1];
+  if (!result.bd)     { const m = desc.match(/(\d+)\s*bed(?:room)?s?/i);   if (m) result.bd     = +m[1]; }
+  if (!result.ba)     { const m = desc.match(/(\d+(?:\.\d+)?)\s*bath/i);   if (m) result.ba     = +m[1]; }
+  if (!result.sleeps) { const m = desc.match(/sleeps?\s*(\d+)/i);          if (m) result.sleeps = +m[1]; }
+  if (result.area === 'Los Angeles area') {
+    const m = desc.match(/\bin\s+([A-Z][^,.\n·]+)/);
+    if (m) result.area = m[1].trim();
+  }
 
-  // Parse address hint
-  const addrM = desc.match(/in\s+([A-Z][^,.\n]+(?:,\s*[A-Z][A-Za-z\s]+)?)/);
-  if (addrM) result.area = addrM[1].trim();
-
-  // JSON-LD
-  const jsonLdRaw = extractJsonLd(html);
-  const nodes = flattenJsonLd(jsonLdRaw);
+  // ── JSON-LD ────────────────────────────────────────────────────────────────
+  const nodes = flattenJsonLd(extractJsonLd(html));
   for (const node of nodes) {
-    if (!result.name && node.name) result.name = String(node.name);
-    if (node.numberOfRooms && !result.bd) result.bd = +node.numberOfRooms || null;
-    if (node.numberOfBathroomsTotal && !result.ba) result.ba = +node.numberOfBathroomsTotal || null;
-    if (node.occupancy && !result.sleeps) result.sleeps = +node.occupancy || null;
+    if (!result.name  && node.name)                  result.name   = String(node.name);
+    if (!result.bd    && node.numberOfRooms)         result.bd     = +node.numberOfRooms || null;
+    if (!result.ba    && node.numberOfBathroomsTotal) result.ba    = +node.numberOfBathroomsTotal || null;
+    if (!result.sleeps && node.occupancy)            result.sleeps = +node.occupancy || null;
 
-    // amenityFeature array
     if (node.amenityFeature) {
       const feats = Array.isArray(node.amenityFeature) ? node.amenityFeature : [node.amenityFeature];
       for (const f of feats) {
         const fname = (f.name || '').toLowerCase();
         const fval  = f.value;
-        if (fname.includes('pool') && fval)    result.pool    = fval === true || fval === 'True' ? 'yes' : 'no';
-        if (fname.includes('park') && fval)    result.parking = fval === true || fval === 'True' ? 'yes' : 'no';
-        if (fname.includes('bedroom') && !result.bd && typeof fval === 'number') result.bd = fval;
-        if (fname.includes('bathroom') && !result.ba && typeof fval === 'number') result.ba = fval;
+        const yes   = fval === true || fval === 'True' || fval === 'true';
+        const no    = fval === false || fval === 'False' || fval === 'false';
+        if (fname.includes('pool'))    result.pool    = result.pool    === 'unknown' ? (yes ? 'yes' : no ? 'no' : 'unknown') : result.pool;
+        if (fname.includes('park'))    result.parking = result.parking === 'unknown' ? (yes ? 'yes' : no ? 'no' : 'unknown') : result.parking;
+        if (!result.bd && fname.includes('bedroom') && typeof fval === 'number')  result.bd = fval;
+        if (!result.ba && fname.includes('bathroom') && typeof fval === 'number') result.ba = fval;
       }
     }
 
-    // Rating
     if (!result.rating && node.aggregateRating) {
       result.rating  = +(+node.aggregateRating.ratingValue).toFixed(2) || null;
-      result.reviews = +node.aggregateRating.reviewCount || null;
+      result.reviews = +node.aggregateRating.reviewCount
+        || +node.aggregateRating.ratingCount
+        || null;
     }
 
-    // Images
     if (node.image) {
       const imgs = Array.isArray(node.image) ? node.image : [node.image];
       for (const img of imgs) {
@@ -213,34 +302,33 @@ async function scrapeListingDetails(cleanUrl, parsed) {
       }
     }
 
-    // Address
     if (node.address && result.area === 'Los Angeles area') {
-      const a = node.address;
+      const a   = node.address;
       const loc = [a.addressLocality, a.addressRegion].filter(Boolean).join(', ');
       if (loc) result.area = loc;
     }
   }
 
-  // Source-specific photo extraction from page source
+  // ── HTML-pattern scraping (photos, amenities, reviews) ────────────────────
   if (parsed.source === 'Airbnb') {
-    const abPhotos = airbnbPhotosFromNextData(html);
-    for (const u of abPhotos) {
+    for (const u of airbnbPhotosFromHtml(html)) {
       if (!result.photos.includes(u)) result.photos.push(u);
       if (result.photos.length >= 8) break;
     }
   } else if (parsed.source === 'VRBO') {
-    const vbPhotos = vrboPhotosFromHtml(html);
-    for (const u of vbPhotos) {
+    for (const u of vrboPhotosFromHtml(html)) {
       if (!result.photos.includes(u)) result.photos.push(u);
       if (result.photos.length >= 8) break;
     }
   }
 
-  // Price attempt
+  detectAmenities(html, result);
+
+  if (!result.reviews) result.reviews = extractReviewCount(html);
+
+  // ── Price ─────────────────────────────────────────────────────────────────
   const rawPrice = extractPrice(html, parsed.source);
-  if (rawPrice && rawPrice > 500 && rawPrice < 200000) {
-    result.displayed_5n = rawPrice;
-  }
+  if (rawPrice && rawPrice > 500 && rawPrice < 200000) result.displayed_5n = rawPrice;
 
   result.photos = result.photos.slice(0, 8);
   if (!result.name) result.name = `${parsed.source} listing ${parsed.id}`;
