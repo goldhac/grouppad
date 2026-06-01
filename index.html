@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LA Group Trip — 7+ Bedroom Rentals, Aug 18–23 2026</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #181b22;
+    --panel-2: #1f232c;
+    --border: #2a2f3a;
+    --text: #e7ebf3;
+    --muted: #8a93a4;
+    --accent: #56d364;
+    --warn: #f0b440;
+    --danger: #f47070;
+    --link: #7ec5ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    padding: 28px 32px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #161922 0%, #0f1115 100%);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; }
+  .params {
+    display: flex; gap: 18px; flex-wrap: wrap;
+    margin-top: 10px; font-size: 13px; color: var(--muted);
+  }
+  .params strong { color: var(--text); font-weight: 600; }
+  .filter-bar {
+    display: flex; gap: 12px; align-items: center;
+    padding: 14px 32px; background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .filter-bar label { color: var(--muted); cursor: pointer; user-select: none; }
+  .filter-bar input { margin-right: 4px; vertical-align: middle; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 20px;
+    padding: 24px 32px 60px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    transition: transform .15s ease, border-color .15s ease;
+  }
+  .card:hover { transform: translateY(-2px); border-color: #3a4252; }
+  .card.over-budget { opacity: 0.72; }
+  .card.check-manual { background: var(--panel-2); }
+  .photo {
+    width: 100%; aspect-ratio: 16/10; object-fit: cover; background: #2a2f3a;
+    display: block;
+  }
+  .photo.placeholder {
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 14px;
+  }
+  .card-body { padding: 16px 18px 18px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+  .rank-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .rank {
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .rank.top { color: var(--accent); }
+  .source {
+    font-size: 11px; padding: 2px 8px; border-radius: 4px;
+    background: #2a2f3a; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .name { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.3; }
+  .area { color: var(--muted); font-size: 13px; }
+  .specs { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--text); }
+  .specs span { background: #232830; padding: 3px 9px; border-radius: 4px; }
+  .price-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-top: 4px; }
+  .price { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  .price-sub { color: var(--muted); font-size: 12px; }
+  .badge {
+    display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 600;
+  }
+  .under { background: rgba(86,211,100,0.13); color: var(--accent); }
+  .over { background: rgba(244,112,112,0.13); color: var(--danger); }
+  .marginal { background: rgba(240,180,64,0.15); color: var(--warn); }
+  .unknown { background: rgba(255,255,255,0.06); color: var(--muted); }
+  .amenities { display: flex; gap: 10px; font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .amenity.yes { color: var(--accent); }
+  .amenity.no { color: var(--danger); }
+  .amenity.unknown { color: var(--muted); }
+  .reviews { font-size: 13px; color: var(--muted); }
+  .reviews strong { color: var(--text); }
+  .note { font-size: 12px; color: var(--muted); margin-top: 4px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .card a.book {
+    display: block; text-align: center; margin-top: auto;
+    background: var(--link); color: #0f1115; text-decoration: none;
+    font-weight: 600; padding: 9px; border-radius: 6px; font-size: 14px;
+  }
+  .card a.book:hover { background: #a3d3ff; }
+  .card.check-manual a.book { background: #4a525f; color: var(--text); }
+  footer { color: var(--muted); padding: 24px 32px 60px; font-size: 12px; line-height: 1.6; max-width: 800px; }
+  footer code { background: #232830; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>LA Group Trip — 7+ Bedroom Rentals</h1>
+  <p>Aug 18–23, 2026 (5 nights) for 14 guests · budget $7,000 all-in</p>
+  <div class="params">
+    <span><strong>Sites:</strong> VRBO · Airbnb · Booking.com</span>
+    <span><strong>Listings:</strong> 14 total</span>
+    <span><strong>Under budget:</strong> 3</span>
+    <span><strong>Last refreshed:</strong> 2026-06-01</span>
+  </div>
+</header>
+
+<div class="filter-bar">
+  <label><input type="checkbox" id="f-under" checked> Under $7k only</label>
+  <label><input type="checkbox" id="f-pool"> Pool required</label>
+  <label><input type="checkbox" id="f-parking"> Parking required</label>
+  <label><input type="checkbox" id="f-manual"> Include "check manually"</label>
+</div>
+
+<div id="grid" class="grid"></div>
+
+<footer>
+  Prices labeled "est all-in" include the listing's displayed total for the dates above, plus a 14% LA transient-occupancy tax buffer. Airbnb cards generally show a total that already includes the cleaning fee but excludes tax — verify with each listing's price breakdown at the booking step. VRBO Covina uses VRBO's base 5-night subtotal plus a $400 cleaning placeholder plus 14% tax. "Check manually" entries didn't return a date-specific quote during the run (min-stay block, delisted, or multi-unit aparthotel).
+  <br><br>
+  Data source: <code>la_mansions.csv</code> in this directory.
+</footer>
+
+<script>
+const listings = [
+  {
+    rank: 1, source: "Airbnb", id: "1632886531011031555",
+    url: "https://www.airbnb.com/rooms/1632886531011031555?check_in=2026-08-18&check_out=2026-08-23&adults=14",
+    name: "L. Huge 7BR Pad: Downtown 15m, 3700sqft",
+    area: "East LA (15 min to DTLA)",
+    bd: 7, ba: 5, sleeps: 24,
+    pool: "yes", parking: "yes",
+    rating: 4.88, reviews: 8, superhost: true,
+    displayed_5n: 4405, est_5n: 5022, est_4n: 4181,
+    budget: "under",
+    image: "https://a0.muscache.com/im/pictures/hosting/Hosting-1632886531011031555/original/ae09fb87-2dd2-41d6-850c-1a74a61f9a43.jpeg",
+    note: "Top pick. Pool + parking, Superhost, sleeps 24 (lots of buffer above your 14). ~$2,000 headroom under budget for groceries/events."
+  },
+  {
+    rank: 2, source: "VRBO", id: "3918232",
+    url: "https://www.vrbo.com/3918232?startDate=2026-08-18&endDate=2026-08-23&adults=14",
+    name: "Spectacular mansion with amazing views",
+    area: "Covina (SGV)",
+    bd: 7, ba: 5, sleeps: 16,
+    pool: "yes", parking: "yes",
+    rating: null, reviews: null, superhost: false,
+    displayed_5n: 4658, est_5n: 5766, est_4n: 4706,
+    budget: "under",
+    image: "https://media.vrbo.com/lodging/104000000/103530000/103525400/103525354/w905h683x60y0-21090fe9.jpg",
+    note: "Same listing is cross-posted on Airbnb at ~$9,549 — book through VRBO. Confirm the $50/person/night 'undisclosed guest' fee won't apply when 14 guests are declared upfront."
+  },
+  {
+    rank: 3, source: "Airbnb", id: "1630286814548143295",
+    url: "https://www.airbnb.com/rooms/1630286814548143295?check_in=2026-08-18&check_out=2026-08-23&adults=14",
+    name: "Starbase Azusa Group Getaway",
+    area: "Azusa (SGV)",
+    bd: 8, ba: 6, sleeps: 16,
+    pool: "no", parking: "yes",
+    rating: 5.0, reviews: 5, superhost: false,
+    displayed_5n: 5320, est_5n: 6065, est_4n: 4852,
+    budget: "under",
+    image: "https://a0.muscache.com/im/pictures/hosting/Hosting-1630286814548143295/original/122f85af-d948-4ad0-8845-1e311578e6e5.jpeg",
+    note: "Most bedrooms under budget (8). Only 5 reviews (newer listing). No pool is the trade-off. ~$935 of buffer at $7k cap."
+  },
+  {
+    rank: 4, source: "Airbnb", id: "1202414135248360924",
+    url: "https://www.airbnb.com/rooms/1202414135248360924?check_in=2026-08-18&check_out=2026-08-23&adults=14",
+    name: "Modern LA 9 Bedroom Family or Big Group Getaway",
+    area: "Los Angeles",
+    bd: 9, ba: 6, sleeps: 18,
+    pool: "unknown", parking: "unknown",
+    rating: 4.92, reviews: 63, superhost: false,
+    displayed_5n: 8825, est_5n: 10060, est_4n: 8048,
+    budget: "over",
+    image: "https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTIwMjQxNDEzNTI0ODM2MDkyNA%3D%3D/original/efe9277e-a972-4ebd-a2bf-3fe3017cf63f.jpeg",
+    note: "9 bedrooms, strong 4.92 rating across 63 reviews. Over budget at any night-count, but the strongest just-over-budget option if you stretch."
+  },
+  {
+    rank: 5, source: "Airbnb", id: "1634436045385384516",
+    url: "https://www.airbnb.com/rooms/1634436045385384516?check_in=2026-08-18&check_out=2026-08-23&adults=14",
+    name: "Casa Bellagio · Bel-Air Hills Retreat · Game Room",
+    area: "Bel-Air Hills",
+    bd: 8, ba: 7, sleeps: 9,
+    pool: "unknown", parking: "unknown",
+    rating: null, reviews: null, superhost: true,
+    displayed_5n: 10117, est_5n: 11533, est_4n: 9226,
+    budget: "over",
+    image: "https://a0.muscache.com/im/pictures/prohost-api/Hosting-1634436045385384516/original/3831c55d-8ff7-43cd-9b00-7ad35ef80a6e.jpeg",
+    note: "Bel-Air Hills location with game room. Sleeps spec is low (9) — may not fit 14 even with bed reconfig. Worth verifying with host before considering."
+  },
+  {
+    rank: 6, source: "Airbnb", id: "1227696600344472592",
+    url: "https://www.airbnb.com/rooms/1227696600344472592?check_in=2026-08-18&check_out=2026-08-23&adults=14",
+    name: "Private 7BR Hollywood Retreat Pool Jacuzzi Views",
+    area: "Hollywood",
+    bd: 7, ba: 7, sleeps: null,
+    pool: "yes", parking: "unknown",
+    rating: 5.0, reviews: 39, superhost: false,
+    displayed_5n: 11368, est_5n: 12959, est_4n: 10367,
+    budget: "over",
+    image: "https://a0.muscache.com/im/pictures/fe7217ff-0b24-438d-880d-b94722c75bf5.jpg",
+    note: "5.0 with 39 reviews — strong track record. Pool + Jacuzzi + views in actual Hollywood. Over budget by ~$6k for 5 nights."
+  },
+  {
+    rank: 7, source: "Airbnb", id: "1625002294982715256",
+    url: "https://www.airbnb.com/rooms/1625002294982715256?check_in=2026-08-18&check_out=2026-08-23&adults=14",
+    name: "Resort-Style Hancock Park Home",
+    area: "Hancock Park",
+    bd: 7, ba: 8, sleeps: 9,
+    pool: "unknown", parking: "unknown",
+    rating: null, reviews: null, superhost: true,
+    displayed_5n: 14518, est_5n: 16550, est_4n: 13240,
+    budget: "over",
+    image: "https://a0.muscache.com/im/pictures/prohost-api/Hosting-1625002294982715256/original/5116f81e-45d7-4fd6-98c0-a3af6a101a92.jpeg",
+    note: "Superhost central-LA option. Significantly over budget."
+  },
+  {
+    rank: 8, source: "Airbnb", id: "899099244009918926",
+    url: "https://www.airbnb.com/rooms/899099244009918926?check_in=2026-08-18&check_out=2026-08-23&adults=14",
+    name: "Celebrity Hideaway in Bel Air Paradise",
+    area: "Bel-Air",
+    bd: 8, ba: 8, sleeps: 8,
+    pool: "unknown", parking: "unknown",
+    rating: 4.75, reviews: 12, superhost: false,
+    displayed_5n: 18886, est_5n: 21530, est_4n: 17224,
+    budget: "over",
+    image: "https://a0.muscache.com/im/pictures/prohost-api/Hosting-899099244009918926/original/e82023eb-b082-4758-b122-ecaf0e4a7d42.jpeg",
+    note: "Bel-Air luxury. ~3x your budget."
+  },
+  {
+    rank: 9, source: "Booking.com", id: "the-ultimate-luxury-villa-with-pool-spa-and-courts",
+    url: "https://www.booking.com/hotel/us/the-ultimate-luxury-villa-with-pool-spa-and-courts.html",
+    name: "The Ultimate Luxury Villa with Pool, Spa and Courts",
+    area: "Los Angeles",
+    bd: 8, ba: 9, sleeps: null,
+    pool: "yes", parking: "unknown",
+    rating: null, reviews: null,
+    displayed_5n: 21900, est_5n: 24966, est_4n: 19973,
+    budget: "over",
+    image: null,
+    note: "Booking.com inventory. Pool + spa + courts. Far over budget."
+  },
+  {
+    rank: 10, source: "Booking.com", id: "anzio-estate",
+    url: "https://www.booking.com/hotel/us/anzio-estate.html",
+    name: "Anzio Estate",
+    area: "Los Angeles",
+    bd: 8, ba: 12, sleeps: null,
+    pool: "unknown", parking: "unknown",
+    rating: null, reviews: null,
+    displayed_5n: 22262, est_5n: 25379, est_4n: 20303,
+    budget: "over",
+    image: null,
+    note: "Booking.com inventory. Premium estate."
+  },
+  {
+    rank: 11, source: "Booking.com", id: "swallow-sanctuary",
+    url: "https://www.booking.com/hotel/us/swallow-sanctuary.html",
+    name: "Swallow Sanctuary",
+    area: "Los Angeles",
+    bd: 7, ba: 12, sleeps: null,
+    pool: "unknown", parking: "unknown",
+    rating: null, reviews: null,
+    displayed_5n: 34754, est_5n: 39620, est_4n: 31696,
+    budget: "over",
+    image: null,
+    note: "Booking.com top-end. 12 bathrooms suggests sprawling estate. ~5x budget."
+  },
+  {
+    rank: 12, source: "VRBO", id: "2392503",
+    url: "https://www.vrbo.com/2392503",
+    name: "MELROSE MANSION!! 7 BEDROOM",
+    area: "Hollywood (Melrose)",
+    bd: 7, ba: 3, sleeps: 25,
+    pool: "no", parking: "no",
+    rating: null, reviews: null,
+    displayed_5n: null, est_5n: null, est_4n: null,
+    budget: "unknown",
+    image: "https://media.vrbo.com/lodging/70000000/69750000/69744800/69744786/18fa2bfc.jpg",
+    note: "VRBO refused Aug 18–23 quote — minimum stay > 5 nights. Has an arcade/game room. Worth contacting host with flexible dates.",
+    check_manual: true
+  },
+  {
+    rank: 13, source: "VRBO", id: "87658047",
+    url: "https://www.vrbo.com/pdp/lo/87658047",
+    name: "StaysPro · Hollywood Homes",
+    area: "Hollywood",
+    bd: null, ba: null, sleeps: null,
+    pool: "no", parking: "yes",
+    rating: null, reviews: 185,
+    displayed_5n: null, est_5n: null, est_4n: null,
+    budget: "unknown",
+    image: "https://media.vrbo.com/lodging/88000000/87660000/87658100/87658047/a7f61d6b.jpg",
+    note: "Multi-unit aparthotel collection (not a single house). Would require booking multiple units. 185 reviews on the collection.",
+    check_manual: true
+  },
+  {
+    rank: 14, source: "VRBO", id: "1213366",
+    url: "https://www.vrbo.com/1213366",
+    name: "(delisted)",
+    area: "Beverly Hills",
+    bd: null, ba: null, sleeps: null,
+    pool: "unknown", parking: "unknown",
+    rating: null, reviews: null,
+    displayed_5n: null, est_5n: null, est_4n: null,
+    budget: "unknown",
+    image: null,
+    note: "Original Beverly Hills seed (1213366) — listing has been removed and the URL redirects to a category page. Skip.",
+    check_manual: true
+  }
+];
+
+const fmt = n => n == null ? "—" : "$" + n.toLocaleString();
+const amenity = (key, val) => {
+  if (val === "yes") return `<span class="amenity yes">✓ ${key}</span>`;
+  if (val === "no")  return `<span class="amenity no">✗ ${key}</span>`;
+  return `<span class="amenity unknown">? ${key}</span>`;
+};
+
+function renderCard(l) {
+  const overBudget = l.budget === "over";
+  const cls = [
+    "card",
+    overBudget ? "over-budget" : "",
+    l.check_manual ? "check-manual" : "",
+  ].filter(Boolean).join(" ");
+  const budgeBadge = l.budget === "under" ? '<span class="badge under">under $7k</span>'
+    : l.budget === "over" ? '<span class="badge over">over budget</span>'
+    : l.budget === "marginal" ? '<span class="badge marginal">marginal</span>'
+    : '<span class="badge unknown">unknown</span>';
+  const rankBadge = l.rank <= 3
+    ? `<span class="rank top">★ Rank ${l.rank}</span>`
+    : `<span class="rank">Rank ${l.rank}</span>`;
+  const photo = l.image
+    ? `<img class="photo" loading="lazy" src="${l.image}" alt="${l.name}">`
+    : `<div class="photo placeholder">no image</div>`;
+  const specs = [
+    l.bd != null ? `<span>${l.bd} bd</span>` : '',
+    l.ba != null ? `<span>${l.ba} ba</span>` : '',
+    l.sleeps != null ? `<span>sleeps ${l.sleeps}</span>` : '',
+  ].filter(Boolean).join('');
+  const reviews = l.rating != null
+    ? `<div class="reviews"><strong>${l.rating}★</strong> (${l.reviews ?? '?'} reviews)${l.superhost ? ' · Superhost' : ''}</div>`
+    : (l.reviews ? `<div class="reviews">(${l.reviews} reviews)</div>` : '<div class="reviews">no rating yet</div>');
+  return `
+    <div class="${cls}" data-budget="${l.budget}" data-pool="${l.pool}" data-parking="${l.parking}" data-manual="${l.check_manual ? '1' : '0'}">
+      ${photo}
+      <div class="card-body">
+        <div class="rank-row">${rankBadge}<span class="source">${l.source}</span></div>
+        <h2 class="name">${l.name}</h2>
+        <div class="area">${l.area}</div>
+        <div class="specs">${specs}</div>
+        <div class="amenities">${amenity('pool', l.pool)}${amenity('parking', l.parking)}</div>
+        ${reviews}
+        <div class="price-row">
+          <span class="price">${fmt(l.est_5n)}</span>
+          ${budgeBadge}
+        </div>
+        <div class="price-sub">${l.displayed_5n ? `displayed: ${fmt(l.displayed_5n)} for 5 nights · 4-night est: ${fmt(l.est_4n)}` : 'price on inquiry'}</div>
+        <div class="note">${l.note}</div>
+        <a class="book" href="${l.url}" target="_blank" rel="noopener">${l.check_manual ? 'Check manually →' : 'View on ' + l.source + ' →'}</a>
+      </div>
+    </div>
+  `;
+}
+
+function render() {
+  const grid = document.getElementById('grid');
+  const onlyUnder = document.getElementById('f-under').checked;
+  const needPool = document.getElementById('f-pool').checked;
+  const needParking = document.getElementById('f-parking').checked;
+  const showManual = document.getElementById('f-manual').checked;
+  const filtered = listings.filter(l => {
+    if (onlyUnder && l.budget !== 'under' && l.budget !== 'marginal') return false;
+    if (needPool && l.pool !== 'yes') return false;
+    if (needParking && l.parking !== 'yes') return false;
+    if (!showManual && l.check_manual) return false;
+    return true;
+  });
+  grid.innerHTML = filtered.length
+    ? filtered.map(renderCard).join('')
+    : '<div style="grid-column:1/-1;color:var(--muted);padding:40px 0;text-align:center;">No listings match these filters.</div>';
+}
+
+for (const id of ['f-under','f-pool','f-parking','f-manual']) {
+  document.getElementById(id).addEventListener('change', render);
+}
+render();
+</script>
+</body>
+</html>
