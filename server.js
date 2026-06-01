@@ -295,12 +295,87 @@ async function fetchAirbnbBookingPrice(listingId) {
   return null;
 }
 
-// Firecrawl: renders the page with a real browser + uses LLM to extract price
+// Playwright: renders the full page in headless Chromium, extracts price from the booking panel
+async function fetchPriceWithPlaywright(cleanUrl, source) {
+  let browser;
+  try {
+    const { chromium } = require('playwright-core');
+    const executablePath = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
+    browser = await chromium.launch({
+      executablePath,
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-extensions',
+      ],
+    });
+    const ctx  = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      locale: 'en-US',
+    });
+    const page = await ctx.newPage();
+    const dated = urlWithDates(cleanUrl, source);
+    console.log('[Playwright] loading', dated);
+
+    await page.goto(dated, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // Airbnb: wait for the booking / price panel to appear
+    if (source === 'Airbnb') {
+      await page.waitForSelector(
+        '[data-testid="book-it-default"], [data-plugin-in-point-id="BOOK_IT_SIDEBAR"], [data-section-id="BOOK_IT_SIDEBAR"]',
+        { timeout: 15000 }
+      ).catch(() => {});
+    }
+
+    // Give XHR/GraphQL calls time to resolve and price to render
+    await page.waitForTimeout(6000);
+
+    // Search visible text first — most reliable for user-facing price display
+    const allText = await page.evaluate(() => document.body.innerText || '');
+    const textPatterns = [
+      /\$([\d,]+(?:\.\d{2})?)\s+total\b/i,
+      /total\b[^$\n]{0,40}\$([\d,]+(?:\.\d{2})?)/i,
+      /\$([\d,]+(?:\.\d{2})?)\s+for\s+5\s+nights?/i,
+      /\$([\d,]+(?:\.\d{2})?)\s+for\s+4\s+nights?/i,
+    ];
+    for (const re of textPatterns) {
+      const m = allText.match(re);
+      if (m) {
+        const val = parseFloat(m[1].replace(/,/g, ''));
+        if (val >= 1000 && val <= 200000) {
+          console.log('[Playwright] found price in visible text:', val);
+          return { price: Math.round(val), type: 'full' };
+        }
+      }
+    }
+
+    // Fall back to rendered HTML snapshot — catches embedded JSON data
+    const rendered = await page.content();
+    const htmlPrice = extractPrice(rendered, source);
+    if (htmlPrice) {
+      console.log('[Playwright] found price in rendered HTML:', htmlPrice);
+      return { price: htmlPrice, type: 'full' };
+    }
+
+    console.log('[Playwright] no price found on page');
+    return null;
+  } catch (e) {
+    console.error('[Playwright] error:', e.message);
+    return null;
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+}
+
+// Firecrawl v2: renders the page with a managed browser + uses LLM to extract price
 async function fetchPriceViaFirecrawl(listingUrl) {
   if (!FIRECRAWL_KEY) return null;
   try {
     const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 35000); // Firecrawl renders JS; can take ~15s
+    const tid  = setTimeout(() => ctrl.abort(), 45000); // Firecrawl renders JS; can take ~15–25s
     const res  = await fetch('https://api.firecrawl.dev/v2/scrape', {
       method: 'POST',
       signal: ctrl.signal,
@@ -310,28 +385,34 @@ async function fetchPriceViaFirecrawl(listingUrl) {
       },
       body: JSON.stringify({
         url: listingUrl,
-        formats: ['extract'],
-        extract: {
-          prompt: 'Extract the total price shown for the entire stay (all nights combined, before taxes). Return {"total_price": <number>} where the number is a plain USD dollar amount with no $ sign or commas.',
-          schema: {
-            type: 'object',
-            properties: {
-              total_price: { type: 'number', description: 'Total price for all nights in USD, no currency symbol' },
-            },
-            required: ['total_price'],
-          },
-        },
+        formats: [{ type: 'question', question: 'What is the total price for the entire stay (all nights combined)? Return only a plain number in USD, no $ sign, no commas.' }],
+        waitFor: 8000,
       }),
     });
     clearTimeout(tid);
-    if (!res.ok) return null;
-    const data  = await res.json();
-    const price = data?.data?.extract?.total_price
-      ?? data?.extract?.total_price
-      ?? data?.data?.llm_extraction?.total_price;
-    if (price && price >= 500 && price <= 200000) return { price: Math.round(price), type: 'full' };
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error('[Firecrawl] HTTP', res.status, errText.slice(0, 200));
+      return null;
+    }
+    const data   = await res.json();
+    const answer = data?.data?.question ?? data?.question ?? data?.data?.answers?.[0] ?? null;
+    if (answer) {
+      const numStr = String(answer).replace(/[$,\s]/g, '').match(/[\d.]+/)?.[0];
+      if (numStr) {
+        const price = Math.round(parseFloat(numStr));
+        if (price >= 500 && price <= 200000) {
+          console.log('[Firecrawl] found price:', price);
+          return { price, type: 'full' };
+        }
+      }
+    }
+    console.log('[Firecrawl] no price in response:', JSON.stringify(data).slice(0, 300));
     return null;
-  } catch { return null; }
+  } catch (e) {
+    console.error('[Firecrawl] exception:', e.message);
+    return null;
+  }
 }
 
 // Airbnb calendar API — nightly base rates only (no cleaning/service fees)
@@ -476,26 +557,35 @@ async function scrapeListingDetails(cleanUrl, parsed) {
 
   if (!result.reviews) result.reviews = extractReviewCount(html);
 
-  // ── Price: HTML → Airbnb API → calendar → Firecrawl (real browser) ───────
+  // ── Price: HTML → Airbnb API → calendar → Playwright → Firecrawl ─────────
   const htmlPrice = extractPrice(html, parsed.source);
   if (htmlPrice) {
     result.displayed_5n    = htmlPrice;
     result.priceIsBaseOnly = false;
   } else {
+    // 1. Try Airbnb internal APIs (both currently return 404 / empty — kept as cheap fast-path)
     let apiResult = null;
     if (parsed.source === 'Airbnb') {
       apiResult = await fetchAirbnbBookingPrice(parsed.id)
                || await fetchAirbnbCalendarPrice(parsed.id);
     }
+
     if (apiResult) {
       result.displayed_5n    = apiResult.price;
       result.priceIsBaseOnly = apiResult.type === 'nightly_only';
     } else {
-      // Last resort: Firecrawl renders the full JS page and LLM-extracts the price
-      const fcResult = await fetchPriceViaFirecrawl(urlWithDates(cleanUrl, parsed.source));
-      if (fcResult) {
-        result.displayed_5n    = fcResult.price;
+      // 2. Playwright: render the full page with real headless Chrome so JS/GraphQL executes
+      const pwResult = await fetchPriceWithPlaywright(cleanUrl, parsed.source);
+      if (pwResult) {
+        result.displayed_5n    = pwResult.price;
         result.priceIsBaseOnly = false;
+      } else {
+        // 3. Last resort: Firecrawl LLM extraction (uses Firecrawl's managed browser)
+        const fcResult = await fetchPriceViaFirecrawl(urlWithDates(cleanUrl, parsed.source));
+        if (fcResult) {
+          result.displayed_5n    = fcResult.price;
+          result.priceIsBaseOnly = false;
+        }
       }
     }
   }
