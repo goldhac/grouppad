@@ -1,6 +1,6 @@
 FROM node:20-bookworm-slim
 
-# Install Chromium + minimal runtime deps
+# Install Chromium + build tools (for better-sqlite3 native compile) + runtime deps
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     libxfixes3 \
     libxkbcommon0 \
     libxrandr2 \
+    python3 make g++ \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 

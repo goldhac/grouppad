@@ -719,4 +719,102 @@ app.post('/api/submit', async (req, res) => {
   res.json(entry);
 });
 
-app.listen(PORT, () => console.log(`LA trip rentals listening on :${PORT}`));
+// ── Pipeline listings (from SQLite) ──────────────────────────────────────────
+
+const PIPELINE_DB = path.join(__dirname, 'data', 'pipeline.db');
+const PIPELINE_BUDGET        = 7000;
+const PIPELINE_TAX           = 0.14;
+const PIPELINE_CLEANING_FEE  = 400;
+
+function getPipelineDb() {
+  try {
+    const Database = require('better-sqlite3');
+    return new Database(PIPELINE_DB, { readonly: true });
+  } catch { return null; }
+}
+
+app.get('/api/pipeline-listings', (req, res) => {
+  const db = getPipelineDb();
+  if (!db) return res.json({ listings: [], count: 0, note: 'Pipeline has not run yet' });
+  try {
+    const rows = db.prepare(`
+      SELECT
+        l.source, l.listing_id, l.name, l.url, l.location,
+        l.bedrooms, l.bathrooms, l.sleeps,
+        l.amenities, l.photos,
+        l.has_pool, l.has_parking,
+        l.rating, l.reviews,
+        l.enriched, l.last_seen,
+        ps.price_total, ps.run_date
+      FROM listings l
+      LEFT JOIN price_snapshots ps ON (
+        ps.source = l.source AND ps.listing_id = l.listing_id
+        AND ps.run_date = (
+          SELECT MAX(run_date) FROM price_snapshots
+          WHERE source = l.source AND listing_id = l.listing_id
+        )
+      )
+      WHERE l.passed_filter = 1
+      ORDER BY
+        CASE WHEN ps.price_total IS NOT NULL THEN 0 ELSE 1 END,
+        CASE WHEN l.has_pool = 1 THEN 0 ELSE 1 END,
+        CASE WHEN l.has_parking = 1 THEN 0 ELSE 1 END,
+        l.bedrooms DESC,
+        l.rating DESC
+    `).all();
+    db.close();
+
+    const listings = rows.map(r => {
+      const est5n = r.price_total
+        ? Math.round((r.price_total + PIPELINE_CLEANING_FEE) * (1 + PIPELINE_TAX))
+        : null;
+      const budget = est5n == null ? 'unknown'
+        : est5n <= PIPELINE_BUDGET              ? 'under'
+        : est5n <= PIPELINE_BUDGET * 1.1        ? 'marginal'
+        : 'over';
+      return {
+        id:           r.listing_id,
+        source:       r.source,
+        url:          r.url,
+        name:         r.name,
+        area:         r.location,
+        bd:           r.bedrooms,
+        ba:           r.bathrooms,
+        sleeps:       r.sleeps,
+        pool:         r.has_pool    ? 'yes' : 'unknown',
+        parking:      r.has_parking ? 'yes' : 'unknown',
+        rating:       r.rating,
+        reviews:      r.reviews,
+        photos:       JSON.parse(r.photos  || '[]'),
+        amenities:    JSON.parse(r.amenities || '[]'),
+        displayed_5n: r.price_total || null,
+        est_5n:       est5n,
+        est_4n:       est5n ? Math.round(est5n * 0.8) : null,
+        budget,
+        check_manual: false,
+        last_seen:    r.last_seen,
+        enriched:     !!r.enriched,
+      };
+    });
+
+    res.json({ listings, count: listings.length });
+  } catch (e) {
+    db.close();
+    console.error('[pipeline-listings]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin: trigger a pipeline run (runs pipeline.js as a child process)
+app.post('/api/admin/run-pipeline', requireAdmin, (req, res) => {
+  const { spawn } = require('child_process');
+  const env = { ...process.env };
+  if (!env.APIFY_TOKEN) return res.status(400).json({ error: 'APIFY_TOKEN not set on server' });
+
+  console.log('[Admin] Starting pipeline run…');
+  const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env, detached: true, stdio: 'ignore' });
+  child.unref();
+  res.json({ ok: true, message: 'Pipeline started in background — check server logs' });
+});
+
+app.listen(PORT, () => console.log(`GroupPad listening on :${PORT}`));

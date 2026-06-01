@@ -12,19 +12,22 @@ const VOTER = getVoter();
 let DATA      = null;
 let VOTES     = {};
 let SUBMITTED = [];
+let PIPELINE  = [];
 let SPLIT     = 14;
 let ADMIN_KEY = localStorage.getItem('admin_key') || null;
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
-  const [data, votes, submitted] = await Promise.all([
+  const [data, votes, submitted, pipeline] = await Promise.all([
     fetch('/api/listings').then(r => r.json()),
     fetch('/api/votes').then(r => r.json()).catch(() => ({})),
     fetch('/api/submitted').then(r => r.json()).catch(() => []),
+    fetch('/api/pipeline-listings').then(r => r.json()).catch(() => ({ listings: [] })),
   ]);
   DATA      = data;
   VOTES     = votes;
   SUBMITTED = submitted;
+  PIPELINE  = pipeline.listings || [];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -72,10 +75,10 @@ function renderCarousel(listing) {
 }
 
 // ── Per-person split row ──────────────────────────────────────────────────────
-function renderPerPerson(est5n) {
+function renderPerPerson(est5n, budget = 7000) {
   if (!est5n) return '';
-  const pp    = Math.ceil(est5n / SPLIT);
-  const isOver = DATA && est5n > DATA.trip.budget;
+  const pp     = Math.ceil(est5n / SPLIT);
+  const isOver = est5n > budget;
   return `
     <div class="per-person-row${isOver ? ' over' : ''}">
       <span class="per-person-amount">${fmt(pp)}</span>
@@ -85,13 +88,14 @@ function renderPerPerson(est5n) {
 }
 
 // ── Card ──────────────────────────────────────────────────────────────────────
-function renderCard(l, isSubmitted) {
+function renderCard(l, isSubmitted, isPipeline = false) {
   const overBudget = l.budget === 'over';
   const cls = [
     'card',
     overBudget      ? 'over-budget'  : '',
     l.check_manual  ? 'check-manual' : '',
     isSubmitted     ? 'submitted'    : '',
+    isPipeline      ? 'pipeline-card': '',
   ].filter(Boolean).join(' ');
 
   const budgetBadge = l.budget === 'under'    ? '<span class="badge under">under budget</span>'
@@ -99,11 +103,13 @@ function renderCard(l, isSubmitted) {
     : l.budget === 'marginal' ? '<span class="badge marginal">marginal</span>'
     : '<span class="badge unknown">unknown</span>';
 
-  const rankBadge = isSubmitted
-    ? `<span class="submitted-tag">community submission</span>`
-    : l.rank <= 3
-      ? `<span class="rank top">★ Rank ${l.rank}</span>`
-      : `<span class="rank">Rank ${l.rank}</span>`;
+  const rankBadge = isPipeline
+    ? `<span class="pipeline-live-tag">live</span>`
+    : isSubmitted
+      ? `<span class="submitted-tag">community submission</span>`
+      : l.rank <= 3
+        ? `<span class="rank top">★ Rank ${l.rank}</span>`
+        : `<span class="rank">Rank ${l.rank}</span>`;
 
   const specs = [
     l.bd     != null ? `<span>${l.bd} bd</span>`       : '',
@@ -121,7 +127,7 @@ function renderCard(l, isSubmitted) {
   const submittedBy = isSubmitted
     ? `<div class="submitted-by-line">Submitted by ${l.submitted_by} · ${l.submitted_at}</div>` : '';
 
-  const adminDeleteBtn = ADMIN_KEY
+  const adminDeleteBtn = ADMIN_KEY && !isPipeline
     ? `<button class="delete-btn" data-id="${l.id}" data-submitted="${isSubmitted ? '1' : '0'}" title="Delete listing">✕ Delete</button>`
     : '';
 
@@ -151,8 +157,8 @@ function renderCard(l, isSubmitted) {
         <div class="price-sub">${l.displayed_5n
           ? `displayed: ${fmt(l.displayed_5n)} for 5 nights · 4-night est: ${fmt(l.est_4n)}`
           : 'price on inquiry'}</div>
-        ${renderPerPerson(l.est_5n)}
-        <div class="note">${l.note}</div>
+        ${renderPerPerson(l.est_5n, DATA ? DATA.trip.budget : 7000)}
+        ${l.note ? `<div class="note">${l.note}</div>` : ''}
         <div class="actions">
           <a class="book" href="${l.url}" target="_blank" rel="noopener">
             ${l.check_manual ? 'Check manually →' : 'View on ' + l.source + ' →'}
@@ -223,6 +229,19 @@ async function toggleAdmin() {
   }
 }
 
+async function triggerPipeline() {
+  if (!ADMIN_KEY) { alert('Log in as admin first.'); return; }
+  if (!confirm('Run the pipeline now?\n\nThis will pull fresh listings from VRBO & Airbnb. Takes ~2–3 minutes.')) return;
+  try {
+    const res = await fetch(`/api/admin/run-pipeline?key=${encodeURIComponent(ADMIN_KEY)}`, { method: 'POST' });
+    const data = await res.json();
+    if (res.ok) alert('Pipeline started! Refresh in a few minutes to see new listings.');
+    else alert('Error: ' + (data.error || res.status));
+  } catch {
+    alert('Network error — check connection.');
+  }
+}
+
 // ── Render ────────────────────────────────────────────────────────────────────
 function render() {
   if (!DATA) return;
@@ -266,6 +285,7 @@ function render() {
     : '<div style="grid-column:1/-1;color:var(--muted);padding:40px 0;text-align:center;">No listings match these filters.</div>';
 
   renderSubmitted();
+  renderPipeline();
   updateSplitDisplay();
   attachCardHandlers();
 }
@@ -276,6 +296,35 @@ function renderSubmitted() {
   if (!SUBMITTED.length) { section.classList.add('hidden'); return; }
   section.classList.remove('hidden');
   grid.innerHTML = SUBMITTED.map(l => renderCard(l, true)).join('');
+}
+
+function renderPipeline() {
+  const section = document.getElementById('pipeline-section');
+  const grid    = document.getElementById('pipeline-grid');
+  if (!section || !grid) return;
+
+  const onlyUnder = document.getElementById('f-under').checked;
+  const needPool  = document.getElementById('f-pool').checked;
+  const needPark  = document.getElementById('f-parking').checked;
+
+  const filtered = PIPELINE.filter(l => {
+    if (onlyUnder && l.budget !== 'under' && l.budget !== 'marginal') return false;
+    if (needPool  && l.pool    !== 'yes') return false;
+    if (needPark  && l.parking !== 'yes') return false;
+    return true;
+  });
+
+  if (!PIPELINE.length) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+
+  // Update header count
+  const noteEl = section.querySelector('.pipeline-note');
+  if (noteEl) noteEl.textContent =
+    `Pulled from VRBO & Airbnb · ${filtered.length} of ${PIPELINE.length} shown`;
+
+  grid.innerHTML = filtered.length
+    ? filtered.map(l => renderCard(l, false, true)).join('')
+    : '<div style="grid-column:1/-1;color:var(--muted);padding:20px 0;text-align:center;">No pipeline listings match these filters.</div>';
 }
 
 // ── Card handlers ─────────────────────────────────────────────────────────────
@@ -363,13 +412,38 @@ document.getElementById('f-split').addEventListener('input', (e) => {
 (function injectAdminBtn() {
   const bar = document.querySelector('.filter-bar');
   if (!bar) return;
+
+  // Admin toggle
   const btn = document.createElement('button');
   btn.id        = 'admin-btn';
   btn.className = 'admin-btn';
   btn.onclick   = toggleAdmin;
   bar.appendChild(btn);
   updateAdminButton();
+
+  // Run pipeline (only visible to admin)
+  const pipeBtn = document.createElement('button');
+  pipeBtn.id        = 'pipeline-run-btn';
+  pipeBtn.className = 'admin-btn';
+  pipeBtn.title     = 'Fetch fresh listings from VRBO & Airbnb';
+  pipeBtn.textContent = '⟳ Run pipeline';
+  pipeBtn.onclick   = triggerPipeline;
+  pipeBtn.style.display = ADMIN_KEY ? '' : 'none';
+  bar.appendChild(pipeBtn);
 })();
+
+// Show/hide pipeline run button with admin state
+const _origUpdateAdmin = updateAdminButton;
+// (patch inline to also toggle pipeline btn)
+function updateAdminButton() {
+  const btn = document.getElementById('admin-btn');
+  const pBtn = document.getElementById('pipeline-run-btn');
+  if (btn) {
+    if (ADMIN_KEY) { btn.textContent = '🔓 Admin'; btn.classList.add('admin-active'); }
+    else           { btn.textContent = '🔑 Admin'; btn.classList.remove('admin-active'); }
+  }
+  if (pBtn) pBtn.style.display = ADMIN_KEY ? '' : 'none';
+}
 
 // ── Submit form ───────────────────────────────────────────────────────────────
 
