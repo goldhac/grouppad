@@ -18,14 +18,38 @@
   <label><input type="checkbox" id="f-pool"> Pool required</label>
   <label><input type="checkbox" id="f-parking"> Parking required</label>
   <label><input type="checkbox" id="f-manual"> Include "check manually"</label>
+  <span class="filter-sep"></span>
+  <div class="split-control">
+    <span class="split-label">Split:</span>
+    <input type="range" id="f-split" min="2" max="30" value="14">
+    <span id="split-display" class="split-display">14 people · <span id="split-avg">—</span>/ea</span>
+  </div>
   <span class="spacer"></span>
   <span class="count" id="count"></span>
 </div>
 
+<div class="submit-bar">
+  <button id="submit-toggle" class="submit-toggle">+ Add a listing</button>
+  <div id="submit-form" class="submit-form hidden">
+    <input type="url" id="submit-url" placeholder="Paste Airbnb, VRBO, or Booking.com URL…" autocomplete="off">
+    <input type="text" id="submit-name-input" placeholder="Your name (optional)" maxlength="60">
+    <button id="submit-btn">Submit</button>
+    <span id="submit-msg" class="submit-msg"></span>
+  </div>
+</div>
+
 <div id="grid" class="grid"></div>
 
+<div id="submitted-section" class="submitted-section hidden">
+  <div class="submitted-header">
+    <span>Community Submissions</span>
+    <span class="submitted-note">Posted by group members — verify details before booking</span>
+  </div>
+  <div id="submitted-grid" class="grid"></div>
+</div>
+
 <footer>
-  Prices labeled "est all-in" include the listing's displayed total for the dates above plus a 14% LA transient-occupancy-tax buffer. Airbnb cards generally show a total that already includes the cleaning fee but excludes tax — verify with each listing's price breakdown at the booking step. VRBO Covina uses VRBO's base 5-night subtotal plus a $400 cleaning placeholder plus 14% tax. "Check manually" entries didn't return a date-specific quote during the run.
+  Prices labeled "est all-in" include the listing's displayed total for the dates above plus a 14% LA transient-occupancy-tax buffer. Airbnb cards generally show a total that already includes the cleaning fee but excludes tax — verify with each listing's price breakdown at the booking step. VRBO Covina uses VRBO's base 5-night subtotal plus a $400 cleaning placeholder plus 14% tax. "Check manually" entries didn't return a date-specific quote during the run. Distances are approximate driving miles to Downtown LA (City Hall).
 </footer>
 
 <script src="/app.js"></script>

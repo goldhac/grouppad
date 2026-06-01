@@ -1,4 +1,3 @@
-// Voter name lives in localStorage. Will be replaced with auth later.
 function getVoter() {
   let v = localStorage.getItem('voter');
   if (!v) {
@@ -11,14 +10,18 @@ function getVoter() {
 const VOTER = getVoter();
 let DATA = null;
 let VOTES = {};
+let SUBMITTED = [];
+let SPLIT = 14;
 
 async function loadData() {
-  const [data, votes] = await Promise.all([
+  const [data, votes, submitted] = await Promise.all([
     fetch('/api/listings').then(r => r.json()),
     fetch('/api/votes').then(r => r.json()).catch(() => ({})),
+    fetch('/api/submitted').then(r => r.json()).catch(() => []),
   ]);
   DATA = data;
   VOTES = votes;
+  SUBMITTED = submitted;
 }
 
 function fmt(n) { return n == null ? '—' : '$' + n.toLocaleString(); }
@@ -63,20 +66,35 @@ function renderCarousel(listing) {
   `;
 }
 
-function renderCard(l) {
+function renderPerPerson(est5n) {
+  if (!est5n) return '';
+  const pp = Math.ceil(est5n / SPLIT);
+  const isOver = DATA && est5n > DATA.trip.budget;
+  return `
+    <div class="per-person-row${isOver ? ' over' : ''}">
+      <span class="per-person-amount">${fmt(pp)}</span>
+      <span class="per-person-label">per person · split ${SPLIT} ways</span>
+    </div>
+  `;
+}
+
+function renderCard(l, isSubmitted) {
   const overBudget = l.budget === 'over';
   const cls = [
     'card',
     overBudget ? 'over-budget' : '',
     l.check_manual ? 'check-manual' : '',
+    isSubmitted ? 'submitted' : '',
   ].filter(Boolean).join(' ');
   const budgetBadge = l.budget === 'under' ? '<span class="badge under">under budget</span>'
     : l.budget === 'over' ? '<span class="badge over">over budget</span>'
     : l.budget === 'marginal' ? '<span class="badge marginal">marginal</span>'
     : '<span class="badge unknown">unknown</span>';
-  const rankBadge = l.rank <= 3
-    ? `<span class="rank top">★ Rank ${l.rank}</span>`
-    : `<span class="rank">Rank ${l.rank}</span>`;
+  const rankBadge = isSubmitted
+    ? `<span class="submitted-tag">community submission</span>`
+    : l.rank <= 3
+      ? `<span class="rank top">★ Rank ${l.rank}</span>`
+      : `<span class="rank">Rank ${l.rank}</span>`;
   const specs = [
     l.bd != null ? `<span>${l.bd} bd</span>` : '',
     l.ba != null ? `<span>${l.ba} ba</span>` : '',
@@ -85,6 +103,12 @@ function renderCard(l) {
   const reviews = l.rating != null
     ? `<div class="reviews"><strong>${l.rating}★</strong> (${l.reviews ?? '?'} reviews)${l.superhost ? ' · Superhost' : ''}</div>`
     : (l.reviews ? `<div class="reviews">(${l.reviews} reviews)</div>` : '<div class="reviews">no rating yet</div>');
+  const distance = l.distance_mi
+    ? `<span class="distance">📍 ${l.distance_mi} mi from DTLA</span>`
+    : '';
+  const submittedBy = isSubmitted
+    ? `<div style="font-size:11px;color:var(--muted);margin-top:-2px">Submitted by ${l.submitted_by} · ${l.submitted_at}</div>`
+    : '';
   const { up, down, mine } = tallyVotes(l.id);
   return `
     <div class="${cls}" data-id="${l.id}" data-budget="${l.budget}" data-pool="${l.pool}" data-parking="${l.parking}" data-manual="${l.check_manual ? '1' : '0'}">
@@ -92,7 +116,10 @@ function renderCard(l) {
       <div class="card-body">
         <div class="rank-row">${rankBadge}<span class="source">${l.source}</span></div>
         <h2 class="name">${l.name}</h2>
-        <div class="area">${l.area}</div>
+        <div class="location-row">
+          <span class="area">${l.area}</span>${distance}
+        </div>
+        ${submittedBy}
         <div class="specs">${specs}</div>
         <div class="amenities">${amenity('pool', l.pool)}${amenity('parking', l.parking)}</div>
         ${reviews}
@@ -101,6 +128,7 @@ function renderCard(l) {
           ${budgetBadge}
         </div>
         <div class="price-sub">${l.displayed_5n ? `displayed: ${fmt(l.displayed_5n)} for 5 nights · 4-night est: ${fmt(l.est_4n)}` : 'price on inquiry'}</div>
+        ${renderPerPerson(l.est_5n)}
         <div class="note">${l.note}</div>
         <div class="actions">
           <a class="book" href="${l.url}" target="_blank" rel="noopener">${l.check_manual ? 'Check manually →' : 'View on ' + l.source + ' →'}</a>
@@ -112,6 +140,19 @@ function renderCard(l) {
       </div>
     </div>
   `;
+}
+
+function updateSplitDisplay() {
+  const splitEl = document.getElementById('split-display');
+  if (!splitEl) return;
+  const listings = DATA ? DATA.listings : [];
+  const under = listings.filter(l => l.budget === 'under' || l.budget === 'marginal');
+  if (under.length) {
+    const avg = Math.ceil(under[0].est_5n / SPLIT);
+    splitEl.innerHTML = `${SPLIT} people · <strong>~${fmt(avg)}/ea</strong> <span style="color:var(--muted);font-size:11px">(top pick)</span>`;
+  } else {
+    splitEl.innerHTML = `${SPLIT} people`;
+  }
 }
 
 function render() {
@@ -148,13 +189,26 @@ function render() {
 
   document.getElementById('count').textContent = `${filtered.length} of ${listings.length} listings`;
   document.getElementById('grid').innerHTML = filtered.length
-    ? filtered.map(renderCard).join('')
+    ? filtered.map(l => renderCard(l, false)).join('')
     : '<div style="grid-column:1/-1;color:var(--muted);padding:40px 0;text-align:center;">No listings match these filters.</div>';
+
+  renderSubmitted();
+  updateSplitDisplay();
   attachCardHandlers();
 }
 
+function renderSubmitted() {
+  const section = document.getElementById('submitted-section');
+  const grid = document.getElementById('submitted-grid');
+  if (!SUBMITTED.length) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  grid.innerHTML = SUBMITTED.map(l => renderCard(l, true)).join('');
+}
+
 function attachCardHandlers() {
-  // Carousel nav
   document.querySelectorAll('.carousel').forEach(carousel => {
     const track = carousel.querySelector('.carousel-track');
     const dots = carousel.querySelectorAll('.dot');
@@ -172,7 +226,6 @@ function attachCardHandlers() {
     dots.forEach(d => d.onclick = (e) => { e.stopPropagation(); go(+d.dataset.i); });
   });
 
-  // Voting
   document.querySelectorAll('.vote-btn').forEach(btn => {
     btn.onclick = async (e) => {
       e.stopPropagation();
@@ -194,14 +247,77 @@ function attachCardHandlers() {
   });
 }
 
+// Filter listeners
 for (const id of ['f-under', 'f-pool', 'f-parking', 'f-manual']) {
   document.getElementById(id).addEventListener('change', render);
 }
 
+// Split slider
+document.getElementById('f-split').addEventListener('input', (e) => {
+  SPLIT = +e.target.value;
+  render();
+});
+
+// Submit form toggle
+document.getElementById('submit-toggle').addEventListener('click', () => {
+  const form = document.getElementById('submit-form');
+  form.classList.toggle('hidden');
+  if (!form.classList.contains('hidden')) {
+    document.getElementById('submit-url').focus();
+  }
+});
+
+// Submit form submission
+document.getElementById('submit-btn').addEventListener('click', async () => {
+  const urlEl = document.getElementById('submit-url');
+  const nameEl = document.getElementById('submit-name-input');
+  const msgEl = document.getElementById('submit-msg');
+  const btn = document.getElementById('submit-btn');
+  const url = urlEl.value.trim();
+  if (!url) {
+    msgEl.textContent = 'Please paste a URL.';
+    msgEl.className = 'submit-msg err';
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+  msgEl.textContent = '';
+  msgEl.className = 'submit-msg';
+  try {
+    const res = await fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, submitted_by: nameEl.value.trim() || VOTER }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      SUBMITTED = [...SUBMITTED, data];
+      urlEl.value = '';
+      nameEl.value = '';
+      msgEl.textContent = `Added "${data.name}" — check it below!`;
+      msgEl.className = 'submit-msg ok';
+      renderSubmitted();
+      attachCardHandlers();
+    } else {
+      msgEl.textContent = data.error || 'Something went wrong.';
+      msgEl.className = 'submit-msg err';
+    }
+  } catch {
+    msgEl.textContent = 'Network error — try again.';
+    msgEl.className = 'submit-msg err';
+  }
+  btn.disabled = false;
+  btn.textContent = 'Submit';
+});
+
+// Enter key on URL input triggers submit
+document.getElementById('submit-url').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('submit-btn').click();
+});
+
 (async () => {
   await loadData();
   render();
-  // Poll for vote updates every 8s so group members see each other's votes
   setInterval(async () => {
     try {
       const v = await fetch('/api/votes').then(r => r.json());
