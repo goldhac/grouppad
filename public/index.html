@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LA Group Trip — 7+ Bedroom Rentals</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>LA Group Trip — 7+ Bedroom Rentals</h1>
+  <p id="trip-line">loading…</p>
+  <div class="params" id="params-line"></div>
+</header>
+
+<div class="filter-bar">
+  <label><input type="checkbox" id="f-under" checked> Under budget only</label>
+  <label><input type="checkbox" id="f-pool"> Pool required</label>
+  <label><input type="checkbox" id="f-parking"> Parking required</label>
+  <label><input type="checkbox" id="f-manual"> Include "check manually"</label>
+  <span class="spacer"></span>
+  <span class="count" id="count"></span>
+</div>
+
+<div id="grid" class="grid"></div>
+
+<footer>
+  Prices labeled "est all-in" include the listing's displayed total for the dates above plus a 14% LA transient-occupancy-tax buffer. Airbnb cards generally show a total that already includes the cleaning fee but excludes tax — verify with each listing's price breakdown at the booking step. VRBO Covina uses VRBO's base 5-night subtotal plus a $400 cleaning placeholder plus 14% tax. "Check manually" entries didn't return a date-specific quote during the run.
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

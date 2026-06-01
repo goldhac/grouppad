@@ -1,0 +1,16 @@
+{
+  "name": "la-trip-rentals",
+  "version": "0.1.0",
+  "description": "Group-trip rental comparison site for LA, Aug 18-23 2026",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}
