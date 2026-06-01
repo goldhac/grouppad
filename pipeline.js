@@ -37,10 +37,65 @@ const LOCATIONS = [
   'Los Angeles CA', 'Covina CA', 'Glendale CA', 'Pasadena CA',
   'Woodland Hills CA', 'Encino CA', 'Sherman Oaks CA',
 ];
+// Airbnb's fast scraper wants plain city names (no ", CA" suffix breaks geocoding).
+// "Los Angeles" alone returns county-wide results; a few extras widen coverage.
+const AIRBNB_LOCATIONS = ['Los Angeles', 'Pasadena', 'Woodland Hills', 'Long Beach'];
 const TAX_RATE             = 0.14;
 const CLEANING_PLACEHOLDER = 400;
 const BUDGET               = 7000;
 const MIN_BEDROOMS         = 7;
+
+// Approx driving miles from each LA-area city to Downtown LA (City Hall).
+// Keys matched longest-first so "west covina" beats "covina", etc.
+const CITY_DISTANCES = {
+  'downtown los angeles': 1, 'dtla': 1, 'los angeles': 5,
+  'west hollywood': 9, 'north hollywood': 12, 'hollywood': 8,
+  'west covina': 21, 'covina': 22, 'glendale': 9, 'pasadena': 10,
+  'south pasadena': 8, 'altadena': 13, 'woodland hills': 24, 'encino': 18,
+  'sherman oaks': 15, 'studio city': 12, 'van nuys': 18, 'tarzana': 22,
+  'northridge': 24, 'reseda': 22, 'canoga park': 25, 'burbank': 12,
+  'santa monica': 16, 'venice': 17, 'culver city': 12, 'marina del rey': 15,
+  'playa del rey': 16, 'inglewood': 12, 'beverly hills': 11, 'brentwood': 16,
+  'bel air': 14, 'westwood': 14, 'long beach': 24, 'pomona': 30,
+  'san gabriel': 11, 'alhambra': 8, 'monterey park': 9, 'arcadia': 14,
+  'el monte': 14, 'baldwin park': 19, 'whittier': 18, 'downey': 13,
+  'torrance': 20, 'redondo beach': 22, 'manhattan beach': 20, 'malibu': 30,
+  'calabasas': 28, 'hawthorne': 15, 'gardena': 16, 'carson': 18,
+  'compton': 14, 'bellflower': 18, 'norwalk': 18, 'la mirada': 22,
+  'diamond bar': 28, 'walnut': 25, 'rowland heights': 25, 'hacienda heights': 22,
+  'montebello': 10, 'pico rivera': 12, 'monrovia': 17, 'duarte': 20,
+  'azusa': 24, 'glendora': 26, 'san dimas': 28, 'la verne': 30, 'claremont': 32,
+  'chatsworth': 27, 'granada hills': 24, 'sylmar': 22, 'pacoima': 18,
+  'sun valley': 15, 'la canada': 12, 'la crescenta': 13, 'temple city': 13,
+  'rosemead': 11, 'south gate': 10, 'lynwood': 11, 'paramount': 16,
+};
+const DISTANCE_KEYS = Object.keys(CITY_DISTANCES).sort((a, b) => b.length - a.length);
+
+function distanceFromDTLA(location) {
+  if (!location) return null;
+  const loc = String(location).toLowerCase();
+  for (const city of DISTANCE_KEYS) {
+    if (loc.includes(city)) return CITY_DISTANCES[city];
+  }
+  return null;
+}
+
+// DTLA City Hall coordinates
+const DTLA = { lat: 34.0537, lng: -118.2427 };
+
+// Straight-line miles, rounded — used when a listing has lat/lng (Airbnb).
+// ~1.25x factor approximates driving distance over straight-line.
+function distanceMiFromCoords(lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  const toRad = d => (d * Math.PI) / 180;
+  const R = 3958.8; // Earth radius miles
+  const dLat = toRad(lat - DTLA.lat);
+  const dLng = toRad(lng - DTLA.lng);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(DTLA.lat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
+  const straight = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(straight * 1.25);
+}
 
 // ── DB ─────────────────────────────────────────────────────────────────────────
 function openDb() {
@@ -62,6 +117,7 @@ function openDb() {
       has_parking   INTEGER DEFAULT 0,
       rating        REAL,
       reviews       INTEGER,
+      distance_mi   REAL,
       passed_filter INTEGER DEFAULT 0,
       enriched      INTEGER DEFAULT 0,
       first_seen    TEXT    DEFAULT (datetime('now')),
@@ -78,6 +134,8 @@ function openDb() {
       PRIMARY KEY (source, listing_id, run_date)
     );
   `);
+  // Migration for DBs created before distance_mi existed
+  try { db.exec('ALTER TABLE listings ADD COLUMN distance_mi REAL'); } catch { /* already present */ }
   return db;
 }
 
@@ -104,6 +162,27 @@ function parseBathroomsFromName(name) {
   if (!name) return null;
   const m = String(name).match(/(\d+(?:\.\d+)?)\s*(?:ba|bath)/i);
   return m ? parseFloat(m[1]) : null;
+}
+
+// Airbnb fast scraper returns subtitles like ["8 beds", "6 bedrooms"]
+function parseAirbnbSubtitles(subtitles) {
+  let bedrooms = null, beds = null;
+  if (Array.isArray(subtitles)) {
+    for (const s of subtitles) {
+      const bdM = String(s).match(/(\d+)\s*bedroom/i);
+      if (bdM) bedrooms = +bdM[1];
+      const bM = String(s).match(/(\d+)\s*beds?\b/i);
+      if (bM && !/bedroom/i.test(s)) beds = +bM[1];
+    }
+  }
+  return { bedrooms, beds };
+}
+
+// Airbnb title like "Home in City of Industry" → "City of Industry"
+function areaFromAirbnbTitle(title) {
+  if (!title) return '';
+  const m = String(title).match(/\bin\s+(.+)$/i);
+  return m ? m[1].trim() : String(title);
 }
 
 function amenityMatch(arr, keywords) {
@@ -151,6 +230,41 @@ async function runApify(actorSlug, input, timeoutMs = 300000) {
   }
 }
 
+// Async pattern for slow actors: start run → poll status → fetch dataset.
+// Needed when a run can exceed the 300s run-sync API cap (e.g. tri_angle Airbnb).
+async function runApifyAsync(actorSlug, input, maxWaitMs = 540000) {
+  try {
+    console.log(`  → ${actorSlug} (async)`);
+    const startRes = await fetch(
+      `https://api.apify.com/v2/acts/${actorSlug}/runs?token=${APIFY_TOKEN}`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }
+    );
+    if (!startRes.ok) {
+      console.error(`  [Apify] start HTTP ${startRes.status}:`, (await startRes.text()).slice(0, 200));
+      return [];
+    }
+    const run = (await startRes.json()).data;
+    const { id: runId, defaultDatasetId } = run;
+    const deadline = Date.now() + maxWaitMs;
+
+    while (Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 10000));
+      const stRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_TOKEN}`);
+      const st = (await stRes.json()).data;
+      if (st.status === 'SUCCEEDED') break;
+      if (['FAILED', 'ABORTED', 'TIMED-OUT'].includes(st.status)) {
+        console.error(`  [Apify] run ${st.status}`);
+        return [];
+      }
+    }
+    const dsRes = await fetch(`https://api.apify.com/v2/datasets/${defaultDatasetId}/items?token=${APIFY_TOKEN}`);
+    return dsRes.ok ? await dsRes.json() : [];
+  } catch (e) {
+    console.error(`  [Apify] ${actorSlug} async failed:`, e.message);
+    return [];
+  }
+}
+
 async function discoverVrbo() {
   console.log('\n[Stage 1] VRBO');
   const items = await runApify('makework36~vrbo-scraper', {
@@ -180,6 +294,7 @@ async function discoverVrbo() {
     name:        item.name,
     url:         `https://www.vrbo.com/${item.id}`,
     location:    item.location || item.searchedLocation || '',
+    distance_mi: distanceFromDTLA(item.location || item.searchedLocation || ''),
     bedrooms:    typeof item.bedrooms === 'number' ? item.bedrooms : null,
     bathrooms:   typeof item.bathrooms === 'number' ? item.bathrooms : parseBathroomsFromName(item.name),
     sleeps:      typeof item.sleeps === 'number'    ? item.sleeps    : null,
@@ -195,35 +310,47 @@ async function discoverVrbo() {
 
 async function discoverAirbnb() {
   console.log('\n[Stage 1] Airbnb');
-  const items = await runApify('makework36~fast-airbnb-price-scraper', {
-    locations:   LOCATIONS,
-    checkin:     TRIP.checkin,
-    checkout:    TRIP.checkout,
-    adults:      TRIP.adults,
-    maxListings: 100,        // actor cap is 100/location; 7 locations = up to 700
-    roomType:    'entire',   // entire homes only
-    currency:    'USD',
+  // Discover WITHOUT trip dates: far-future Aug 2026 + 16 guests returns 0
+  // (availability not loaded), but undated search returns the full set plus a
+  // representative 5-night total. Exact dated price comes from the card link /
+  // Playwright. minBedrooms pushes the 7+ filter server-side.
+  const items = await runApifyAsync('tri_angle~new-fast-airbnb-scraper', {
+    locationQueries: AIRBNB_LOCATIONS,
+    adults:          TRIP.adults,
+    minBedrooms:     MIN_BEDROOMS,
+    currency:        'USD',
+    locale:          'en-US',
   });
   console.log(`  Returned ${items.length} items`);
 
-  return items.map(item => ({
-    source:      'airbnb',
-    listing_id:  String(item.id),
-    name:        item.name,
-    url:         `https://www.airbnb.com/rooms/${item.id}`,
-    location:    item.locationLabel || item.location || '',
-    bedrooms:    parseBedrooms(item.roomInfo),
-    bathrooms:   parseBathrooms(item.roomInfo),
-    sleeps:      typeof item.maxGuestCapacity === 'number' ? item.maxGuestCapacity : null,
-    amenities:   [],
-    photos:      Array.isArray(item.photos) ? item.photos : [],
-    has_pool:    0,
-    has_parking: 0,
-    rating:      item.rating       ?? null,
-    reviews:     item.reviewsCount ?? null,
-    // priceAmount is the full stay total (5 nights) — Airbnb already includes fees
-    price_total: typeof item.priceAmount === 'number' ? item.priceAmount : parsePrice(item.price),
-  }));
+  return items
+    .filter(item => item && item.id)   // guard: skip rows with no id (avoids PK collisions)
+    .map(item => {
+      const { bedrooms, beds } = parseAirbnbSubtitles(item.subtitles);
+      const area   = areaFromAirbnbTitle(item.title) || item.name || '';
+      const lat    = item.coordinates?.latitude;
+      const lng    = item.coordinates?.longitude;
+      const photos = Array.isArray(item.images) ? item.images.map(im => im.url).filter(Boolean) : [];
+      const text   = `${item.name || ''} ${item.title || ''}`.toLowerCase();
+      return {
+        source:      'airbnb',
+        listing_id:  String(item.id),
+        name:        item.name || item.titleLocale || area || `Airbnb ${item.id}`,
+        url:         `https://www.airbnb.com/rooms/${item.id}`,
+        location:    area,
+        distance_mi: distanceMiFromCoords(lat, lng) ?? distanceFromDTLA(area),
+        bedrooms:    bedrooms,
+        bathrooms:   parseBathroomsFromName(item.name),
+        sleeps:      beds,
+        amenities:   Array.isArray(item.badges) ? item.badges : [],
+        photos,
+        has_pool:    /\bpool\b/.test(text) ? 1 : 0,
+        has_parking: /\b(parking|garage|driveway)\b/.test(text) ? 1 : 0,
+        rating:      typeof item.rating?.average      === 'number' ? item.rating.average      : null,
+        reviews:     typeof item.rating?.reviewsCount === 'number' ? item.rating.reviewsCount : null,
+        price_total: parsePrice(item.pricing?.price || item.pricing?.label),
+      };
+    });
 }
 
 // ── Stage 2 — Upsert ──────────────────────────────────────────────────────────
@@ -233,10 +360,10 @@ function upsertAll(db, rows) {
   const upsertListing = db.prepare(`
     INSERT INTO listings
       (source, listing_id, name, url, location, bedrooms, bathrooms, sleeps,
-       amenities, photos, has_pool, has_parking, rating, reviews)
+       amenities, photos, has_pool, has_parking, rating, reviews, distance_mi)
     VALUES
       (@source, @listing_id, @name, @url, @location, @bedrooms, @bathrooms, @sleeps,
-       @amenities, @photos, @has_pool, @has_parking, @rating, @reviews)
+       @amenities, @photos, @has_pool, @has_parking, @rating, @reviews, @distance_mi)
     ON CONFLICT(source, listing_id) DO UPDATE SET
       name        = EXCLUDED.name,
       url         = EXCLUDED.url,
@@ -250,6 +377,7 @@ function upsertAll(db, rows) {
       has_parking = CASE WHEN EXCLUDED.has_parking = 1 THEN 1 ELSE listings.has_parking END,
       rating      = COALESCE(EXCLUDED.rating,  listings.rating),
       reviews     = COALESCE(EXCLUDED.reviews, listings.reviews),
+      distance_mi = COALESCE(EXCLUDED.distance_mi, listings.distance_mi),
       last_seen   = datetime('now')
   `);
 
@@ -402,7 +530,9 @@ async function fetchMissingPrices(db) {
 }
 
 // ── Stage 3c — Budget filter ───────────────────────────────────────────────────
-function filterListings(db) {
+// Only listings seen in THIS run (last_seen >= runStart) are eligible, so
+// listings that dropped out of today's results disappear instead of piling up.
+function filterListings(db, runStart) {
   db.prepare('UPDATE listings SET passed_filter = 0').run();
 
   const rows = db.prepare(`
@@ -416,7 +546,8 @@ function filterListings(db) {
         FROM price_snapshots GROUP BY source, listing_id
       )
     ) ps ON ps.source = l.source AND ps.listing_id = l.listing_id
-  `).all();
+    WHERE l.last_seen >= ?
+  `).all(runStart);
 
   const pass = db.prepare('UPDATE listings SET passed_filter = 1 WHERE source=? AND listing_id=?');
   let passed = 0;
@@ -429,7 +560,7 @@ function filterListings(db) {
     pass.run(r.source, r.listing_id);
     passed++;
   }
-  console.log(`\n[Stage 3c] ${passed} / ${rows.length} listings passed (beds >= ${MIN_BEDROOMS}, est ≤ $${BUDGET.toLocaleString()})`);
+  console.log(`\n[Stage 3c] ${passed} / ${rows.length} listings (this run) passed (beds >= ${MIN_BEDROOMS}, est ≤ $${BUDGET.toLocaleString()})`);
 }
 
 // ── Stage 4 — Firecrawl enrichment ────────────────────────────────────────────
@@ -520,6 +651,9 @@ async function main() {
   if (!APIFY_TOKEN) { console.error('ERROR: APIFY_TOKEN required'); process.exit(1); }
 
   const start = Date.now();
+  // SQLite datetime('now') format, captured before discovery so every row
+  // upserted this run gets last_seen >= RUN_START.
+  const RUN_START = new Date().toISOString().slice(0, 19).replace('T', ' ');
   console.log('═══════════════════════════════════════════════════');
   console.log(' GroupPad LA Rental Pipeline');
   console.log(` Run: ${new Date().toISOString().slice(0, 16)} UTC`);
@@ -538,8 +672,8 @@ async function main() {
   // Stage 3b — Playwright: get prices for bedroom-qualifying listings that have none
   await fetchMissingPrices(db);
 
-  // Stage 3c — budget filter
-  filterListings(db);
+  // Stage 3c — budget filter (only listings seen this run)
+  filterListings(db, RUN_START);
 
   // Stage 4 — enrich survivors
   await enrichSurvivors(db);

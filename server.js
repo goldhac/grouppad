@@ -749,7 +749,7 @@ app.get('/api/pipeline-listings', (req, res) => {
         l.bedrooms, l.bathrooms, l.sleeps,
         l.amenities, l.photos,
         l.has_pool, l.has_parking,
-        l.rating, l.reviews,
+        l.rating, l.reviews, l.distance_mi,
         l.enriched, l.last_seen,
         ps.price_total, ps.run_date
       FROM listings l
@@ -771,8 +771,14 @@ app.get('/api/pipeline-listings', (req, res) => {
     db.close();
 
     const listings = rows.map(r => {
+      // Source-aware all-in: Airbnb totals already include the cleaning fee,
+      // so only add tax; VRBO/other add a cleaning placeholder + tax.
       const est5n = r.price_total
-        ? Math.round((r.price_total + PIPELINE_CLEANING_FEE) * (1 + PIPELINE_TAX))
+        ? Math.round(
+            (r.source === 'airbnb'
+              ? r.price_total
+              : r.price_total + PIPELINE_CLEANING_FEE) * (1 + PIPELINE_TAX)
+          )
         : null;
       const budget = est5n == null ? 'unknown'
         : est5n <= PIPELINE_BUDGET              ? 'under'
@@ -787,6 +793,7 @@ app.get('/api/pipeline-listings', (req, res) => {
         bd:           r.bedrooms,
         ba:           r.bathrooms,
         sleeps:       r.sleeps,
+        distance_mi:  r.distance_mi ?? null,
         pool:         r.has_pool    ? 'yes' : 'unknown',
         parking:      r.has_parking ? 'yes' : 'unknown',
         rating:       r.rating,
