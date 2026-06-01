@@ -245,7 +245,8 @@ function extractPrice(html, source) {
   return null;
 }
 
-const AB_KEY = 'd306zoyjsyarp7ufs3il2wss7kmpq5fz';
+const AB_KEY        = 'd306zoyjsyarp7ufs3il2wss7kmpq5fz';
+const FIRECRAWL_KEY = process.env.FIRECRAWL_KEY || null;
 
 // Try Airbnb's internal booking-details API — returns full price breakdown JSON
 async function fetchAirbnbBookingPrice(listingId) {
@@ -292,6 +293,45 @@ async function fetchAirbnbBookingPrice(listingId) {
     } catch {}
   }
   return null;
+}
+
+// Firecrawl: renders the page with a real browser + uses LLM to extract price
+async function fetchPriceViaFirecrawl(listingUrl) {
+  if (!FIRECRAWL_KEY) return null;
+  try {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 35000); // Firecrawl renders JS; can take ~15s
+    const res  = await fetch('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: {
+        'Authorization': `Bearer ${FIRECRAWL_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url: listingUrl,
+        formats: ['extract'],
+        extract: {
+          prompt: 'Extract the total price shown for the entire stay (all nights combined, before tax). Return {"total_price": <number>} where the number is a plain USD dollar amount — no $ sign, no commas.',
+          schema: {
+            type: 'object',
+            properties: {
+              total_price: { type: 'number', description: 'Total price for all nights in USD' },
+            },
+            required: ['total_price'],
+          },
+        },
+      }),
+    });
+    clearTimeout(tid);
+    if (!res.ok) return null;
+    const data  = await res.json();
+    const price = data?.data?.extract?.total_price
+      ?? data?.extract?.total_price
+      ?? data?.data?.llm_extraction?.total_price;
+    if (price && price >= 500 && price <= 200000) return { price: Math.round(price), type: 'full' };
+    return null;
+  } catch { return null; }
 }
 
 // Airbnb calendar API — nightly base rates only (no cleaning/service fees)
@@ -436,17 +476,27 @@ async function scrapeListingDetails(cleanUrl, parsed) {
 
   if (!result.reviews) result.reviews = extractReviewCount(html);
 
-  // ── Price: HTML patterns → booking API → calendar API ────────────────────
+  // ── Price: HTML → Airbnb API → calendar → Firecrawl (real browser) ───────
   const htmlPrice = extractPrice(html, parsed.source);
   if (htmlPrice) {
-    result.displayed_5n  = htmlPrice;
+    result.displayed_5n    = htmlPrice;
     result.priceIsBaseOnly = false;
-  } else if (parsed.source === 'Airbnb') {
-    const apiResult = await fetchAirbnbBookingPrice(parsed.id)
-      || await fetchAirbnbCalendarPrice(parsed.id);
+  } else {
+    let apiResult = null;
+    if (parsed.source === 'Airbnb') {
+      apiResult = await fetchAirbnbBookingPrice(parsed.id)
+               || await fetchAirbnbCalendarPrice(parsed.id);
+    }
     if (apiResult) {
       result.displayed_5n    = apiResult.price;
       result.priceIsBaseOnly = apiResult.type === 'nightly_only';
+    } else {
+      // Last resort: Firecrawl renders the full JS page and LLM-extracts the price
+      const fcResult = await fetchPriceViaFirecrawl(urlWithDates(cleanUrl, parsed.source));
+      if (fcResult) {
+        result.displayed_5n    = fcResult.price;
+        result.priceIsBaseOnly = false;
+      }
     }
   }
 
