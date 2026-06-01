@@ -246,7 +246,7 @@ function extractPrice(html, source) {
 }
 
 const AB_KEY        = 'd306zoyjsyarp7ufs3il2wss7kmpq5fz';
-const FIRECRAWL_KEY = process.env.FIRECRAWL_KEY || null;
+const FIRECRAWL_KEY = process.env.FIRECRAWL_API_KEY || null;
 
 // Try Airbnb's internal booking-details API — returns full price breakdown JSON
 async function fetchAirbnbBookingPrice(listingId) {
@@ -301,7 +301,7 @@ async function fetchPriceViaFirecrawl(listingUrl) {
   try {
     const ctrl = new AbortController();
     const tid  = setTimeout(() => ctrl.abort(), 35000); // Firecrawl renders JS; can take ~15s
-    const res  = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    const res  = await fetch('https://api.firecrawl.dev/v2/scrape', {
       method: 'POST',
       signal: ctrl.signal,
       headers: {
@@ -312,11 +312,11 @@ async function fetchPriceViaFirecrawl(listingUrl) {
         url: listingUrl,
         formats: ['extract'],
         extract: {
-          prompt: 'Extract the total price shown for the entire stay (all nights combined, before tax). Return {"total_price": <number>} where the number is a plain USD dollar amount — no $ sign, no commas.',
+          prompt: 'Extract the total price shown for the entire stay (all nights combined, before taxes). Return {"total_price": <number>} where the number is a plain USD dollar amount with no $ sign or commas.',
           schema: {
             type: 'object',
             properties: {
-              total_price: { type: 'number', description: 'Total price for all nights in USD' },
+              total_price: { type: 'number', description: 'Total price for all nights in USD, no currency symbol' },
             },
             required: ['total_price'],
           },
