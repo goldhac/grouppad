@@ -823,4 +823,38 @@ app.post('/api/admin/run-pipeline', requireAdmin, (req, res) => {
   res.json({ ok: true, message: 'Pipeline started in background — check server logs' });
 });
 
-app.listen(PORT, () => console.log(`GroupPad listening on :${PORT}`));
+// ── Daily pipeline scheduler ──────────────────────────────────────────────────
+// Runs pipeline.js once a day at PIPELINE_HOUR_UTC (default 15:00 UTC = 8am PDT).
+// Self-rescheduling setTimeout so it survives indefinitely while the server is up.
+const PIPELINE_HOUR_UTC = Number(process.env.PIPELINE_HOUR_UTC ?? 15);
+
+function runPipelineJob() {
+  if (!process.env.APIFY_TOKEN) {
+    console.log('[Cron] Skipping pipeline run — APIFY_TOKEN not set');
+    return;
+  }
+  const { spawn } = require('child_process');
+  console.log('[Cron] Starting daily pipeline run…');
+  const child = spawn('node', ['pipeline.js'], {
+    cwd: __dirname, env: { ...process.env }, detached: true, stdio: 'ignore',
+  });
+  child.unref();
+}
+
+function scheduleDailyPipeline() {
+  const now  = new Date();
+  const next = new Date(now);
+  next.setUTCHours(PIPELINE_HOUR_UTC, 0, 0, 0);
+  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  const delay = next - now;
+  console.log(`[Cron] Next pipeline run at ${next.toISOString()} (in ${Math.round(delay / 3600000)}h)`);
+  setTimeout(() => {
+    runPipelineJob();
+    scheduleDailyPipeline(); // reschedule for the following day
+  }, delay);
+}
+
+app.listen(PORT, () => {
+  console.log(`GroupPad listening on :${PORT}`);
+  scheduleDailyPipeline();
+});
