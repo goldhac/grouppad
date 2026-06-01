@@ -1,6 +1,16 @@
-FROM node:20-bookworm-slim
+# ── Stage 1: compile native modules (better-sqlite3 needs gcc) ────────────────
+FROM node:20-bookworm-slim AS builder
 
-# Install Chromium + build tools (for better-sqlite3 native compile) + runtime deps
+RUN apt-get update && apt-get install -y python3 make g++ --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+# ── Stage 2: lean runtime image (no build tools) ──────────────────────────────
+FROM node:20-bookworm-slim AS runtime
+
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -17,20 +27,16 @@ RUN apt-get update && apt-get install -y \
     libxfixes3 \
     libxkbcommon0 \
     libxrandr2 \
-    python3 make g++ \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Playwright looks for this env var
-ENV CHROMIUM_PATH=/usr/bin/chromium
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-
-COPY package*.json ./
-RUN npm ci --omit=dev
-
+# Copy compiled node_modules from builder (no g++ needed at runtime)
+COPY --from=builder /app/node_modules ./node_modules
 COPY . .
 
+ENV CHROMIUM_PATH=/usr/bin/chromium
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 EXPOSE 3000
 CMD ["node", "server.js"]

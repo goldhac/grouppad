@@ -39,14 +39,20 @@ function requireAdmin(req, res, next) {
 // ── URL parsing ───────────────────────────────────────────────────────────────
 
 function parseListingUrl(rawUrl) {
-  const url = rawUrl.trim();
-  const ab = url.match(/airbnb\.com\/rooms\/(\d+)/);
+  let urlObj;
+  try { urlObj = new URL(rawUrl.trim()); } catch { return null; }
+  if (!['http:', 'https:'].includes(urlObj.protocol)) return null;
+  const full = urlObj.toString();
+  const ab = full.match(/airbnb\.com\/rooms\/(\d+)/);
   if (ab) return { source: 'Airbnb', id: ab[1] };
-  const vb = url.match(/vrbo\.com\/(\d+)/);
+  const vb = full.match(/vrbo\.com\/(\d+)/);
   if (vb) return { source: 'VRBO', id: vb[1] };
-  const bk = url.match(/booking\.com\/hotel\/[^/?#]+\/([^./?#]+)/);
+  const bk = full.match(/booking\.com\/hotel\/[^/?#]+\/([^./?#]+)/);
   if (bk) return { source: 'Booking.com', id: bk[1] };
-  return null;
+  // Any other valid rental URL — derive source from hostname, id from path
+  const host   = urlObj.hostname.replace(/^www\./, '');
+  const pathId = urlObj.pathname.replace(/^\/+|\/+$/g, '').replace(/\//g, '-').slice(0, 100) || 'listing';
+  return { source: host, id: pathId };
 }
 
 // ── Scraper ───────────────────────────────────────────────────────────────────
@@ -651,7 +657,7 @@ app.post('/api/submit', async (req, res) => {
 
   const parsed = parseListingUrl(url);
   if (!parsed)
-    return res.status(400).json({ error: 'URL must be from Airbnb, VRBO, or Booking.com' });
+    return res.status(400).json({ error: 'Please enter a valid http/https URL' });
 
   // Dedup check against submitted
   const submitted = loadSubmitted();
