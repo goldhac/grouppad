@@ -29,8 +29,8 @@ const TRIP = {
   nights:   5,
 };
 const LOCATIONS = [
-  'Los Angeles', 'Covina', 'Glendale', 'Pasadena',
-  'Woodland Hills', 'Encino', 'Sherman Oaks',
+  'Los Angeles CA', 'Covina CA', 'Glendale CA', 'Pasadena CA',
+  'Woodland Hills CA', 'Encino CA', 'Sherman Oaks CA',
 ];
 const TAX_RATE             = 0.14;   // LA transient occupancy tax estimate
 const CLEANING_PLACEHOLDER = 400;    // used if cleaning fee not in total
@@ -149,11 +149,22 @@ async function discoverVrbo() {
   });
   console.log(`  Returned ${items.length} items`);
 
-  return items.map(item => ({
+  // Drop results that slipped through to other states (e.g. Glendale AZ vs CA)
+  const LA_KEYWORDS = /\b(los angeles|glendale|pasadena|burbank|sherman oaks|encino|woodland hills|covina|west hollywood|north hollywood|van nuys|reseda|chatsworth|calabasas|agoura|thousand oaks|santa monica|culver city|inglewood|torrance|gardena|compton|hawthorne|lawndale|el segundo|manhattan beach|hermosa beach|redondo beach|carson|long beach|lakewood|downey|whittier|pico rivera|montebello|monterey park|alhambra|san gabriel|arcadia|monrovia|duarte|azusa|glendora|pomona|ontario|rancho cucamonga|fontana|rialto|riverside|corona|anaheim|fullerton|placentia|yorba linda|brea|la habra|buena park|la mirada|norwalk|santa fe springs|la puente|west covina|baldwin park|el monte|rosemead|temple city|san marino|la canada|sunland|tujunga|shadow hills|north hills|granada hills|northridge|porter ranch|west hills|winnetka|canoga park|west hollywood|silver lake|echo park|highland park|eagle rock|glassell park|atwater village|los feliz|griffith park|boyle heights|east la|commerce|bell|bell gardens|huntington park|south gate|lynwood|paramount|bellflower|cerritos|artesia|hawaiian gardens|signal hill|wilmington|san pedro|harbor city|lomita|rancho palos verdes|palos verdes|rolling hills|ca|california)\b/i;
+
+  return items.filter(item => {
+    const loc = (item.location || item.searchedLocation || '').toLowerCase();
+    const urlStr = (item.url || '').toLowerCase();
+    // Keep if location or URL contains a CA city/keyword; drop obvious AZ/NV/TX results
+    const hasAZ = /\bphoenix|scottsdale|tempe|mesa|chandler|gilbert|glendale.*(az|arizona)|az\b/i.test(loc + ' ' + urlStr);
+    if (hasAZ) return false;
+    return true;
+  }).map(item => ({
     source:      'vrbo',
     listing_id:  String(item.id),
     name:        item.name,
-    url:         item.url,
+    // Use clean VRBO URL for enrichment; Expedia URL kept as fallback via expedia_url field
+    url:         `https://www.vrbo.com/${item.id}`,
     location:    item.location || item.searchedLocation || '',
     bedrooms:    typeof item.bedrooms === 'number' ? item.bedrooms : null,
     bathrooms:   typeof item.bathrooms === 'number' ? item.bathrooms : null,
@@ -175,7 +186,7 @@ async function discoverAirbnb() {
     checkin:     TRIP.checkin,
     checkout:    TRIP.checkout,
     adults:      TRIP.adults,
-    maxListings: 500,
+    maxListings: 100, // actor cap is 100 per location (7 locations = up to 700 total)
     roomType:    'entire',
     currency:    'USD',
   });
