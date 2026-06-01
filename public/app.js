@@ -379,11 +379,12 @@ document.getElementById('submit-toggle').addEventListener('click', () => {
 });
 
 document.getElementById('submit-btn').addEventListener('click', async () => {
-  const urlEl  = document.getElementById('submit-url');
-  const nameEl = document.getElementById('submit-name-input');
-  const msgEl  = document.getElementById('submit-msg');
-  const btn    = document.getElementById('submit-btn');
-  const url    = urlEl.value.trim();
+  const urlEl   = document.getElementById('submit-url');
+  const priceEl = document.getElementById('submit-price-input');
+  const nameEl  = document.getElementById('submit-name-input');
+  const msgEl   = document.getElementById('submit-msg');
+  const btn     = document.getElementById('submit-btn');
+  const url     = urlEl.value.trim();
 
   if (!url) {
     msgEl.textContent = 'Please paste a URL.';
@@ -400,13 +401,18 @@ document.getElementById('submit-btn').addEventListener('click', async () => {
     const res  = await fetch('/api/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, submitted_by: nameEl.value.trim() || VOTER }),
+      body: JSON.stringify({
+        url,
+        submitted_by: nameEl.value.trim() || VOTER,
+        manual_price: priceEl.value.trim() || undefined,
+      }),
     });
     const data = await res.json();
     if (res.ok) {
       SUBMITTED = [...SUBMITTED, data];
-      urlEl.value  = '';
-      nameEl.value = '';
+      urlEl.value   = '';
+      priceEl.value = '';
+      nameEl.value  = '';
       const bedStr = data.bd ? ` · ${data.bd} bd` : '';
       msgEl.textContent = `Added "${data.name}"${bedStr} — see it below!`;
       msgEl.className   = 'submit-msg ok';

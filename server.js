@@ -245,18 +245,65 @@ function extractPrice(html, source) {
   return null;
 }
 
-// Airbnb calendar API: nightly base rates only (no cleaning/service fees)
-// Used as last-resort fallback when HTML price extraction fails
+const AB_KEY = 'd306zoyjsyarp7ufs3il2wss7kmpq5fz';
+
+// Try Airbnb's internal booking-details API — returns full price breakdown JSON
+async function fetchAirbnbBookingPrice(listingId) {
+  const endpoints = [
+    // v2 booking details — sometimes returns total_price_formatted
+    `https://www.airbnb.com/api/v2/pdp_listing_booking_details?adults=${TRIP.adults}` +
+    `&check_in=${TRIP.checkin}&check_out=${TRIP.checkout}&currency=USD` +
+    `&key=${AB_KEY}&listing_id=${listingId}&number_of_nights=5`,
+    // v2 stays pricing quote
+    `https://www.airbnb.com/api/v2/stays_pdp/price_quote?adults=${TRIP.adults}` +
+    `&check_in=${TRIP.checkin}&check_out=${TRIP.checkout}&currency=USD` +
+    `&key=${AB_KEY}&listing_id=${listingId}`,
+  ];
+  for (const url of endpoints) {
+    try {
+      const ctrl = new AbortController();
+      const tid  = setTimeout(() => ctrl.abort(), 7000);
+      const res  = await fetch(url, {
+        signal: ctrl.signal,
+        headers: {
+          'X-Airbnb-API-Key': AB_KEY,
+          'User-Agent': 'Airbnb/22.40 iPhone/16.0 Type/Phone',
+          'Accept': 'application/json',
+        },
+      });
+      clearTimeout(tid);
+      if (!res.ok) continue;
+      const body = await res.text();
+      // Search JSON for total price fields
+      const patterns = [
+        /"total_price_formatted"\s*:\s*"\\?\$([\d,]+)"/i,
+        /"total_price"\s*:\s*\{"amount"\s*:\s*(\d+(?:\.\d+)?)/i,
+        /"totalAmount"\s*:\s*\{"[a-z]+"\s*:\s*(\d+(?:\.\d+)?)/i,
+        /"total"\s*:\s*\{"amount"\s*:\s*(\d+(?:\.\d+)?)/i,
+        /"amount"\s*:\s*(\d{4,6}(?:\.\d+)?)\b/,
+      ];
+      for (const p of patterns) {
+        const m = body.match(p);
+        if (m) {
+          const val = Math.round(parseFloat(m[1].replace(/,/g, '')));
+          if (val >= 1000 && val <= 150000) return { price: val, type: 'full' };
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// Airbnb calendar API — nightly base rates only (no cleaning/service fees)
 async function fetchAirbnbCalendarPrice(listingId) {
   try {
-    const key = 'd306zoyjsyarp7ufs3il2wss7kmpq5fz'; // Airbnb public frontend key
-    const url = `https://www.airbnb.com/api/v2/calendar_months?currency=USD&key=${key}` +
+    const url = `https://www.airbnb.com/api/v2/calendar_months?currency=USD&key=${AB_KEY}` +
                 `&listing_id=${listingId}&month=8&year=2026&count=1`;
     const ctrl = new AbortController();
     const tid  = setTimeout(() => ctrl.abort(), 6000);
     const res  = await fetch(url, {
       signal: ctrl.signal,
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible)', 'X-Airbnb-Api-Key': key },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible)', 'X-Airbnb-Api-Key': AB_KEY },
     });
     clearTimeout(tid);
     if (!res.ok) return null;
@@ -270,7 +317,7 @@ async function fetchAirbnbCalendarPrice(listingId) {
         found++;
       }
     }
-    return found === 5 ? Math.round(total) : null;
+    return found === 5 ? { price: Math.round(total), type: 'nightly_only' } : null;
   } catch { return null; }
 }
 
@@ -389,16 +436,17 @@ async function scrapeListingDetails(cleanUrl, parsed) {
 
   if (!result.reviews) result.reviews = extractReviewCount(html);
 
-  // ── Price ─────────────────────────────────────────────────────────────────
-  const rawPrice = extractPrice(html, parsed.source);
-  if (rawPrice) {
-    result.displayed_5n = rawPrice;
+  // ── Price: HTML patterns → booking API → calendar API ────────────────────
+  const htmlPrice = extractPrice(html, parsed.source);
+  if (htmlPrice) {
+    result.displayed_5n  = htmlPrice;
+    result.priceIsBaseOnly = false;
   } else if (parsed.source === 'Airbnb') {
-    // Fallback: Airbnb calendar API gives nightly base rates (no cleaning/service)
-    const calPrice = await fetchAirbnbCalendarPrice(parsed.id);
-    if (calPrice) {
-      result.displayed_5n = calPrice;
-      result.priceIsBaseOnly = true; // flag so the note reflects this
+    const apiResult = await fetchAirbnbBookingPrice(parsed.id)
+      || await fetchAirbnbCalendarPrice(parsed.id);
+    if (apiResult) {
+      result.displayed_5n    = apiResult.price;
+      result.priceIsBaseOnly = apiResult.type === 'nightly_only';
     }
   }
 
@@ -458,7 +506,7 @@ app.get('/api/submitted', (req, res) => res.json(loadSubmitted()));
 
 // Submit a new listing
 app.post('/api/submit', async (req, res) => {
-  const { url, submitted_by } = req.body || {};
+  const { url, submitted_by, manual_price } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url required' });
 
   const parsed = parseListingUrl(url);
@@ -479,7 +527,14 @@ app.post('/api/submit', async (req, res) => {
   const scraped  = await scrapeListingDetails(cleanUrl, parsed);
   const by       = (submitted_by || 'anonymous').slice(0, 60);
 
-  // Estimate 5-night all-in price if we have a displayed price
+  // Manual price overrides auto-detection
+  const manualVal = manual_price ? Math.round(+String(manual_price).replace(/[$,]/g, '')) : 0;
+  if (manualVal >= 500 && manualVal <= 150000) {
+    scraped.displayed_5n   = manualVal;
+    scraped.priceIsBaseOnly = false;
+  }
+
+  // Estimate 5-night all-in price (Airbnb total already includes most fees; add 14% tax)
   let est5n = null;
   if (scraped.displayed_5n) {
     est5n = Math.round(scraped.displayed_5n * 1.14);

@@ -84,6 +84,7 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
 }
 .submit-form input[type="url"] { flex: 1; min-width: 240px; }
 .submit-form input[type="text"] { width: 160px; }
+#submit-price-input { width: 220px; }
 .submit-form input:focus { border-color: var(--link); }
 .submit-form button {
   background: var(--link); color: #0f1115; font-weight: 600;
