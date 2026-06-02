@@ -54,17 +54,50 @@
   </div>
 
   <div id="compare-panel" class="compare-panel hidden">
-    <label class="compare-label">Paste your trip itinerary / plans (optional — makes the comparison smarter):</label>
-    <textarea id="compare-itinerary" rows="4" placeholder="e.g. Day 1: arrive, dinner in Santa Monica. Day 2: Universal Studios. Day 3: pool day + birthday party at the house. Day 4: Hollywood + Griffith. Need space for a big group dinner and parking for 4 cars…"></textarea>
-    <input type="text" id="compare-criteria" placeholder="Anything else you care about? (e.g. must have hot tub, walkable, quiet street)">
+    <label class="compare-label">Trip itinerary <span class="muted-note">(posted by the organizer)</span>:</label>
+    <div id="itinerary-display" class="itinerary-display">No itinerary posted yet.</div>
+    <div id="itinerary-admin" class="itinerary-admin hidden">
+      <textarea id="itinerary-edit" rows="4" placeholder="Admin: post the one canonical itinerary here. e.g. Day 1: arrive, dinner in Santa Monica. Day 2: Universal Studios. Day 3: pool day + birthday party at the house…"></textarea>
+      <div class="compare-actions">
+        <button id="itinerary-save" class="ai-btn">Save itinerary</button>
+        <span id="itinerary-msg" class="compare-msg"></span>
+      </div>
+    </div>
+    <input type="text" id="compare-criteria" placeholder="Anything else to weigh? (e.g. must have hot tub, walkable, quiet street)">
     <div class="compare-actions">
       <button id="compare-run" class="ai-btn primary">Analyze &amp; compare shortlist</button>
       <span id="compare-msg" class="compare-msg"></span>
     </div>
     <div id="compare-result" class="compare-result hidden"></div>
+
+    <div class="h2h">
+      <label class="compare-label">⚔️ Head-to-head (1v1):</label>
+      <div class="h2h-row">
+        <select id="h2h-a" class="h2h-select"></select>
+        <span class="h2h-vs">vs</span>
+        <select id="h2h-b" class="h2h-select"></select>
+        <button id="h2h-run" class="ai-btn">Compare 1v1</button>
+      </div>
+      <span id="h2h-msg" class="compare-msg"></span>
+      <div id="h2h-result" class="compare-result hidden"></div>
+    </div>
   </div>
 
   <div id="shortlist-grid" class="grid"></div>
+</div>
+
+<div id="caveats-section" class="caveats-section">
+  <div class="caveats-header">
+    <span>💬 Group caveats</span>
+    <span class="caveats-note">Drop your must-haves &amp; dealbreakers — they feed the AI ranking</span>
+  </div>
+  <div id="caveats-list" class="caveats-list"></div>
+  <div class="caveats-form">
+    <input type="text" id="caveat-name" placeholder="Your name" maxlength="40" class="caveat-name">
+    <input type="text" id="caveat-text" placeholder="e.g. I need a ground-floor room; parking for my car is a must" maxlength="500" class="caveat-text">
+    <button id="caveat-send" class="ai-btn">Post</button>
+  </div>
+  <span id="caveat-msg" class="compare-msg"></span>
 </div>
 
 <div id="grid" class="grid"></div>

@@ -15,6 +15,8 @@ try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
 const DATA_FILE      = path.join(__dirname, 'data', 'listings.json'); // static base (image)
 const VOTES_FILE     = path.join(DATA_DIR, 'votes.json');            // persisted
 const SUBMITTED_FILE = path.join(DATA_DIR, 'submitted.json');        // persisted
+const ITINERARY_FILE = path.join(DATA_DIR, 'itinerary.json');        // persisted (admin)
+const CAVEATS_FILE   = path.join(DATA_DIR, 'caveats.json');          // persisted (members)
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -33,6 +35,18 @@ function loadSubmitted() {
   try { return JSON.parse(fs.readFileSync(SUBMITTED_FILE, 'utf8')); } catch { return []; }
 }
 function saveSubmitted(l) { fs.writeFileSync(SUBMITTED_FILE, JSON.stringify(l, null, 2)); }
+
+// Single canonical trip itinerary, posted by the admin. { text, updated_at }
+function loadItinerary() {
+  try { return JSON.parse(fs.readFileSync(ITINERARY_FILE, 'utf8')); } catch { return { text: '', updated_at: null }; }
+}
+function saveItinerary(it) { fs.writeFileSync(ITINERARY_FILE, JSON.stringify(it, null, 2)); }
+
+// Member caveats: [{ id, name, text, created_at }]
+function loadCaveats() {
+  try { return JSON.parse(fs.readFileSync(CAVEATS_FILE, 'utf8')); } catch { return []; }
+}
+function saveCaveats(c) { fs.writeFileSync(CAVEATS_FILE, JSON.stringify(c, null, 2)); }
 
 // ── Admin middleware ──────────────────────────────────────────────────────────
 
@@ -862,10 +876,15 @@ app.post('/api/compare-listings', async (req, res) => {
   if (!GEMINI_API_KEY) {
     return res.status(503).json({ error: 'AI compare is not configured (GEMINI_API_KEY missing).' });
   }
-  const { listings, itinerary, criteria } = req.body || {};
+  const { listings, criteria, mode } = req.body || {};
   if (!Array.isArray(listings) || listings.length < 2) {
     return res.status(400).json({ error: 'Pick at least 2 listings to compare.' });
   }
+  const headToHead = mode === '1v1' && listings.length === 2;
+  // Itinerary now comes from the single admin-posted source, not per-user uploads.
+  const itinerary = loadItinerary().text || '';
+  // Fold in member caveats so the AI weighs what the group actually cares about.
+  const caveats = loadCaveats().slice(-30).map(c => `- ${c.name}: ${c.text}`).join('\n');
 
   // Compact each listing to the fields that matter, capped to keep the prompt small.
   const compact = listings.slice(0, 12).map((l, i) => ({
@@ -880,11 +899,24 @@ app.post('/api/compare-listings', async (req, res) => {
     url: l.url,
   }));
 
-  const prompt =
+  const context =
 `You are helping a group of 14 friends choose a large rental home for a 5-night LA birthday trip (Aug 18–23, 2026), budget ~$7,000 all-in. They prefer mansions / large homes and will accept locations up to ~1 hour from Downtown LA.
 
-${itinerary ? `Their trip itinerary / plans:\n${String(itinerary).slice(0, 4000)}\n` : 'No itinerary was provided.'}
-${criteria ? `Extra criteria they care about:\n${String(criteria).slice(0, 1000)}\n` : ''}
+${itinerary ? `Their trip itinerary / plans (posted by the trip organizer):\n${String(itinerary).slice(0, 4000)}\n` : 'No itinerary was provided.'}
+${caveats ? `Individual member caveats / must-haves:\n${caveats.slice(0, 1500)}\n` : ''}
+${criteria ? `Extra criteria they care about:\n${String(criteria).slice(0, 1000)}\n` : ''}`;
+
+  const prompt = headToHead
+    ? `${context}
+Head-to-head: compare these TWO homes (JSON):
+${JSON.stringify(compact, null, 1)}
+
+Write a punchy 1v1 markdown breakdown:
+1. **Winner:** name the better pick in one bold line and why.
+2. A tight table (Metric | Home 1 | Home 2) covering beds/sleeps, ~all-in price, distance from DTLA, pool, hot tub, parking, rating/reviews.
+3. "Pick Home 1 if…" / "Pick Home 2 if…" — one line each.
+Keep it under ~250 words. Refer to homes by number and name.`
+    : `${context}
 Here are the candidate listings (JSON):
 ${JSON.stringify(compact, null, 1)}
 
@@ -930,6 +962,67 @@ app.post('/api/admin/run-pipeline', requireAdmin, (req, res) => {
   const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env, detached: true, stdio: 'ignore' });
   child.unref();
   res.json({ ok: true, message: 'Pipeline started in background — check server logs' });
+});
+
+// ── Trip itinerary (admin posts one canonical itinerary; everyone reads it) ─────
+app.get('/api/itinerary', (req, res) => res.json(loadItinerary()));
+
+app.post('/api/admin/itinerary', requireAdmin, (req, res) => {
+  const text = String((req.body && req.body.text) || '').slice(0, 8000);
+  const it = { text, updated_at: new Date().toISOString() };
+  saveItinerary(it);
+  res.json(it);
+});
+
+// ── Member caveats (small chat: each member adds their own must-haves) ──────────
+app.get('/api/caveats', (req, res) => res.json(loadCaveats()));
+
+app.post('/api/caveats', (req, res) => {
+  const name = String((req.body && req.body.name) || 'Anon').slice(0, 40).trim() || 'Anon';
+  const text = String((req.body && req.body.text) || '').slice(0, 500).trim();
+  if (!text) return res.status(400).json({ error: 'Say something first.' });
+  const list = loadCaveats();
+  list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, text, created_at: new Date().toISOString() });
+  const trimmed = list.slice(-200); // keep the log bounded
+  saveCaveats(trimmed);
+  res.json(trimmed);
+});
+
+app.delete('/api/caveats/:id', requireAdmin, (req, res) => {
+  const list = loadCaveats();
+  const updated = list.filter(c => c.id !== req.params.id);
+  saveCaveats(updated);
+  res.json(updated);
+});
+
+// ── Admin: Apify token usage (current month spend vs the $5 free cap) ───────────
+app.get('/api/admin/apify-usage', requireAdmin, async (req, res) => {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) return res.status(400).json({ error: 'APIFY_TOKEN not set on server' });
+  try {
+    const [limitsR, runsR] = await Promise.all([
+      fetch(`https://api.apify.com/v2/users/me/limits?token=${token}`),
+      fetch(`https://api.apify.com/v2/actor-runs?token=${token}&limit=10&desc=1`),
+    ]);
+    const limits = await limitsR.json();
+    const runs   = await runsR.json();
+    const usage = limits?.data?.current?.monthlyUsageUsd
+               ?? limits?.data?.monthlyUsageUsd
+               ?? null;
+    const limit = limits?.data?.limits?.maxMonthlyUsageUsd
+               ?? limits?.data?.maxMonthlyUsageUsd
+               ?? null;
+    const recent = (runs?.data?.items || []).map(r => ({
+      startedAt: r.startedAt,
+      status: r.status,
+      costUsd: r.usageTotalUsd ?? null,
+      actId: r.actId,
+    }));
+    res.json({ usageUsd: usage, limitUsd: limit, recent });
+  } catch (e) {
+    console.error('[apify-usage]', e.message);
+    res.status(502).json({ error: e.message });
+  }
 });
 
 // ── Pipeline scheduler ────────────────────────────────────────────────────────

@@ -364,6 +364,51 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
   padding: 2px 8px; border-radius: 4px;
 }
 
+/* Itinerary (admin-posted, read by all) */
+.muted-note { color: var(--muted); font-weight: normal; }
+.itinerary-display {
+  background: #181c23; border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap;
+}
+.itinerary-display.empty { color: var(--muted); font-style: italic; }
+.itinerary-admin { display: flex; flex-direction: column; gap: 8px; }
+.itinerary-admin.hidden { display: none; }
+
+/* Head-to-head 1v1 */
+.h2h { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px;
+  display: flex; flex-direction: column; gap: 8px; }
+.h2h-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.h2h-select {
+  flex: 1; min-width: 140px; background: #232830; border: 1px solid var(--border);
+  color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 13px;
+}
+.h2h-vs { color: var(--muted); font-weight: 600; }
+
+/* Group caveats chat */
+.caveats-section { padding: 16px 32px; }
+.caveats-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.caveats-header > span:first-child { font-size: 16px; font-weight: 600; }
+.caveats-note { font-size: 12px; color: var(--muted); }
+.caveats-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px;
+  max-height: 240px; overflow-y: auto; }
+.caveat-empty { color: var(--muted); font-style: italic; font-size: 13px; }
+.caveat-item {
+  display: flex; align-items: baseline; gap: 8px; background: #181c23;
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px;
+}
+.caveat-who { color: var(--link); font-weight: 600; flex-shrink: 0; }
+.caveat-body { flex: 1; }
+.caveat-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 12px; }
+.caveat-del:hover { color: var(--danger); }
+.caveats-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.caveat-name { width: 140px; }
+.caveat-text { flex: 1; min-width: 200px; }
+.caveats-form input {
+  background: #232830; border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 8px 10px; font-size: 13px;
+}
+.caveats-form input:focus { border-color: var(--warn); outline: none; }
+
 footer { color: var(--muted); padding: 24px 32px 60px; font-size: 12px; line-height: 1.6; max-width: 800px; }
 
 @media (max-width: 600px) {

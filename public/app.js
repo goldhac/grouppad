@@ -15,19 +15,25 @@ let SUBMITTED = [];
 let PIPELINE  = [];
 let SPLIT     = 14;
 let ADMIN_KEY = localStorage.getItem('admin_key') || null;
+let ITINERARY = { text: '', updated_at: null };
+let CAVEATS   = [];
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
-  const [data, votes, submitted, pipeline] = await Promise.all([
+  const [data, votes, submitted, pipeline, itinerary, caveats] = await Promise.all([
     fetch('/api/listings').then(r => r.json()),
     fetch('/api/votes').then(r => r.json()).catch(() => ({})),
     fetch('/api/submitted').then(r => r.json()).catch(() => []),
     fetch('/api/pipeline-listings').then(r => r.json()).catch(() => ({ listings: [] })),
+    fetch('/api/itinerary').then(r => r.json()).catch(() => ({ text: '', updated_at: null })),
+    fetch('/api/caveats').then(r => r.json()).catch(() => []),
   ]);
   DATA      = data;
   VOTES     = votes;
   SUBMITTED = submitted;
   PIPELINE  = pipeline.listings || [];
+  ITINERARY = itinerary || { text: '', updated_at: null };
+  CAVEATS   = Array.isArray(caveats) ? caveats : [];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -348,8 +354,67 @@ function render() {
 
   renderSubmitted();
   renderPipeline();
+  renderItinerary();
+  renderCaveats();
+  renderH2HOptions();
   updateSplitDisplay();
   attachCardHandlers();
+}
+
+// Show the single admin-posted itinerary; prefill the admin editor.
+function renderItinerary() {
+  const disp = document.getElementById('itinerary-display');
+  if (disp) {
+    disp.textContent = ITINERARY.text ? ITINERARY.text : 'No itinerary posted yet.';
+    disp.classList.toggle('empty', !ITINERARY.text);
+  }
+  const edit = document.getElementById('itinerary-edit');
+  if (edit && document.activeElement !== edit) edit.value = ITINERARY.text || '';
+  const itAdmin = document.getElementById('itinerary-admin');
+  if (itAdmin) itAdmin.classList.toggle('hidden', !ADMIN_KEY);
+}
+
+// Group caveats chat log + admin delete.
+function renderCaveats() {
+  const list = document.getElementById('caveats-list');
+  if (!list) return;
+  if (!CAVEATS.length) {
+    list.innerHTML = '<div class="caveat-empty">No caveats yet — be the first to add one.</div>';
+    return;
+  }
+  list.innerHTML = CAVEATS.slice().reverse().map(c => `
+    <div class="caveat-item">
+      <span class="caveat-who">${escapeHtml(c.name)}</span>
+      <span class="caveat-body">${escapeHtml(c.text)}</span>
+      ${ADMIN_KEY ? `<button class="caveat-del" data-id="${c.id}" title="Delete">✕</button>` : ''}
+    </div>`).join('');
+  list.querySelectorAll('.caveat-del').forEach(btn => {
+    btn.onclick = async () => {
+      const res = await fetch(`/api/caveats/${btn.dataset.id}?key=${encodeURIComponent(ADMIN_KEY)}`, { method: 'DELETE' });
+      if (res.ok) { CAVEATS = await res.json(); renderCaveats(); }
+    };
+  });
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Populate the two 1v1 dropdowns from the current shortlist (or all pools).
+function renderH2HOptions() {
+  const a = document.getElementById('h2h-a');
+  const b = document.getElementById('h2h-b');
+  if (!a || !b) return;
+  const pool = getShortlistListings();
+  const opts = (pool.length >= 2 ? pool : [...SUBMITTED, ...PIPELINE, ...(DATA && DATA.listings || [])])
+    .filter((l, i, arr) => arr.findIndex(x => String(x.id) === String(l.id)) === i);
+  const html = opts.map(l => `<option value="${l.id}">${escapeHtml((l.name||'').slice(0,60))}</option>`).join('');
+  const aVal = a.value, bVal = b.value;
+  a.innerHTML = html; b.innerHTML = html;
+  if (aVal) a.value = aVal;
+  if (bVal) b.value = bVal;
+  if (!a.value && opts[0]) a.value = opts[0].id;
+  if (!b.value && opts[1]) b.value = opts[1].id;
 }
 
 // The members' shortlist: anything liked (net upvotes ≥ 1), ranked by votes.
@@ -531,7 +596,34 @@ document.getElementById('f-split').addEventListener('input', (e) => {
   pipeBtn.onclick   = triggerPipeline;
   pipeBtn.style.display = ADMIN_KEY ? '' : 'none';
   bar.appendChild(pipeBtn);
+
+  // Apify usage (only visible to admin)
+  const usageBtn = document.createElement('button');
+  usageBtn.id        = 'apify-usage-btn';
+  usageBtn.className  = 'admin-btn';
+  usageBtn.title      = 'Apify token spend this month';
+  usageBtn.textContent = '📊 API usage';
+  usageBtn.onclick   = showApifyUsage;
+  usageBtn.style.display = ADMIN_KEY ? '' : 'none';
+  bar.appendChild(usageBtn);
 })();
+
+async function showApifyUsage() {
+  if (!ADMIN_KEY) { alert('Log in as admin first.'); return; }
+  try {
+    const res  = await fetch(`/api/admin/apify-usage?key=${encodeURIComponent(ADMIN_KEY)}`);
+    const data = await res.json();
+    if (!res.ok) { alert('Error: ' + (data.error || res.status)); return; }
+    const used  = data.usageUsd != null ? `$${Number(data.usageUsd).toFixed(3)}` : '—';
+    const limit = data.limitUsd != null ? `$${Number(data.limitUsd).toFixed(2)}` : '$5.00 (free tier)';
+    const runs  = (data.recent || []).slice(0, 8).map(r =>
+      `  ${(r.startedAt||'').slice(0,16)}  ${r.costUsd!=null?('$'+Number(r.costUsd).toFixed(3)):'—'}  ${r.status}`
+    ).join('\n') || '  (no recent runs)';
+    alert(`Apify usage this month\n\nSpent: ${used} of ${limit}\n\nRecent runs (newest first):\n${runs}`);
+  } catch {
+    alert('Network error — check connection.');
+  }
+}
 
 // Show/hide pipeline run button with admin state
 const _origUpdateAdmin = updateAdminButton;
@@ -544,6 +636,10 @@ function updateAdminButton() {
     else           { btn.textContent = '🔑 Admin'; btn.classList.remove('admin-active'); }
   }
   if (pBtn) pBtn.style.display = ADMIN_KEY ? '' : 'none';
+  const uBtn = document.getElementById('apify-usage-btn');
+  if (uBtn) uBtn.style.display = ADMIN_KEY ? '' : 'none';
+  const itAdmin = document.getElementById('itinerary-admin');
+  if (itAdmin) itAdmin.classList.toggle('hidden', !ADMIN_KEY);
 }
 
 // ── Submit form ───────────────────────────────────────────────────────────────
@@ -683,7 +779,6 @@ function getShortlistListings() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           listings:  items,
-          itinerary: document.getElementById('compare-itinerary').value.trim(),
           criteria:  document.getElementById('compare-criteria').value.trim(),
         }),
       });
@@ -703,6 +798,77 @@ function getShortlistListings() {
     }
     runBtn.disabled = false;
   });
+
+  // Admin: save the canonical itinerary
+  const itSave = document.getElementById('itinerary-save');
+  if (itSave) itSave.addEventListener('click', async () => {
+    if (!ADMIN_KEY) { alert('Log in as admin first.'); return; }
+    const itMsg = document.getElementById('itinerary-msg');
+    const text  = document.getElementById('itinerary-edit').value.trim();
+    itSave.disabled = true;
+    try {
+      const res = await fetch(`/api/admin/itinerary?key=${encodeURIComponent(ADMIN_KEY)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (res.ok) { ITINERARY = data; renderItinerary(); itMsg.textContent = 'Itinerary saved.'; itMsg.className = 'compare-msg ok'; }
+      else { itMsg.textContent = data.error || 'Save failed.'; itMsg.className = 'compare-msg err'; }
+    } catch { itMsg.textContent = 'Network error.'; itMsg.className = 'compare-msg err'; }
+    itSave.disabled = false;
+  });
+
+  // Head-to-head 1v1
+  const h2hRun = document.getElementById('h2h-run');
+  if (h2hRun) h2hRun.addEventListener('click', async () => {
+    const msg    = document.getElementById('h2h-msg');
+    const result = document.getElementById('h2h-result');
+    const aId = document.getElementById('h2h-a').value;
+    const bId = document.getElementById('h2h-b').value;
+    if (!aId || !bId || aId === bId) { msg.textContent = 'Pick two different homes.'; msg.className = 'compare-msg err'; return; }
+    const all = [...SUBMITTED, ...PIPELINE, ...(DATA && DATA.listings || [])];
+    const a = all.find(l => String(l.id) === String(aId));
+    const b = all.find(l => String(l.id) === String(bId));
+    if (!a || !b) { msg.textContent = 'Could not find those homes.'; msg.className = 'compare-msg err'; return; }
+    h2hRun.disabled = true;
+    msg.textContent = 'Battling it out with Gemini…'; msg.className = 'compare-msg';
+    result.classList.add('hidden');
+    try {
+      const res = await fetch('/api/compare-listings', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listings: [a, b], mode: '1v1' }),
+      });
+      const data = await res.json();
+      if (res.ok && data.analysis) {
+        result.innerHTML = mdToHtml(data.analysis); result.classList.remove('hidden');
+        msg.textContent = ''; msg.className = 'compare-msg';
+      } else { msg.textContent = data.error || 'Comparison failed.'; msg.className = 'compare-msg err'; }
+    } catch { msg.textContent = 'Network error — try again.'; msg.className = 'compare-msg err'; }
+    h2hRun.disabled = false;
+  });
+
+  // Group caveats: post
+  const cvSend = document.getElementById('caveat-send');
+  if (cvSend) cvSend.addEventListener('click', async () => {
+    const msg  = document.getElementById('caveat-msg');
+    const nameEl = document.getElementById('caveat-name');
+    const textEl = document.getElementById('caveat-text');
+    const text = textEl.value.trim();
+    if (!text) { msg.textContent = 'Type a caveat first.'; msg.className = 'compare-msg err'; return; }
+    cvSend.disabled = true;
+    try {
+      const res = await fetch('/api/caveats', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nameEl.value.trim() || VOTER, text }),
+      });
+      const data = await res.json();
+      if (res.ok) { CAVEATS = data; textEl.value = ''; renderCaveats(); msg.textContent = ''; }
+      else { msg.textContent = data.error || 'Failed.'; msg.className = 'compare-msg err'; }
+    } catch { msg.textContent = 'Network error.'; msg.className = 'compare-msg err'; }
+    cvSend.disabled = false;
+  });
+  const cvText = document.getElementById('caveat-text');
+  if (cvText) cvText.addEventListener('keydown', e => { if (e.key === 'Enter') cvSend.click(); });
 })();
 
 // ── Poll for vote updates ─────────────────────────────────────────────────────
