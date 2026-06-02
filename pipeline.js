@@ -44,7 +44,7 @@ const LOCATIONS = [
 // CA filter. Narrow to one county-wide query + a hard cap so we pay for tens,
 // not thousands, of rows. Tune via env without redeploying code.
 const VRBO_LOCATIONS = ['Los Angeles CA'];
-const VRBO_MAX_RESULTS = Number(process.env.VRBO_MAX_RESULTS || 60);
+const VRBO_MAX_RESULTS = Number(process.env.VRBO_MAX_RESULTS || 40);
 // Airbnb fast scraper is cheap ($0.002/result). NOTE: this actor currently
 // IGNORES maxItems (a 4-location LA search returns ~170/location regardless),
 // so the real Airbnb cost lever is the number of AIRBNB_LOCATIONS, not this cap.
@@ -52,9 +52,11 @@ const VRBO_MAX_RESULTS = Number(process.env.VRBO_MAX_RESULTS || 60);
 const AIRBNB_MAX_ITEMS = Number(process.env.AIRBNB_MAX_ITEMS || 200);
 // Airbnb's fast scraper wants plain city names (no ", CA" suffix breaks geocoding).
 // "Los Angeles" alone returns county-wide results; a few extras widen coverage.
-// Fewer locations = lower cost (this is the real Airbnb cost lever — see below).
-// "Los Angeles" returns county-wide results; "Woodland Hills" adds Valley mansions.
-const AIRBNB_LOCATIONS = (process.env.AIRBNB_LOCATIONS || 'Los Angeles,Woodland Hills')
+// Airbnb is the cheap, high-value source — cast a wider net here. Each location
+// adds ~$0.20–0.35/run. "Los Angeles" is county-wide; the rest add Valley,
+// beach, and east-county mansion coverage. Override via AIRBNB_LOCATIONS env.
+const AIRBNB_LOCATIONS = (process.env.AIRBNB_LOCATIONS ||
+  'Los Angeles,Woodland Hills,Pasadena,Long Beach,Malibu,Calabasas')
   .split(',').map(s => s.trim()).filter(Boolean);
 const TAX_RATE             = 0.14;
 const CLEANING_PLACEHOLDER = 400;

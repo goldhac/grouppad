@@ -379,15 +379,17 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
 .insights-block.hidden { display: none; }
 .insights-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; font-weight: 600; }
 
-/* Head-to-head 1v1 */
+/* Pick & compare (selection-driven) */
 .h2h { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px;
   display: flex; flex-direction: column; gap: 8px; }
 .h2h-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.h2h-select {
-  flex: 1; min-width: 140px; background: #232830; border: 1px solid var(--border);
-  color: var(--text); border-radius: 6px; padding: 8px 10px; font-size: 13px;
-}
-.h2h-vs { color: var(--muted); font-weight: 600; }
+.select-count { font-size: 13px; color: var(--warn); font-weight: 600; margin-right: 4px; }
+
+/* Card selection checkbox + highlight */
+.select-box { display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
+  color: var(--muted); cursor: pointer; user-select: none; }
+.select-box input { accent-color: var(--warn); cursor: pointer; margin: 0; }
+.card.is-selected { outline: 2px solid var(--warn); outline-offset: 1px; }
 
 /* Group caveats chat */
 .caveats-section { padding: 16px 32px; }

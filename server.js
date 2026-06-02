@@ -1047,7 +1047,7 @@ app.get('/api/admin/apify-usage', requireAdmin, async (req, res) => {
 // move week-to-week this far out, so weekly is plenty. Self-rescheduling
 // setTimeout so it survives indefinitely while the server is up.
 const PIPELINE_HOUR_UTC     = Number(process.env.PIPELINE_HOUR_UTC ?? 15);
-const PIPELINE_INTERVAL_DAYS = Math.max(1, Number(process.env.PIPELINE_INTERVAL_DAYS ?? 7));
+const PIPELINE_INTERVAL_DAYS = Math.max(1, Number(process.env.PIPELINE_INTERVAL_DAYS ?? 3));
 
 function runPipelineJob() {
   if (!process.env.APIFY_TOKEN) {

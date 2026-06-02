@@ -18,6 +18,7 @@ let ADMIN_KEY = localStorage.getItem('admin_key') || null;
 let ITINERARY = { text: '', updated_at: null };
 let CAVEATS   = [];
 let INSIGHTS  = null;
+let SELECTED  = new Set();   // listing ids ticked for comparison
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
@@ -154,6 +155,7 @@ function renderCard(l, isSubmitted, isPipeline = false) {
     l.check_manual  ? 'check-manual' : '',
     isSubmitted     ? 'submitted'    : '',
     isPipeline      ? 'pipeline-card': '',
+    SELECTED.has(String(l.id)) ? 'is-selected' : '',
   ].filter(Boolean).join(' ');
 
   const budgetBadge = l.budget === 'under'    ? '<span class="badge under">under budget</span>'
@@ -207,6 +209,7 @@ function renderCard(l, isSubmitted, isPipeline = false) {
         <div class="rank-row">
           ${rankBadge}
           <span class="source">${l.source}</span>
+          <label class="select-box" title="Tick to compare"><input type="checkbox" class="select-cb" data-id="${l.id}" ${SELECTED.has(String(l.id)) ? 'checked' : ''}><span>compare</span></label>
           ${adminDeleteBtn}
         </div>
         <h2 class="name">${l.name}</h2>
@@ -360,7 +363,6 @@ function render() {
   renderItinerary();
   renderCaveats();
   renderInsights();
-  renderH2HOptions();
   updateSplitDisplay();
   attachCardHandlers();
 }
@@ -419,21 +421,28 @@ function renderInsights() {
   }
 }
 
-// Populate the two 1v1 dropdowns from the current shortlist (or all pools).
-function renderH2HOptions() {
-  const a = document.getElementById('h2h-a');
-  const b = document.getElementById('h2h-b');
-  if (!a || !b) return;
-  const pool = getShortlistListings();
-  const opts = (pool.length >= 2 ? pool : [...SUBMITTED, ...PIPELINE, ...(DATA && DATA.listings || [])])
-    .filter((l, i, arr) => arr.findIndex(x => String(x.id) === String(l.id)) === i);
-  const html = opts.map(l => `<option value="${l.id}">${escapeHtml((l.name||'').slice(0,60))}</option>`).join('');
-  const aVal = a.value, bVal = b.value;
-  a.innerHTML = html; b.innerHTML = html;
-  if (aVal) a.value = aVal;
-  if (bVal) b.value = bVal;
-  if (!a.value && opts[0]) a.value = opts[0].id;
-  if (!b.value && opts[1]) b.value = opts[1].id;
+// Reflect the current card selection in the compare controls.
+function updateSelectionUI() {
+  const n = SELECTED.size;
+  const countEl = document.getElementById('select-count');
+  if (countEl) countEl.textContent = `${n} selected`;
+  const b1v1   = document.getElementById('cmp-1v1');
+  const bSel   = document.getElementById('cmp-selected');
+  const bClear = document.getElementById('cmp-clear');
+  if (b1v1)   b1v1.disabled   = n !== 2;
+  if (bSel)   bSel.disabled   = n < 2;
+  if (bClear) bClear.disabled = n === 0;
+}
+
+// Resolve selected ids to full listing objects from every pool.
+function getSelectedListings() {
+  const all = [...SUBMITTED, ...PIPELINE, ...(DATA && DATA.listings || [])];
+  const out = [], seen = new Set();
+  for (const id of SELECTED) {
+    const l = all.find(x => String(x.id) === String(id));
+    if (l && !seen.has(String(id))) { seen.add(String(id)); out.push(l); }
+  }
+  return out;
 }
 
 // The members' shortlist: anything liked (net upvotes ≥ 1), ranked by votes.
@@ -531,6 +540,19 @@ function attachCardHandlers() {
     if (next) next.onclick = (e) => { e.stopPropagation(); go(+carousel.dataset.idx + 1); };
     dots.forEach(d => d.onclick = (e) => { e.stopPropagation(); go(+d.dataset.i); });
   });
+
+  // Selection checkboxes (for comparison)
+  document.querySelectorAll('.select-cb').forEach(cb => {
+    cb.onclick = (e) => {
+      e.stopPropagation();
+      const id = String(cb.dataset.id);
+      if (cb.checked) SELECTED.add(id); else SELECTED.delete(id);
+      const card = cb.closest('.card');
+      if (card) card.classList.toggle('is-selected', cb.checked);
+      updateSelectionUI();
+    };
+  });
+  updateSelectionUI();
 
   // Voting
   document.querySelectorAll('.vote-btn').forEach(btn => {
@@ -834,39 +856,63 @@ function getShortlistListings() {
         body: JSON.stringify({ text }),
       });
       const data = await res.json();
-      if (res.ok) { ITINERARY = data; renderItinerary(); itMsg.textContent = 'Itinerary saved.'; itMsg.className = 'compare-msg ok'; }
+      if (res.ok) { ITINERARY = data; renderItinerary(); itMsg.textContent = 'Itinerary saved — it persists across deploys.'; itMsg.className = 'compare-msg ok'; }
       else { itMsg.textContent = data.error || 'Save failed.'; itMsg.className = 'compare-msg err'; }
     } catch { itMsg.textContent = 'Network error.'; itMsg.className = 'compare-msg err'; }
     itSave.disabled = false;
   });
 
-  // Head-to-head 1v1
-  const h2hRun = document.getElementById('h2h-run');
-  if (h2hRun) h2hRun.addEventListener('click', async () => {
+  // Admin: load itinerary from a text file into the editor box
+  const itFile = document.getElementById('itinerary-file');
+  if (itFile) itFile.addEventListener('change', () => {
+    const f = itFile.files && itFile.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const box = document.getElementById('itinerary-edit');
+      if (box) box.value = String(reader.result || '').slice(0, 8000);
+      const itMsg = document.getElementById('itinerary-msg');
+      if (itMsg) { itMsg.textContent = `Loaded “${f.name}” — click Save to publish.`; itMsg.className = 'compare-msg ok'; }
+    };
+    reader.readAsText(f);
+  });
+
+  // Selection-driven comparison (tick cards, then compare)
+  async function runSelectedCompare(mode) {
     const msg    = document.getElementById('h2h-msg');
     const result = document.getElementById('h2h-result');
-    const aId = document.getElementById('h2h-a').value;
-    const bId = document.getElementById('h2h-b').value;
-    if (!aId || !bId || aId === bId) { msg.textContent = 'Pick two different homes.'; msg.className = 'compare-msg err'; return; }
-    const all = [...SUBMITTED, ...PIPELINE, ...(DATA && DATA.listings || [])];
-    const a = all.find(l => String(l.id) === String(aId));
-    const b = all.find(l => String(l.id) === String(bId));
-    if (!a || !b) { msg.textContent = 'Could not find those homes.'; msg.className = 'compare-msg err'; return; }
-    h2hRun.disabled = true;
-    msg.textContent = 'Battling it out with Gemini…'; msg.className = 'compare-msg';
+    const items  = getSelectedListings();
+    if (mode === '1v1' && items.length !== 2) { msg.textContent = 'Tick exactly 2 cards for a 1v1.'; msg.className = 'compare-msg err'; return; }
+    if (items.length < 2) { msg.textContent = 'Tick at least 2 cards to compare.'; msg.className = 'compare-msg err'; return; }
+    msg.textContent = mode === '1v1' ? 'Battling it out with Gemini…' : 'Comparing your picks…';
+    msg.className = 'compare-msg';
     result.classList.add('hidden');
+    const btns = ['cmp-1v1','cmp-selected','cmp-clear'].map(id => document.getElementById(id));
+    btns.forEach(b => b && (b.disabled = true));
     try {
+      const body = { listings: items, criteria: (document.getElementById('compare-criteria')||{}).value || '' };
+      if (mode === '1v1') body.mode = '1v1';
       const res = await fetch('/api/compare-listings', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ listings: [a, b], mode: '1v1' }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       const data = await res.json();
       if (res.ok && data.analysis) {
         result.innerHTML = mdToHtml(data.analysis); result.classList.remove('hidden');
-        msg.textContent = ''; msg.className = 'compare-msg';
+        msg.textContent = `Compared ${items.length} home${items.length>2?'s':''}.`; msg.className = 'compare-msg ok';
+        if (mode !== '1v1') { INSIGHTS = { analysis: data.analysis, created_at: new Date().toISOString() }; renderInsights(); }
       } else { msg.textContent = data.error || 'Comparison failed.'; msg.className = 'compare-msg err'; }
     } catch { msg.textContent = 'Network error — try again.'; msg.className = 'compare-msg err'; }
-    h2hRun.disabled = false;
+    updateSelectionUI();
+  }
+  const cmp1v1 = document.getElementById('cmp-1v1');
+  const cmpSel = document.getElementById('cmp-selected');
+  const cmpClr = document.getElementById('cmp-clear');
+  if (cmp1v1) cmp1v1.addEventListener('click', () => runSelectedCompare('1v1'));
+  if (cmpSel) cmpSel.addEventListener('click', () => runSelectedCompare('multi'));
+  if (cmpClr) cmpClr.addEventListener('click', () => {
+    SELECTED.clear();
+    document.querySelectorAll('.select-cb').forEach(cb => { cb.checked = false; cb.closest('.card')?.classList.remove('is-selected'); });
+    updateSelectionUI();
   });
 
   // Group caveats: post
