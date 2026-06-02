@@ -932,10 +932,14 @@ app.post('/api/admin/run-pipeline', requireAdmin, (req, res) => {
   res.json({ ok: true, message: 'Pipeline started in background — check server logs' });
 });
 
-// ── Daily pipeline scheduler ──────────────────────────────────────────────────
-// Runs pipeline.js once a day at PIPELINE_HOUR_UTC (default 15:00 UTC = 8am PDT).
-// Self-rescheduling setTimeout so it survives indefinitely while the server is up.
-const PIPELINE_HOUR_UTC = Number(process.env.PIPELINE_HOUR_UTC ?? 15);
+// ── Pipeline scheduler ────────────────────────────────────────────────────────
+// Runs pipeline.js every PIPELINE_INTERVAL_DAYS days at PIPELINE_HOUR_UTC.
+// Default is WEEKLY (not daily): each run bills Apify, and the free tier is only
+// $5/account/month — daily runs would blow that. Prices for an Aug trip barely
+// move week-to-week this far out, so weekly is plenty. Self-rescheduling
+// setTimeout so it survives indefinitely while the server is up.
+const PIPELINE_HOUR_UTC     = Number(process.env.PIPELINE_HOUR_UTC ?? 15);
+const PIPELINE_INTERVAL_DAYS = Math.max(1, Number(process.env.PIPELINE_INTERVAL_DAYS ?? 7));
 
 function runPipelineJob() {
   if (!process.env.APIFY_TOKEN) {
@@ -943,27 +947,27 @@ function runPipelineJob() {
     return;
   }
   const { spawn } = require('child_process');
-  console.log('[Cron] Starting daily pipeline run…');
+  console.log('[Cron] Starting scheduled pipeline run…');
   const child = spawn('node', ['pipeline.js'], {
     cwd: __dirname, env: { ...process.env }, detached: true, stdio: 'ignore',
   });
   child.unref();
 }
 
-function scheduleDailyPipeline() {
+function schedulePipeline() {
   const now  = new Date();
   const next = new Date(now);
   next.setUTCHours(PIPELINE_HOUR_UTC, 0, 0, 0);
-  if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  while (next <= now) next.setUTCDate(next.getUTCDate() + PIPELINE_INTERVAL_DAYS);
   const delay = next - now;
-  console.log(`[Cron] Next pipeline run at ${next.toISOString()} (in ${Math.round(delay / 3600000)}h)`);
+  console.log(`[Cron] Next pipeline run at ${next.toISOString()} (in ${Math.round(delay / 3600000)}h, every ${PIPELINE_INTERVAL_DAYS}d)`);
   setTimeout(() => {
     runPipelineJob();
-    scheduleDailyPipeline(); // reschedule for the following day
+    schedulePipeline(); // reschedule for the following interval
   }, delay);
 }
 
 app.listen(PORT, () => {
   console.log(`GroupPad listening on :${PORT}`);
-  scheduleDailyPipeline();
+  schedulePipeline();
 });

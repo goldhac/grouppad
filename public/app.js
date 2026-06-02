@@ -352,7 +352,9 @@ function render() {
   attachCardHandlers();
 }
 
-// Liked (net upvotes ≥ 1) homes + member submissions, pulled to the top.
+// The members' shortlist: anything liked (net upvotes ≥ 1), ranked by votes.
+// Community submissions live in their own section below and only rise into the
+// shortlist once they get a net upvote — so a freshly-added home is never lost.
 function renderShortlist() {
   const section = document.getElementById('shortlist-section');
   const grid    = document.getElementById('shortlist-grid');
@@ -367,8 +369,7 @@ function renderShortlist() {
   for (const it of [...subs, ...pipeline, ...base]) {
     const id = String(it.l.id);
     if (seen.has(id)) continue;
-    const liked = netVotes(id) >= 1;
-    if (it.submitted || liked) { seen.add(id); items.push(it); }
+    if (netVotes(id) >= 1) { seen.add(id); items.push(it); }
   }
 
   SHORTLIST_IDS = new Set(items.map(it => String(it.l.id)));
@@ -380,10 +381,19 @@ function renderShortlist() {
   grid.innerHTML = items.map(it => renderCard(it.l, it.submitted, it.pipeline)).join('');
 }
 
+// Member-added homes. Always visible (minus any already promoted to the
+// shortlist by votes), so submissions never disappear on refresh.
 function renderSubmitted() {
-  // Submissions are folded into the shortlist now; keep this section hidden.
   const section = document.getElementById('submitted-section');
-  if (section) section.classList.add('hidden');
+  const grid    = document.getElementById('submitted-grid');
+  if (!section || !grid) return;
+
+  const items = SUBMITTED.filter(l => !SHORTLIST_IDS.has(String(l.id)));
+  if (!items.length) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+
+  items.sort((a, b) => (netVotes(String(b.id)) - netVotes(String(a.id))) || (mansionScore(b) - mansionScore(a)));
+  grid.innerHTML = items.map(l => renderCard(l, true, false)).join('');
 }
 
 function renderPipeline() {
@@ -614,10 +624,9 @@ document.getElementById('submit-btn').addEventListener('click', async () => {
       priceEl.value = '';
       nameEl.value  = '';
       const bedStr = data.bd ? ` · ${data.bd} bd` : '';
-      msgEl.textContent = `Added "${data.name}"${bedStr} — see it below!`;
+      msgEl.textContent = `Added "${data.name}"${bedStr} — see it in Community Submissions below!`;
       msgEl.className   = 'submit-msg ok';
-      renderSubmitted();
-      attachCardHandlers();
+      render();
     } else {
       msgEl.textContent = data.error || 'Something went wrong.';
       msgEl.className   = 'submit-msg err';

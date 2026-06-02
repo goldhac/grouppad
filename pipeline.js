@@ -39,6 +39,14 @@ const LOCATIONS = [
   'Los Angeles CA', 'Covina CA', 'Glendale CA', 'Pasadena CA',
   'Woodland Hills CA', 'Encino CA', 'Sherman Oaks CA',
 ];
+// VRBO charges $0.0025 PER returned property result. The 7-location ×
+// maxResults:500 search billed ~2000 results ($4.998) but only ~5 survived the
+// CA filter. Narrow to one county-wide query + a hard cap so we pay for tens,
+// not thousands, of rows. Tune via env without redeploying code.
+const VRBO_LOCATIONS = ['Los Angeles CA'];
+const VRBO_MAX_RESULTS = Number(process.env.VRBO_MAX_RESULTS || 60);
+// Airbnb fast scraper is cheap ($0.002/result) but cap it too for safety.
+const AIRBNB_MAX_ITEMS = Number(process.env.AIRBNB_MAX_ITEMS || 200);
 // Airbnb's fast scraper wants plain city names (no ", CA" suffix breaks geocoding).
 // "Los Angeles" alone returns county-wide results; a few extras widen coverage.
 const AIRBNB_LOCATIONS = ['Los Angeles', 'Pasadena', 'Woodland Hills', 'Long Beach'];
@@ -270,11 +278,11 @@ async function runApifyAsync(actorSlug, input, maxWaitMs = 540000) {
 async function discoverVrbo() {
   console.log('\n[Stage 1] VRBO');
   const items = await runApify('makework36~vrbo-scraper', {
-    locations:    LOCATIONS,
+    locations:    VRBO_LOCATIONS,
     checkIn:      TRIP.checkin,
     checkOut:     TRIP.checkout,
     adults:       TRIP.adults,
-    maxResults:   500,
+    maxResults:   VRBO_MAX_RESULTS,
     propertyType: 'VACATION_RENTAL_ONLY',
     currency:     'USD',
     locale:       'en_US',
@@ -320,6 +328,7 @@ async function discoverAirbnb() {
     locationQueries: AIRBNB_LOCATIONS,
     adults:          TRIP.adults,
     minBedrooms:     MIN_BEDROOMS,
+    maxItems:        AIRBNB_MAX_ITEMS,
     currency:        'USD',
     locale:          'en-US',
   });
