@@ -909,6 +909,30 @@ function getShortlistListings() {
     itSave.disabled = false;
   });
 
+  // Admin: clear / delete the currently-posted itinerary
+  const itClear = document.getElementById('itinerary-clear');
+  if (itClear) itClear.addEventListener('click', async () => {
+    if (!ADMIN_KEY) { alert('Log in as admin first.'); return; }
+    if (!confirm('Delete the posted itinerary? This clears it for everyone.')) return;
+    const itMsg = document.getElementById('itinerary-msg');
+    itClear.disabled = true;
+    try {
+      const res = await fetch('/api/admin/itinerary', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+        body: JSON.stringify({ text: '' }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        ITINERARY = data;
+        const box = document.getElementById('itinerary-edit');
+        if (box) box.value = '';
+        renderItinerary();
+        itMsg.textContent = 'Itinerary cleared.'; itMsg.className = 'compare-msg ok';
+      } else { itMsg.textContent = data.error || 'Clear failed.'; itMsg.className = 'compare-msg err'; }
+    } catch { itMsg.textContent = 'Network error.'; itMsg.className = 'compare-msg err'; }
+    itClear.disabled = false;
+  });
+
   // Admin: load itinerary from a PDF / text file into the editor box
   const itFile = document.getElementById('itinerary-file');
   function setItMsg(text, cls) {
@@ -928,29 +952,26 @@ function getShortlistListings() {
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
-      // Rebuild lines using each item's end-of-line flag (and a y-position
-      // fallback) so the result keeps the document's line/paragraph structure
-      // instead of collapsing everything into one run-on blob.
-      let line = '';
-      let lastY = null;
-      const lines = [];
+      // Group text fragments into lines by their y-coordinate, then order each
+      // line left-to-right by x. This reconstructs the page's actual layout
+      // instead of dumping every fragment into one run-on string.
+      const rows = [];
       for (const it of content.items) {
-        const y = it.transform ? it.transform[5] : null;
-        if (lastY != null && y != null && Math.abs(y - lastY) > 3 && line.trim()) {
-          lines.push(line.trimEnd());
-          line = '';
-        }
-        line += it.str;
-        if (it.hasEOL) { lines.push(line.trimEnd()); line = ''; lastY = null; }
-        else { if (it.str && !/\s$/.test(it.str)) line += ' '; lastY = y; }
+        if (!it.str) continue;
+        const y = it.transform ? it.transform[5] : 0;
+        const x = it.transform ? it.transform[4] : 0;
+        let row = rows.find(r => Math.abs(r.y - y) <= 2.5);
+        if (!row) { row = { y, items: [] }; rows.push(row); }
+        row.items.push({ x, s: it.str });
       }
-      if (line.trim()) lines.push(line.trimEnd());
+      rows.sort((a, b) => b.y - a.y); // top of page first
+      const lines = rows.map(r =>
+        r.items.sort((a, b) => a.x - b.x).map(o => o.s).join(' ')
+          .replace(/\s+/g, ' ').trim()
+      ).filter(Boolean);
       pages.push(lines.join('\n'));
     }
-    return pages.join('\n\n')
-      .replace(/[ \t]+/g, ' ')      // collapse runs of spaces
-      .replace(/\n{3,}/g, '\n\n')   // collapse big gaps
-      .trim();
+    return pages.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
   }
   if (itFile) itFile.addEventListener('change', async () => {
     const f = itFile.files && itFile.files[0];

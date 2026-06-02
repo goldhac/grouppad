@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>GroupPad — LA Group Trip Rentals</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="/style.css">
+<link rel="stylesheet" href="/style.css?v=3">
 </head>
 <body>
 <header>
@@ -59,6 +59,7 @@
       <label class="ai-btn" for="itinerary-file" title="Load a PDF / .txt / .md file into the box">📄 Upload PDF or text</label>
       <input type="file" id="itinerary-file" accept=".pdf,.txt,.md,application/pdf,text/plain" hidden>
       <button id="itinerary-save" class="ai-btn primary">Save itinerary (one &amp; done)</button>
+      <button id="itinerary-clear" class="ai-btn danger">🗑️ Clear itinerary</button>
       <span id="itinerary-msg" class="compare-msg"></span>
     </div>
   </div>
@@ -155,6 +156,6 @@
       'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 </script>
-<script src="/app.js"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>
