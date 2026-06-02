@@ -1,14 +1,5 @@
-// ── Identity ──────────────────────────────────────────────────────────────────
-function getVoter() {
-  let v = localStorage.getItem('voter');
-  if (!v) {
-    v = prompt('Your name (used for voting)?') || 'guest-' + Math.floor(Math.random() * 9999);
-    localStorage.setItem('voter', v);
-  }
-  return v;
-}
-
-let VOTER = getVoter();
+// ── Identity (passwordless accounts) ────────────────────────────────────────────
+let USER      = null;   // { id, email, name } when signed in, else null
 let DATA      = null;
 let VOTES     = {};
 let SUBMITTED = [];
@@ -20,9 +11,53 @@ let CAVEATS   = [];
 let INSIGHTS  = null;
 let SELECTED  = new Set();   // listing ids ticked for comparison
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// ── Auth actions (passwordless magic-link) ──────────────────────────────────────
+async function loadUser() {
+  try { const d = await fetch('/api/auth/me').then(r => r.json()); USER = d.user || null; }
+  catch { USER = null; }
+}
+async function signIn() {
+  const email = (prompt("Enter your email — we'll send you a one-time sign-in link:") || '').trim();
+  if (!email) return;
+  if (!EMAIL_RE.test(email)) { alert("That doesn't look like a valid email."); return; }
+  try {
+    const r = await fetch('/api/auth/request-link', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) alert('Check your email for a sign-in link (it expires in 15 minutes).');
+    else alert(d.error || 'Could not send the link.');
+  } catch { alert('Network error — try again.'); }
+}
+async function signOut() {
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch {}
+  USER = null; render();
+}
+async function renameUser() {
+  if (!USER) return;
+  const name = (prompt('Display name:', USER.name) || '').trim();
+  if (!name || name === USER.name) return;
+  try {
+    const r = await fetch('/api/auth/me', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) { USER = d.user; render(); } else alert(d.error || 'Could not update name.');
+  } catch { alert('Network error.'); }
+}
+// Gate an action behind sign-in; offers to send a link if signed out.
+function requireSignIn(action) {
+  if (USER) return true;
+  if (confirm(`Please sign in to ${action || 'do that'}. Send a one-time sign-in link to your email now?`)) signIn();
+  return false;
+}
+
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
-  const [data, votes, submitted, pipeline, itinerary, caveats, insights] = await Promise.all([
+  const [me, data, votes, submitted, pipeline, itinerary, caveats, insights] = await Promise.all([
+    fetch('/api/auth/me').then(r => r.json()).catch(() => ({ user: null })),
     fetch('/api/listings').then(r => r.json()),
     fetch('/api/votes').then(r => r.json()).catch(() => ({})),
     fetch('/api/submitted').then(r => r.json()).catch(() => []),
@@ -31,6 +66,7 @@ async function loadData() {
     fetch('/api/caveats').then(r => r.json()).catch(() => []),
     fetch('/api/insights').then(r => r.json()).catch(() => null),
   ]);
+  USER      = (me && me.user) || null;
   DATA      = data;
   VOTES     = votes;
   SUBMITTED = submitted;
@@ -55,7 +91,7 @@ function tallyVotes(listingId) {
   for (const [voter, vote] of Object.entries(v)) {
     if (vote === 'up') up++;
     else if (vote === 'down') down++;
-    if (voter === VOTER) mine = vote;
+    if (USER && voter === USER.id) mine = vote;
   }
   return { up, down, mine };
 }
@@ -323,34 +359,23 @@ function render() {
   const listings   = DATA.listings;
   const underCount = listings.filter(l => l.budget === 'under').length;
 
+  const authSpan = USER
+    ? `<span class="auth-state"><strong>Signed in:</strong> ${escapeHtml(USER.name)} ` +
+      `<a href="#" id="auth-rename" style="color:var(--link)">rename</a> · ` +
+      `<a href="#" id="auth-signout" style="color:var(--link)">sign out</a></span>`
+    : `<span class="auth-state"><a href="#" id="auth-signin" style="color:var(--link)"><strong>Sign in to vote →</strong></a></span>`;
+
   document.getElementById('params-line').innerHTML =
     `<span><strong>Sites:</strong> VRBO · Airbnb · Booking.com</span>` +
     `<span><strong>Listings:</strong> ${listings.length}</span>` +
     `<span><strong>Under budget:</strong> ${underCount}</span>` +
     `<span><strong>Refreshed:</strong> ${t.refreshed_at}</span>` +
-    `<span><strong>Voting as:</strong> ${VOTER} <a href="#" id="change-voter" style="color:var(--link)">change</a></span>`;
+    authSpan;
 
-  document.getElementById('change-voter').onclick = async (e) => {
-    e.preventDefault();
-    const next = (prompt('Your name (used for voting):', VOTER) || '').trim();
-    if (!next || next === VOTER) return;
-    const old = VOTER;
-    // Carry your existing votes over to the new name so you don't lose your picks.
-    const mine = [];
-    for (const [lid, voters] of Object.entries(VOTES)) {
-      if (voters[old]) mine.push([lid, voters[old]]);
-    }
-    VOTER = next;
-    localStorage.setItem('voter', next);
-    for (const [lid, vote] of mine) {
-      try {
-        await fetch('/api/votes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ listing_id: lid, voter: next, vote }) });
-        await fetch('/api/votes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ listing_id: lid, voter: old, vote: null }) });
-      } catch {}
-    }
-    try { VOTES = await fetch('/api/votes').then(r => r.json()); } catch {}
-    render();
-  };
+  const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = (e) => { e.preventDefault(); fn(); }; };
+  bind('auth-signin', signIn);
+  bind('auth-rename', renameUser);
+  bind('auth-signout', signOut);
 
   const onlyUnder  = document.getElementById('f-under').checked;
   const needPool   = document.getElementById('f-pool').checked;
@@ -605,17 +630,19 @@ function attachCardHandlers() {
   document.querySelectorAll('.vote-btn').forEach(btn => {
     btn.onclick = async (e) => {
       e.stopPropagation();
+      if (!requireSignIn('vote')) return;
       const card      = btn.closest('.card');
       const listingId = card.dataset.id;
       const myVote    = btn.dataset.vote;
-      const current   = (VOTES[listingId] || {})[VOTER];
+      const current   = (VOTES[listingId] || {})[USER.id];
       const next      = current === myVote ? null : myVote;
       const res = await fetch('/api/votes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ listing_id: listingId, voter: VOTER, vote: next }),
+        body: JSON.stringify({ listing_id: listingId, vote: next }),
       });
       if (res.ok) { VOTES = await res.json(); render(); }
+      else if (res.status === 401) { USER = null; requireSignIn('vote'); }
     };
   });
 
@@ -773,9 +800,9 @@ document.getElementById('submit-toggle').addEventListener('click', () => {
 });
 
 document.getElementById('submit-btn').addEventListener('click', async () => {
+  if (!requireSignIn('add a listing')) return;
   const urlEl   = document.getElementById('submit-url');
   const priceEl = document.getElementById('submit-price-input');
-  const nameEl  = document.getElementById('submit-name-input');
   const msgEl   = document.getElementById('submit-msg');
   const btn     = document.getElementById('submit-btn');
   const url     = urlEl.value.trim();
@@ -797,7 +824,6 @@ document.getElementById('submit-btn').addEventListener('click', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url,
-        submitted_by: nameEl.value.trim() || VOTER,
         manual_price: priceEl.value.trim() || undefined,
       }),
     });
@@ -806,7 +832,6 @@ document.getElementById('submit-btn').addEventListener('click', async () => {
       SUBMITTED = [...SUBMITTED, data];
       urlEl.value   = '';
       priceEl.value = '';
-      nameEl.value  = '';
       const bedStr = data.bd ? ` · ${data.bd} bd` : '';
       msgEl.textContent = `Added "${data.name}"${bedStr} — see it in Community Submissions below!`;
       msgEl.className   = 'submit-msg ok';
@@ -1049,18 +1074,19 @@ function getShortlistListings() {
   const cvSend = document.getElementById('caveat-send');
   if (cvSend) cvSend.addEventListener('click', async () => {
     const msg  = document.getElementById('caveat-msg');
-    const nameEl = document.getElementById('caveat-name');
     const textEl = document.getElementById('caveat-text');
     const text = textEl.value.trim();
     if (!text) { msg.textContent = 'Type a caveat first.'; msg.className = 'compare-msg err'; return; }
+    if (!requireSignIn('post a caveat')) return;
     cvSend.disabled = true;
     try {
       const res = await fetch('/api/caveats', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: nameEl.value.trim() || VOTER, text }),
+        body: JSON.stringify({ text }),
       });
       const data = await res.json();
       if (res.ok) { CAVEATS = data; textEl.value = ''; renderCaveats(); msg.textContent = ''; }
+      else if (res.status === 401) { USER = null; render(); requireSignIn('post a caveat'); }
       else { msg.textContent = data.error || 'Failed.'; msg.className = 'compare-msg err'; }
     } catch { msg.textContent = 'Network error.'; msg.className = 'compare-msg err'; }
     cvSend.disabled = false;

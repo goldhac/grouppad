@@ -32,8 +32,12 @@ const SUBMITTED_FILE = path.join(DATA_DIR, 'submitted.json');        // persiste
 const ITINERARY_FILE = path.join(DATA_DIR, 'itinerary.json');        // persisted (admin)
 const CAVEATS_FILE   = path.join(DATA_DIR, 'caveats.json');          // persisted (members)
 const INSIGHTS_FILE  = path.join(DATA_DIR, 'insights.json');         // persisted (cached AI)
+const USERS_FILE     = path.join(DATA_DIR, 'users.json');            // persisted (accounts)
+const SESSIONS_FILE  = path.join(DATA_DIR, 'sessions.json');         // persisted (login sessions)
+const MAGIC_FILE     = path.join(DATA_DIR, 'magic.json');            // persisted (pending magic links)
 
 app.use(express.json());
+app.use((req, res, next) => attachUser(req, res, next));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── File helpers ─────────────────────────────────────────────────────────────
@@ -79,6 +83,124 @@ function loadInsights() {
   try { return JSON.parse(fs.readFileSync(INSIGHTS_FILE, 'utf8')); } catch { return null; }
 }
 function saveInsights(i) { writeJsonAtomic(INSIGHTS_FILE, i); }
+
+// ── Accounts (passwordless magic-link auth) ────────────────────────────────────
+// users.json    : { [userId]: { id, email, name, created_at } }
+// sessions.json : { [sessionId]: { user_id, created_at, expires_at } }
+// magic.json    : { [tokenHash]: { email, expires_at } }   (one-time sign-in links)
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const MAGIC_TTL_MS   = 15 * 60 * 1000;           // 15 minutes
+const SESSION_COOKIE = 'gp_session';
+
+function loadUsers()    { try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch { return {}; } }
+function saveUsers(u)   { writeJsonAtomic(USERS_FILE, u); }
+function loadSessions() { try { return JSON.parse(fs.readFileSync(SESSIONS_FILE, 'utf8')); } catch { return {}; } }
+function saveSessions(s){ writeJsonAtomic(SESSIONS_FILE, s); }
+function loadMagic()    { try { return JSON.parse(fs.readFileSync(MAGIC_FILE, 'utf8')); } catch { return {}; } }
+function saveMagic(m)   { writeJsonAtomic(MAGIC_FILE, m); }
+
+const sha256 = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
+const isEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+
+function parseCookies(req) {
+  const out = {};
+  const raw = req.headers.cookie;
+  if (!raw) return out;
+  for (const part of raw.split(';')) {
+    const i = part.indexOf('=');
+    if (i < 0) continue;
+    out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return out;
+}
+
+// Find or create a user by email; display name defaults to the address local-part.
+function findOrCreateUser(email) {
+  const e = String(email).trim().toLowerCase();
+  const users = loadUsers();
+  let user = Object.values(users).find(u => u.email === e);
+  if (!user) {
+    const id = crypto.randomBytes(12).toString('hex');
+    user = { id, email: e, name: e.split('@')[0].slice(0, 40), created_at: new Date().toISOString() };
+    users[id] = user;
+    saveUsers(users);
+  }
+  return user;
+}
+
+function createSession(userId) {
+  const sessions = loadSessions();
+  const now = Date.now();
+  // Opportunistically prune expired sessions so the file stays small.
+  for (const [sid, s] of Object.entries(sessions)) if (s.expires_at < now) delete sessions[sid];
+  const id = crypto.randomBytes(32).toString('hex');
+  sessions[id] = { user_id: userId, created_at: now, expires_at: now + SESSION_TTL_MS };
+  saveSessions(sessions);
+  return id;
+}
+
+function userFromSession(sid) {
+  if (!sid) return null;
+  const sessions = loadSessions();
+  const s = sessions[sid];
+  if (!s || s.expires_at < Date.now()) return null;
+  const users = loadUsers();
+  return users[s.user_id] || null;
+}
+
+function setSessionCookie(req, res, sid) {
+  const parts = [
+    `${SESSION_COOKIE}=${sid}`, 'Path=/', 'HttpOnly', 'SameSite=Lax',
+    `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
+  ];
+  if (req.secure) parts.push('Secure');
+  res.append('Set-Cookie', parts.join('; '));
+}
+function clearSessionCookie(req, res) {
+  const parts = [`${SESSION_COOKIE}=`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0'];
+  if (req.secure) parts.push('Secure');
+  res.append('Set-Cookie', parts.join('; '));
+}
+
+// Populate req.user (or null) on every request from the session cookie.
+function attachUser(req, res, next) {
+  try { req.user = userFromSession(parseCookies(req)[SESSION_COOKIE]); }
+  catch { req.user = null; }
+  next();
+}
+function requireAuth(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Sign in to do that.' });
+  next();
+}
+
+// Send the magic link by email via Resend if configured; otherwise log it
+// server-side (visible in deploy logs) so it can still be tested before the
+// email provider is wired up. We never return the link in the HTTP response,
+// since on a public URL that would let anyone log in as any email.
+async function sendMagicLink(email, link) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.log(`[auth] (email not configured) magic link for ${email}: ${link}`);
+    return { sent: false };
+  }
+  const from = process.env.MAIL_FROM || 'GroupPad <onboarding@resend.dev>';
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from, to: [email], subject: 'Your GroupPad sign-in link',
+      html: `<p>Tap to sign in to GroupPad:</p>
+             <p><a href="${link}">Sign in</a></p>
+             <p style="color:#888;font-size:12px">This link expires in 15 minutes. If you didn't request it, ignore this email.</p>`,
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    console.error('[auth] Resend send failed:', res.status, body.slice(0, 300));
+    throw new Error('Could not send email');
+  }
+  return { sent: true };
+}
 
 // ── Rate limiting (in-memory, per-IP) ──────────────────────────────────────────
 // Protects the endpoints that cost real money (scraping on /submit, Gemini on
@@ -775,14 +897,73 @@ async function scrapeListingDetails(cleanUrl, parsed) {
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 
+// ── Auth: passwordless magic-link ───────────────────────────────────────────────
+// Who am I? (null when signed out) — the client bootstraps from this.
+app.get('/api/auth/me', (req, res) => {
+  res.json({ user: req.user ? { id: req.user.id, email: req.user.email, name: req.user.name } : null });
+});
+
+// Request a sign-in link. Always responds ok (never reveals whether the email
+// exists or whether mail is configured) to avoid enumeration.
+app.post('/api/auth/request-link', rateLimit({ windowMs: 60000, max: 5 }), async (req, res) => {
+  const email = String((req.body && req.body.email) || '').trim().toLowerCase();
+  if (!isEmail(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  const token = crypto.randomBytes(32).toString('hex');
+  const magic = loadMagic();
+  const now = Date.now();
+  for (const [h, m] of Object.entries(magic)) if (m.expires_at < now) delete magic[h]; // prune
+  magic[sha256(token)] = { email, expires_at: now + MAGIC_TTL_MS };
+  saveMagic(magic);
+  const link = `${req.protocol}://${req.get('host')}/api/auth/verify?token=${token}`;
+  try { await sendMagicLink(email, link); }
+  catch { return res.status(502).json({ error: 'Could not send the email. Try again shortly.' }); }
+  res.json({ ok: true });
+});
+
+// Click target from the email: consume the token, start a session, land home.
+app.get('/api/auth/verify', (req, res) => {
+  const token = String(req.query.token || '');
+  const magic = loadMagic();
+  const hash = sha256(token);
+  const rec = magic[hash];
+  if (!rec || rec.expires_at < Date.now()) {
+    return res.status(400).send('<p>This sign-in link is invalid or expired. <a href="/">Request a new one</a>.</p>');
+  }
+  delete magic[hash]; // single-use
+  saveMagic(magic);
+  const user = findOrCreateUser(rec.email);
+  const sid = createSession(user.id);
+  setSessionCookie(req, res, sid);
+  res.redirect('/');
+});
+
+// Update display name.
+app.patch('/api/auth/me', requireAuth, (req, res) => {
+  const name = String((req.body && req.body.name) || '').trim().slice(0, 40);
+  if (!name) return res.status(400).json({ error: 'Name cannot be empty.' });
+  const users = loadUsers();
+  if (users[req.user.id]) { users[req.user.id].name = name; saveUsers(users); }
+  res.json({ user: { id: req.user.id, email: req.user.email, name } });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  const sid = parseCookies(req)[SESSION_COOKIE];
+  if (sid) { const s = loadSessions(); if (s[sid]) { delete s[sid]; saveSessions(s); } }
+  clearSessionCookie(req, res);
+  res.json({ ok: true });
+});
+
 app.get('/api/listings', (req, res) => res.json(loadListings()));
 
 app.get('/api/votes', (req, res) => res.json(loadVotes()));
 
-app.post('/api/votes', (req, res) => {
-  const { listing_id, voter, vote } = req.body || {};
-  if (!listing_id || !voter || !['up', 'down', null].includes(vote))
-    return res.status(400).json({ error: 'expected { listing_id, voter, vote: "up"|"down"|null }' });
+// Vote on a listing. Identity comes from the session, not the request body, so
+// votes map to a real account and can't be spoofed by typing someone's name.
+app.post('/api/votes', requireAuth, (req, res) => {
+  const { listing_id, vote } = req.body || {};
+  if (!listing_id || !['up', 'down', null].includes(vote))
+    return res.status(400).json({ error: 'expected { listing_id, vote: "up"|"down"|null }' });
+  const voter = req.user.id;
   const votes = loadVotes();
   if (!votes[listing_id]) votes[listing_id] = {};
   if (vote === null) delete votes[listing_id][voter];
@@ -822,8 +1003,8 @@ app.delete('/api/submitted/:id', requireAdmin, (req, res) => {
 app.get('/api/submitted', (req, res) => res.json(loadSubmitted()));
 
 // Submit a new listing
-app.post('/api/submit', rateLimit({ windowMs: 60000, max: 5 }), async (req, res) => {
-  const { url, submitted_by, manual_price } = req.body || {};
+app.post('/api/submit', requireAuth, rateLimit({ windowMs: 60000, max: 5 }), async (req, res) => {
+  const { url, manual_price } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url required' });
 
   const parsed = parseListingUrl(url);
@@ -846,7 +1027,7 @@ app.post('/api/submit', rateLimit({ windowMs: 60000, max: 5 }), async (req, res)
 
   const cleanUrl = url.split('?')[0];
   const scraped  = await scrapeListingDetails(cleanUrl, parsed);
-  const by       = (submitted_by || 'anonymous').slice(0, 60);
+  const by       = (req.user.name || 'member').slice(0, 60);
 
   // Manual price overrides auto-detection
   const manualVal = manual_price ? Math.round(+String(manual_price).replace(/[$,]/g, '')) : 0;
@@ -1158,12 +1339,12 @@ app.post('/api/admin/itinerary', requireAdmin, (req, res) => {
 // ── Member caveats (small chat: each member adds their own must-haves) ──────────
 app.get('/api/caveats', (req, res) => res.json(loadCaveats()));
 
-app.post('/api/caveats', (req, res) => {
-  const name = String((req.body && req.body.name) || 'Anon').slice(0, 40).trim() || 'Anon';
+app.post('/api/caveats', requireAuth, (req, res) => {
+  const name = req.user.name || 'Member';
   const text = String((req.body && req.body.text) || '').slice(0, 500).trim();
   if (!text) return res.status(400).json({ error: 'Say something first.' });
   const list = loadCaveats();
-  list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name, text, created_at: new Date().toISOString() });
+  list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), user_id: req.user.id, name, text, created_at: new Date().toISOString() });
   const trimmed = list.slice(-200); // keep the log bounded
   saveCaveats(trimmed);
   res.json(trimmed);
