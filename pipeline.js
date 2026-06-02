@@ -45,11 +45,17 @@ const LOCATIONS = [
 // not thousands, of rows. Tune via env without redeploying code.
 const VRBO_LOCATIONS = ['Los Angeles CA'];
 const VRBO_MAX_RESULTS = Number(process.env.VRBO_MAX_RESULTS || 60);
-// Airbnb fast scraper is cheap ($0.002/result) but cap it too for safety.
+// Airbnb fast scraper is cheap ($0.002/result). NOTE: this actor currently
+// IGNORES maxItems (a 4-location LA search returns ~170/location regardless),
+// so the real Airbnb cost lever is the number of AIRBNB_LOCATIONS, not this cap.
+// Kept as a best-effort hint in case the actor starts honoring it.
 const AIRBNB_MAX_ITEMS = Number(process.env.AIRBNB_MAX_ITEMS || 200);
 // Airbnb's fast scraper wants plain city names (no ", CA" suffix breaks geocoding).
 // "Los Angeles" alone returns county-wide results; a few extras widen coverage.
-const AIRBNB_LOCATIONS = ['Los Angeles', 'Pasadena', 'Woodland Hills', 'Long Beach'];
+// Fewer locations = lower cost (this is the real Airbnb cost lever — see below).
+// "Los Angeles" returns county-wide results; "Woodland Hills" adds Valley mansions.
+const AIRBNB_LOCATIONS = (process.env.AIRBNB_LOCATIONS || 'Los Angeles,Woodland Hills')
+  .split(',').map(s => s.trim()).filter(Boolean);
 const TAX_RATE             = 0.14;
 const CLEANING_PLACEHOLDER = 400;
 const BUDGET               = 7000;
