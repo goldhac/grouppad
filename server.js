@@ -6,9 +6,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const ADMIN_KEY = process.env.ADMIN_KEY || 'la2026admin';
 
-const DATA_FILE      = path.join(__dirname, 'data', 'listings.json');
-const VOTES_FILE     = path.join(__dirname, 'data', 'votes.json');
-const SUBMITTED_FILE = path.join(__dirname, 'data', 'submitted.json');
+// Mutable data (votes/likes, member submissions, pipeline DB) lives in a
+// persistent volume so it survives deploys/restarts. Static base data
+// (listings.json, seed snapshot) stays bundled in the image.
+const DATA_DIR = process.env.PIPELINE_DATA_DIR || path.join(__dirname, 'data');
+try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+
+const DATA_FILE      = path.join(__dirname, 'data', 'listings.json'); // static base (image)
+const VOTES_FILE     = path.join(DATA_DIR, 'votes.json');            // persisted
+const SUBMITTED_FILE = path.join(DATA_DIR, 'submitted.json');        // persisted
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -727,8 +733,8 @@ app.post('/api/submit', async (req, res) => {
 
 // ── Pipeline listings (from SQLite) ──────────────────────────────────────────
 
-const PIPELINE_DB = path.join(__dirname, 'data', 'pipeline.db');
-const PIPELINE_SEED = path.join(__dirname, 'data', 'seed-listings.json');
+const PIPELINE_DB = path.join(DATA_DIR, 'pipeline.db');              // persisted
+const PIPELINE_SEED = path.join(__dirname, 'data', 'seed-listings.json'); // static (image)
 const PIPELINE_BUDGET        = 7000;
 const PIPELINE_TAX           = 0.14;
 const PIPELINE_CLEANING_FEE  = 400;

@@ -24,7 +24,9 @@ const Database = require('better-sqlite3');
 const APIFY_TOKEN    = process.env.APIFY_TOKEN;
 const FIRECRAWL_KEY  = process.env.FIRECRAWL_API_KEY;
 const CHROMIUM_PATH  = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
-const DB_PATH        = path.join(__dirname, 'data', 'pipeline.db');
+const DATA_DIR       = process.env.PIPELINE_DATA_DIR || path.join(__dirname, 'data');
+try { require('fs').mkdirSync(DATA_DIR, { recursive: true }); } catch {}
+const DB_PATH        = path.join(DATA_DIR, 'pipeline.db');
 
 // ── Trip constants ────────────────────────────────────────────────────────────
 const TRIP = {
