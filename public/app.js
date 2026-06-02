@@ -124,6 +124,15 @@ function renderCard(l, isSubmitted, isPipeline = false) {
   const distance = l.distance_mi
     ? `<span class="distance">📍 ${l.distance_mi} mi from DTLA</span>` : '';
 
+  // Highlight badges (Guest favorite, Superhost, etc.) for a quick glimpse
+  const highlightChips = Array.isArray(l.amenities)
+    ? l.amenities
+        .filter(a => /guest favorite|superhost|washer|dryer/i.test(a))
+        .slice(0, 3)
+        .map(a => `<span class="amenity hi">★ ${a}</span>`)
+        .join('')
+    : '';
+
   const submittedBy = isSubmitted
     ? `<div class="submitted-by-line">Submitted by ${l.submitted_by} · ${l.submitted_at}</div>` : '';
 
@@ -148,7 +157,7 @@ function renderCard(l, isSubmitted, isPipeline = false) {
         </div>
         ${submittedBy}
         <div class="specs">${specs}</div>
-        <div class="amenities">${amenity('pool', l.pool)}${amenity('parking', l.parking)}</div>
+        <div class="amenities">${amenity('pool', l.pool)}${l.hot_tub === 'yes' ? amenity('hot tub', l.hot_tub) : ''}${amenity('parking', l.parking)}${highlightChips}</div>
         ${reviews}
         <div class="price-row">
           <span class="price">${fmt(l.est_5n)}</span>

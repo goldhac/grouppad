@@ -542,8 +542,6 @@ async function fetchMissingPrices(db) {
 // Only listings seen in THIS run (last_seen >= runStart) are eligible, so
 // listings that dropped out of today's results disappear instead of piling up.
 function filterListings(db, runStart) {
-  db.prepare('UPDATE listings SET passed_filter = 0').run();
-
   const rows = db.prepare(`
     SELECT l.source, l.listing_id, l.bedrooms, ps.price_total
     FROM listings l
@@ -558,18 +556,29 @@ function filterListings(db, runStart) {
     WHERE l.last_seen >= ?
   `).all(runStart);
 
-  const pass = db.prepare('UPDATE listings SET passed_filter = 1 WHERE source=? AND listing_id=?');
-  let passed = 0;
+  // Compute survivors first.
+  const survivors = [];
   for (const r of rows) {
     if (!r.bedrooms || r.bedrooms < MIN_BEDROOMS) continue;
     if (r.price_total) {
       const est = estimateAllIn(r.price_total, r.source);
       if (est > BUDGET) continue;
     }
-    pass.run(r.source, r.listing_id);
-    passed++;
+    survivors.push(r);
   }
-  console.log(`\n[Stage 3c] ${passed} / ${rows.length} listings (this run) passed (beds >= ${MIN_BEDROOMS}, est ≤ $${BUDGET.toLocaleString()})`);
+
+  // Robustness: if this run produced no qualifying listings (Apify quota hit,
+  // scraper error, etc.), keep the previous board rather than blanking the
+  // site. Only swap in the new set when we actually have results.
+  if (survivors.length === 0) {
+    console.log('[Stage 3c] 0 qualifying listings this run — keeping previous board intact');
+    return;
+  }
+
+  db.prepare('UPDATE listings SET passed_filter = 0').run();
+  const pass = db.prepare('UPDATE listings SET passed_filter = 1 WHERE source=? AND listing_id=?');
+  for (const r of survivors) pass.run(r.source, r.listing_id);
+  console.log(`\n[Stage 3c] ${survivors.length} / ${rows.length} listings (this run) passed (beds >= ${MIN_BEDROOMS}, est ≤ $${BUDGET.toLocaleString()})`);
 }
 
 // ── Stage 4 — Firecrawl enrichment ────────────────────────────────────────────

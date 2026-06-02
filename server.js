@@ -728,9 +728,12 @@ app.post('/api/submit', async (req, res) => {
 // ── Pipeline listings (from SQLite) ──────────────────────────────────────────
 
 const PIPELINE_DB = path.join(__dirname, 'data', 'pipeline.db');
+const PIPELINE_SEED = path.join(__dirname, 'data', 'seed-listings.json');
 const PIPELINE_BUDGET        = 7000;
 const PIPELINE_TAX           = 0.14;
 const PIPELINE_CLEANING_FEE  = 400;
+const PIPELINE_REGION_MAX_MI = 150;
+const HOT_TUB_RE = /\b(hot tub|hottub|jacuzzi|spa|whirlpool)\b/i;
 
 function getPipelineDb() {
   try {
@@ -739,9 +742,23 @@ function getPipelineDb() {
   } catch { return null; }
 }
 
+// Fallback snapshot: if the live DB is empty (fresh container, Apify quota hit,
+// or a failed run), serve the last-known-good listings so the board is never
+// blank. Live data overrides this whenever a scrape succeeds.
+function loadSeedListings() {
+  try {
+    const raw = require('fs').readFileSync(PIPELINE_SEED, 'utf8');
+    const j = JSON.parse(raw);
+    return Array.isArray(j) ? j : (j.listings || []);
+  } catch { return []; }
+}
+
 app.get('/api/pipeline-listings', (req, res) => {
   const db = getPipelineDb();
-  if (!db) return res.json({ listings: [], count: 0, note: 'Pipeline has not run yet' });
+  if (!db) {
+    const seed = loadSeedListings();
+    return res.json({ listings: seed, count: seed.length, note: 'Showing saved snapshot — pipeline DB unavailable' });
+  }
   try {
     const rows = db.prepare(`
       SELECT
@@ -795,6 +812,7 @@ app.get('/api/pipeline-listings', (req, res) => {
         sleeps:       r.sleeps,
         distance_mi:  r.distance_mi ?? null,
         pool:         r.has_pool    ? 'yes' : 'unknown',
+        hot_tub:      HOT_TUB_RE.test(r.name || '') ? 'yes' : 'unknown',
         parking:      r.has_parking ? 'yes' : 'unknown',
         rating:       r.rating,
         reviews:      r.reviews,
@@ -810,11 +828,20 @@ app.get('/api/pipeline-listings', (req, res) => {
       };
     });
 
-    res.json({ listings, count: listings.length });
+    // Region guard at read time too (drops any out-of-area rows already in DB).
+    const inRegion = listings.filter(l => l.distance_mi == null || l.distance_mi <= PIPELINE_REGION_MAX_MI);
+
+    if (inRegion.length === 0) {
+      const seed = loadSeedListings();
+      return res.json({ listings: seed, count: seed.length, note: 'Showing saved snapshot — live refresh paused (Apify quota)' });
+    }
+
+    res.json({ listings: inRegion, count: inRegion.length });
   } catch (e) {
-    db.close();
+    if (db) db.close();
     console.error('[pipeline-listings]', e.message);
-    res.status(500).json({ error: e.message });
+    const seed = loadSeedListings();
+    res.json({ listings: seed, count: seed.length, note: 'Showing saved snapshot (read error)' });
   }
 });
 

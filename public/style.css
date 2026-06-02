@@ -222,10 +222,11 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
 .over { background: rgba(244,112,112,0.13); color: var(--danger); }
 .marginal { background: rgba(240,180,64,0.15); color: var(--warn); }
 .unknown { background: rgba(255,255,255,0.06); color: var(--muted); }
-.amenities { display: flex; gap: 10px; font-size: 13px; color: var(--muted); }
+.amenities { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13px; color: var(--muted); }
 .amenity.yes { color: var(--accent); }
 .amenity.no { color: var(--danger); }
 .amenity.unknown { color: var(--muted); }
+.amenity.hi { color: var(--warn); font-size: 12px; }
 .reviews { font-size: 13px; color: var(--muted); }
 .reviews strong { color: var(--text); }
 .note { font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 8px; }
