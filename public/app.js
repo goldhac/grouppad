@@ -424,14 +424,18 @@ function renderInsights() {
 // Reflect the current card selection in the compare controls.
 function updateSelectionUI() {
   const n = SELECTED.size;
-  const countEl = document.getElementById('select-count');
-  if (countEl) countEl.textContent = `${n} selected`;
-  const b1v1   = document.getElementById('cmp-1v1');
-  const bSel   = document.getElementById('cmp-selected');
-  const bClear = document.getElementById('cmp-clear');
-  if (b1v1)   b1v1.disabled   = n !== 2;
-  if (bSel)   bSel.disabled   = n < 2;
-  if (bClear) bClear.disabled = n === 0;
+  const txt = `${n} selected`;
+  const set = (id, fn) => { const el = document.getElementById(id); if (el) fn(el); };
+  // Inline controls inside the compare panel
+  set('select-count', el => el.textContent = txt);
+  set('cmp-1v1',     el => el.disabled = n !== 2);
+  set('cmp-selected',el => el.disabled = n < 2);
+  set('cmp-clear',   el => el.disabled = n === 0);
+  // Floating dock (so you can compare without scrolling up)
+  set('dock-count',    el => el.textContent = txt);
+  set('dock-1v1',      el => el.disabled = n !== 2);
+  set('dock-selected', el => el.disabled = n < 2);
+  set('compare-dock',  el => el.classList.toggle('hidden', n < 1));
 }
 
 // Resolve selected ids to full listing objects from every pool.
@@ -915,6 +919,11 @@ function getShortlistListings() {
     const items  = getSelectedListings();
     if (mode === '1v1' && items.length !== 2) { msg.textContent = 'Tick exactly 2 cards for a 1v1.'; msg.className = 'compare-msg err'; return; }
     if (items.length < 2) { msg.textContent = 'Tick at least 2 cards to compare.'; msg.className = 'compare-msg err'; return; }
+    // Open the compare panel and bring the results into view so you don't have
+    // to hunt for them — works whether triggered from the panel or the dock.
+    document.getElementById('compare-panel')?.classList.remove('hidden');
+    (document.querySelector('.h2h') || document.getElementById('shortlist-section'))
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     msg.textContent = mode === '1v1' ? 'Battling it out with Gemini…' : 'Comparing your picks…';
     msg.className = 'compare-msg';
     result.classList.add('hidden');
@@ -940,11 +949,17 @@ function getShortlistListings() {
   const cmpClr = document.getElementById('cmp-clear');
   if (cmp1v1) cmp1v1.addEventListener('click', () => runSelectedCompare('1v1'));
   if (cmpSel) cmpSel.addEventListener('click', () => runSelectedCompare('multi'));
-  if (cmpClr) cmpClr.addEventListener('click', () => {
+  function clearSelection() {
     SELECTED.clear();
     document.querySelectorAll('.select-cb').forEach(cb => { cb.checked = false; cb.closest('.card')?.classList.remove('is-selected'); });
     updateSelectionUI();
-  });
+  }
+  if (cmpClr) cmpClr.addEventListener('click', clearSelection);
+
+  // Floating dock mirrors the panel controls so you can compare from anywhere.
+  document.getElementById('dock-1v1')?.addEventListener('click', () => runSelectedCompare('1v1'));
+  document.getElementById('dock-selected')?.addEventListener('click', () => runSelectedCompare('multi'));
+  document.getElementById('dock-clear')?.addEventListener('click', clearSelection);
 
   // Group caveats: post
   const cvSend = document.getElementById('caveat-send');
