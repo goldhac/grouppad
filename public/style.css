@@ -332,6 +332,8 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
 .ai-btn:hover { background: rgba(240,180,64,0.12); }
 .ai-btn.primary { background: var(--warn); color: #0f1115; border-color: var(--warn); }
 .ai-btn:disabled { opacity: 0.5; cursor: default; }
+.ai-btn.danger { border-color: var(--danger); color: var(--danger); }
+.ai-btn.danger:hover { background: rgba(220,80,80,0.12); }
 
 /* Floating compare dock — appears once you tick cards, so you can compare
    without scrolling back to the shortlist. */
