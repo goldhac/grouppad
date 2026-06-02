@@ -1,10 +1,20 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const dns = require('dns').promises;
+const net = require('net');
 
 const app = express();
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 3000;
-const ADMIN_KEY = process.env.ADMIN_KEY || 'la2026admin';
+// No insecure default: if ADMIN_KEY isn't set in the environment we generate a
+// random ephemeral key, which effectively disables admin until it's configured
+// (better than shipping a guessable hardcoded key on a public URL).
+const ADMIN_KEY = process.env.ADMIN_KEY || crypto.randomBytes(24).toString('hex');
+if (!process.env.ADMIN_KEY) {
+  console.warn('[admin] ADMIN_KEY not set — generated a random ephemeral key. Set ADMIN_KEY to enable admin features.');
+}
 
 // Mutable data (votes/likes, member submissions, pipeline DB) lives in a
 // persistent volume so it survives deploys/restarts. Static base data
@@ -12,7 +22,11 @@ const ADMIN_KEY = process.env.ADMIN_KEY || 'la2026admin';
 const DATA_DIR = process.env.PIPELINE_DATA_DIR || path.join(__dirname, 'data');
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
 
-const DATA_FILE      = path.join(__dirname, 'data', 'listings.json'); // static base (image)
+// The curated main list lives bundled in the image as a seed, but edits
+// (admin deletes / re-ranks) are written to the persistent volume so they
+// survive deploys. Read prefers the persisted copy, falling back to the seed.
+const BASE_LISTINGS  = path.join(__dirname, 'data', 'listings.json'); // bundled seed
+const LISTINGS_FILE  = path.join(DATA_DIR, 'listings.json');         // persisted, editable
 const VOTES_FILE     = path.join(DATA_DIR, 'votes.json');            // persisted
 const SUBMITTED_FILE = path.join(DATA_DIR, 'submitted.json');        // persisted
 const ITINERARY_FILE = path.join(DATA_DIR, 'itinerary.json');        // persisted (admin)
@@ -24,42 +38,110 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ── File helpers ─────────────────────────────────────────────────────────────
 
-function loadListings()  { return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); }
-function saveListings(d) { fs.writeFileSync(DATA_FILE, JSON.stringify(d, null, 2)); }
+// Atomic write: write to a temp file then rename, so a crash mid-write can't
+// corrupt the JSON and concurrent readers never see a half-written file.
+function writeJsonAtomic(file, data) {
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, file);
+}
+
+function loadListings() {
+  try { return JSON.parse(fs.readFileSync(LISTINGS_FILE, 'utf8')); }
+  catch { return JSON.parse(fs.readFileSync(BASE_LISTINGS, 'utf8')); }
+}
+function saveListings(d) { writeJsonAtomic(LISTINGS_FILE, d); }
 
 function loadVotes() {
   try { return JSON.parse(fs.readFileSync(VOTES_FILE, 'utf8')); } catch { return {}; }
 }
-function saveVotes(v) { fs.writeFileSync(VOTES_FILE, JSON.stringify(v, null, 2)); }
+function saveVotes(v) { writeJsonAtomic(VOTES_FILE, v); }
 
 function loadSubmitted() {
   try { return JSON.parse(fs.readFileSync(SUBMITTED_FILE, 'utf8')); } catch { return []; }
 }
-function saveSubmitted(l) { fs.writeFileSync(SUBMITTED_FILE, JSON.stringify(l, null, 2)); }
+function saveSubmitted(l) { writeJsonAtomic(SUBMITTED_FILE, l); }
 
 // Single canonical trip itinerary, posted by the admin. { text, updated_at }
 function loadItinerary() {
   try { return JSON.parse(fs.readFileSync(ITINERARY_FILE, 'utf8')); } catch { return { text: '', updated_at: null }; }
 }
-function saveItinerary(it) { fs.writeFileSync(ITINERARY_FILE, JSON.stringify(it, null, 2)); }
+function saveItinerary(it) { writeJsonAtomic(ITINERARY_FILE, it); }
 
 // Member caveats: [{ id, name, text, created_at }]
 function loadCaveats() {
   try { return JSON.parse(fs.readFileSync(CAVEATS_FILE, 'utf8')); } catch { return []; }
 }
-function saveCaveats(c) { fs.writeFileSync(CAVEATS_FILE, JSON.stringify(c, null, 2)); }
+function saveCaveats(c) { writeJsonAtomic(CAVEATS_FILE, c); }
 
 // Cached AI shortlist analysis, shared with everyone (one Gemini call per run).
 function loadInsights() {
   try { return JSON.parse(fs.readFileSync(INSIGHTS_FILE, 'utf8')); } catch { return null; }
 }
-function saveInsights(i) { fs.writeFileSync(INSIGHTS_FILE, JSON.stringify(i, null, 2)); }
+function saveInsights(i) { writeJsonAtomic(INSIGHTS_FILE, i); }
+
+// ── Rate limiting (in-memory, per-IP) ──────────────────────────────────────────
+// Protects the endpoints that cost real money (scraping on /submit, Gemini on
+// /compare-listings) from being hammered. Good enough for a small group app.
+function rateLimit({ windowMs, max }) {
+  const hits = new Map();
+  return (req, res, next) => {
+    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
+    const now = Date.now();
+    let rec = hits.get(ip);
+    if (!rec || now > rec.reset) { rec = { count: 0, reset: now + windowMs }; hits.set(ip, rec); }
+    rec.count++;
+    if (rec.count > max) {
+      const retry = Math.ceil((rec.reset - now) / 1000);
+      res.set('Retry-After', String(retry));
+      return res.status(429).json({ error: `Too many requests — try again in ${retry}s.` });
+    }
+    next();
+  };
+}
+
+// ── SSRF guard ─────────────────────────────────────────────────────────────────
+// Before fetching a user-supplied URL server-side, make sure it doesn't point at
+// localhost / private / link-local / cloud-metadata addresses.
+function isPrivateIp(ip) {
+  if (net.isIPv4(ip)) {
+    const [a, b] = ip.split('.').map(Number);
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 169 && b === 254) return true;            // link-local + 169.254.169.254 metadata
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;  // CGNAT
+    return false;
+  }
+  if (net.isIPv6(ip)) {
+    const v = ip.toLowerCase();
+    return v === '::1' || v.startsWith('fe80') || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('::ffff:');
+  }
+  return false;
+}
+async function assertSafeUrl(rawUrl) {
+  let u;
+  try { u = new URL(rawUrl); } catch { throw new Error('Invalid URL'); }
+  if (!['http:', 'https:'].includes(u.protocol)) throw new Error('Only http/https URLs allowed');
+  const host = u.hostname.toLowerCase().replace(/\.$/, '');
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal') || host.endsWith('.localhost'))
+    throw new Error('Blocked host');
+  if (net.isIP(host) && isPrivateIp(host)) throw new Error('Blocked private address');
+  // Resolve DNS and reject if any resolved address is private (basic rebind guard).
+  try {
+    const addrs = await dns.lookup(host, { all: true });
+    if (addrs.some(a => isPrivateIp(a.address))) throw new Error('Blocked private address');
+  } catch (e) {
+    if (/Blocked/.test(e.message)) throw e;
+    // DNS failure: let the fetch itself fail rather than hard-blocking.
+  }
+}
 
 // ── Admin middleware ──────────────────────────────────────────────────────────
-
+// Header-only (never the query string) so the key can't leak into access logs.
 function requireAdmin(req, res, next) {
-  const key = req.query.key || req.headers['x-admin-key'] || '';
-  if (key !== ADMIN_KEY) return res.status(401).json({ error: 'Wrong admin key' });
+  const key = req.headers['x-admin-key'] || '';
+  if (!key || key !== ADMIN_KEY) return res.status(401).json({ error: 'Wrong admin key' });
   next();
 }
 
@@ -80,6 +162,56 @@ function parseListingUrl(rawUrl) {
   const host   = urlObj.hostname.replace(/^www\./, '');
   const pathId = urlObj.pathname.replace(/^\/+|\/+$/g, '').replace(/\//g, '-').slice(0, 100) || 'listing';
   return { source: host, id: pathId };
+}
+
+// ── Distance from Downtown LA (mirrors pipeline.js) ────────────────────────────
+const DTLA = { lat: 34.0537, lng: -118.2427 };
+const CITY_DISTANCES = {
+  'downtown los angeles': 1, 'dtla': 1, 'los angeles': 5,
+  'west hollywood': 9, 'north hollywood': 12, 'hollywood': 8,
+  'west covina': 21, 'covina': 22, 'glendale': 9, 'pasadena': 10,
+  'south pasadena': 8, 'altadena': 13, 'woodland hills': 24, 'encino': 18,
+  'sherman oaks': 15, 'studio city': 12, 'van nuys': 18, 'tarzana': 22,
+  'northridge': 24, 'reseda': 22, 'canoga park': 25, 'burbank': 12,
+  'santa monica': 16, 'venice': 17, 'culver city': 12, 'marina del rey': 15,
+  'playa del rey': 16, 'inglewood': 12, 'beverly hills': 11, 'brentwood': 16,
+  'bel air': 14, 'westwood': 14, 'long beach': 24, 'pomona': 30,
+  'san gabriel': 11, 'alhambra': 8, 'monterey park': 9, 'arcadia': 14,
+  'el monte': 14, 'baldwin park': 19, 'whittier': 18, 'downey': 13,
+  'torrance': 20, 'redondo beach': 22, 'manhattan beach': 20, 'malibu': 30,
+  'calabasas': 28, 'hawthorne': 15, 'gardena': 16, 'carson': 18,
+  'compton': 14, 'bellflower': 18, 'norwalk': 18, 'la mirada': 22,
+  'diamond bar': 28, 'walnut': 25, 'rowland heights': 25, 'hacienda heights': 22,
+  'montebello': 10, 'pico rivera': 12, 'monrovia': 17, 'duarte': 20,
+  'azusa': 24, 'glendora': 26, 'san dimas': 28, 'la verne': 30, 'claremont': 32,
+  'chatsworth': 27, 'granada hills': 24, 'sylmar': 22, 'pacoima': 18,
+  'sun valley': 15, 'la canada': 12, 'la crescenta': 13, 'temple city': 13,
+  'rosemead': 11, 'south gate': 10, 'lynwood': 11, 'paramount': 16,
+};
+const DISTANCE_KEYS = Object.keys(CITY_DISTANCES).sort((a, b) => b.length - a.length);
+
+function distanceFromDTLA(location) {
+  if (!location) return null;
+  const loc = String(location).toLowerCase();
+  for (const city of DISTANCE_KEYS) if (loc.includes(city)) return CITY_DISTANCES[city];
+  return null;
+}
+function distanceMiFromCoords(lat, lng) {
+  if (typeof lat !== 'number' || typeof lng !== 'number' || isNaN(lat) || isNaN(lng)) return null;
+  const toRad = d => (d * Math.PI) / 180;
+  const R = 3958.8;
+  const dLat = toRad(lat - DTLA.lat), dLng = toRad(lng - DTLA.lng);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(DTLA.lat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1.25);
+}
+// Pull lat/lng out of raw HTML when JSON-LD doesn't carry geo coordinates.
+function extractLatLng(html) {
+  const m = html.match(/"lat(?:itude)?"\s*:\s*(-?\d{1,2}\.\d{3,})\s*,\s*"l(?:ng|on|ongitude)"\s*:\s*(-?\d{2,3}\.\d{3,})/i);
+  if (m) {
+    const lat = +m[1], lng = +m[2];
+    if (lat >= 32 && lat <= 36 && lng >= -120 && lng <= -116) return { lat, lng }; // sanity: SoCal box
+  }
+  return null;
 }
 
 // ── Scraper ───────────────────────────────────────────────────────────────────
@@ -498,6 +630,7 @@ async function scrapeListingDetails(cleanUrl, parsed) {
     rating: null, reviews: null,
     pool: 'unknown', parking: 'unknown',
     displayed_5n: null,
+    lat: null, lng: null,
   };
 
   if (!html) return result;
@@ -571,6 +704,17 @@ async function scrapeListingDetails(cleanUrl, parsed) {
       const loc = [a.addressLocality, a.addressRegion].filter(Boolean).join(', ');
       if (loc) result.area = loc;
     }
+
+    if (result.lat == null && node.geo && node.geo.latitude != null) {
+      const lat = +node.geo.latitude, lng = +node.geo.longitude;
+      if (!isNaN(lat) && !isNaN(lng)) { result.lat = lat; result.lng = lng; }
+    }
+  }
+
+  // Fall back to scraping coordinates straight out of the HTML.
+  if (result.lat == null) {
+    const geo = extractLatLng(html);
+    if (geo) { result.lat = geo.lat; result.lng = geo.lng; }
   }
 
   // ── HTML-pattern scraping (photos, amenities, reviews) ────────────────────
@@ -678,13 +822,17 @@ app.delete('/api/submitted/:id', requireAdmin, (req, res) => {
 app.get('/api/submitted', (req, res) => res.json(loadSubmitted()));
 
 // Submit a new listing
-app.post('/api/submit', async (req, res) => {
+app.post('/api/submit', rateLimit({ windowMs: 60000, max: 5 }), async (req, res) => {
   const { url, submitted_by, manual_price } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url required' });
 
   const parsed = parseListingUrl(url);
   if (!parsed)
     return res.status(400).json({ error: 'Please enter a valid http/https URL' });
+
+  // Guard against SSRF before we fetch the URL server-side.
+  try { await assertSafeUrl(url); }
+  catch (e) { return res.status(400).json({ error: e.message || 'URL not allowed' }); }
 
   // Dedup check against submitted
   const submitted = loadSubmitted();
@@ -718,13 +866,19 @@ app.post('/api/submit', async (req, res) => {
     : est5n <= main.trip.budget * 1.1 ? 'marginal'
     : 'over';
 
+  // Distance from DTLA: prefer scraped coordinates, else infer from the area/name.
+  const distance_mi =
+    distanceMiFromCoords(scraped.lat, scraped.lng) ??
+    distanceFromDTLA(scraped.area) ??
+    distanceFromDTLA(scraped.name);
+
   const entry = {
     id:            parsed.id,
     source:        parsed.source,
     url:           cleanUrl,
     name:          scraped.name,
     area:          scraped.area,
-    distance_mi:   null,
+    distance_mi:   distance_mi,
     bd:            scraped.bd,
     ba:            scraped.ba,
     sleeps:        scraped.sleeps,
@@ -879,7 +1033,7 @@ app.get('/api/pipeline-listings', (req, res) => {
 //          parking,rating,reviews,url,amenities}], itinerary: "free text",
 //          criteria?: "free text" }
 // Returns: { analysis: "markdown text" }
-app.post('/api/compare-listings', async (req, res) => {
+app.post('/api/compare-listings', rateLimit({ windowMs: 60000, max: 10 }), async (req, res) => {
   if (!GEMINI_API_KEY) {
     return res.status(503).json({ error: 'AI compare is not configured (GEMINI_API_KEY missing).' });
   }
@@ -955,7 +1109,10 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
     // Cache the full-shortlist analysis so everyone sees it without re-spending
     // on Gemini. 1v1 battles are ad-hoc and not cached.
     if (!headToHead) {
-      saveInsights({ analysis, count: compact.length, created_at: new Date().toISOString() });
+      // Record which listings were analyzed so the client can flag the insights
+      // as stale once the shortlist changes.
+      const ids = listings.map(l => String(l.id)).sort();
+      saveInsights({ analysis, count: compact.length, ids, created_at: new Date().toISOString() });
     }
     res.json({ analysis });
   } catch (e) {

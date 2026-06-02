@@ -522,25 +522,33 @@ async function playwrightPrice(listingId, source) {
   }
 }
 
+// Reuse a price snapshot if we already have a valid one within this many days,
+// instead of re-rendering every listing with Playwright on every run.
+const PRICE_TTL_DAYS = Number(process.env.PRICE_TTL_DAYS || 3);
+
 async function fetchMissingPrices(db) {
   const today = new Date().toISOString().slice(0, 10);
 
-  // Listings with enough bedrooms but no price snapshot today
+  // Bedroom-passing listings that DON'T already have a valid price within the
+  // TTL window. Anything priced recently is reused (Stage 3c reads the latest
+  // snapshot), saving redundant Playwright renders.
   const candidates = db.prepare(`
     SELECT l.source, l.listing_id, l.bedrooms
     FROM listings l
     WHERE l.bedrooms >= ?
       AND NOT EXISTS (
         SELECT 1 FROM price_snapshots p
-        WHERE p.source = l.source AND p.listing_id = l.listing_id AND p.run_date = ?
+        WHERE p.source = l.source AND p.listing_id = l.listing_id
+          AND p.price_total IS NOT NULL
+          AND julianday(?) - julianday(p.run_date) < ?
       )
-  `).all(MIN_BEDROOMS, today);
+  `).all(MIN_BEDROOMS, today, PRICE_TTL_DAYS);
 
   if (!candidates.length) {
-    console.log('\n[Stage 3b] All bedroom-passing listings already have prices today');
+    console.log(`\n[Stage 3b] All bedroom-passing listings already priced within ${PRICE_TTL_DAYS} days`);
     return;
   }
-  console.log(`\n[Stage 3b] Playwright price fetch for ${candidates.length} listings without today's price`);
+  console.log(`\n[Stage 3b] Playwright price fetch for ${candidates.length} listings missing a price < ${PRICE_TTL_DAYS}d old`);
 
   const insertSnap = db.prepare(`
     INSERT INTO price_snapshots (source, listing_id, run_date, price_total, nights)

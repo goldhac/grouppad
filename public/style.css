@@ -387,8 +387,10 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
   padding: 2px 8px; border-radius: 4px;
 }
 
-/* Itinerary (admin-posted, read by all) */
-.muted-note { color: var(--muted); font-weight: normal; }
+/* Itinerary (admin-posted, read by all) — its own always-visible section */
+.muted-note { color: var(--muted); font-weight: normal; font-size: 12px; }
+.itinerary-section { padding: 12px 32px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.itinerary-header { display: flex; align-items: baseline; gap: 10px; font-weight: 600; font-size: 15px; }
 .itinerary-display {
   background: #181c23; border: 1px solid var(--border); border-radius: 8px;
   padding: 10px 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap;
@@ -396,6 +398,31 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
 .itinerary-display.empty { color: var(--muted); font-style: italic; }
 .itinerary-admin { display: flex; flex-direction: column; gap: 8px; }
 .itinerary-admin.hidden { display: none; }
+.itinerary-admin textarea {
+  width: 100%; box-sizing: border-box; background: #232830;
+  border: 1px solid var(--border); color: var(--text); border-radius: 6px;
+  padding: 8px 10px; font-size: 13px; font-family: inherit; resize: vertical;
+}
+.itinerary-admin textarea:focus { border-color: var(--warn); outline: none; }
+
+/* Stale-insights warning */
+.insights-stale {
+  background: rgba(240,180,64,0.12); border: 1px solid var(--warn);
+  border-radius: 6px; padding: 8px 12px; margin-bottom: 10px;
+  font-size: 13px; color: var(--warn);
+}
+
+/* Load-failure banner */
+.load-error {
+  position: sticky; top: 0; z-index: 100; background: var(--danger); color: #fff;
+  padding: 10px 16px; font-size: 14px; display: flex; align-items: center; gap: 12px;
+}
+.load-error button {
+  background: #fff; color: var(--danger); border: none; border-radius: 6px;
+  padding: 4px 12px; font-weight: 700; cursor: pointer;
+}
+
+@media (max-width: 720px) { .itinerary-section { padding-left: 16px; padding-right: 16px; } }
 
 /* Shared group AI insights */
 .insights-block { padding: 4px 32px 12px; }

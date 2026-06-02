@@ -8,7 +8,7 @@ function getVoter() {
   return v;
 }
 
-const VOTER = getVoter();
+let VOTER = getVoter();
 let DATA      = null;
 let VOTES     = {};
 let SUBMITTED = [];
@@ -285,7 +285,7 @@ async function toggleAdmin() {
   const key = prompt('Enter admin key:');
   if (!key) return;
   try {
-    const res = await fetch(`/api/admin/verify?key=${encodeURIComponent(key)}`);
+    const res = await fetch('/api/admin/verify', { headers: { 'x-admin-key': key } });
     if (res.ok) {
       ADMIN_KEY = key;
       localStorage.setItem('admin_key', key);
@@ -303,7 +303,7 @@ async function triggerPipeline() {
   if (!ADMIN_KEY) { alert('Log in as admin first.'); return; }
   if (!confirm('Run the pipeline now?\n\nThis will pull fresh listings from VRBO & Airbnb. Takes ~2–3 minutes.')) return;
   try {
-    const res = await fetch(`/api/admin/run-pipeline?key=${encodeURIComponent(ADMIN_KEY)}`, { method: 'POST' });
+    const res = await fetch('/api/admin/run-pipeline', { method: 'POST', headers: { 'x-admin-key': ADMIN_KEY } });
     const data = await res.json();
     if (res.ok) alert('Pipeline started! Refresh in a few minutes to see new listings.');
     else alert('Error: ' + (data.error || res.status));
@@ -330,10 +330,26 @@ function render() {
     `<span><strong>Refreshed:</strong> ${t.refreshed_at}</span>` +
     `<span><strong>Voting as:</strong> ${VOTER} <a href="#" id="change-voter" style="color:var(--link)">change</a></span>`;
 
-  document.getElementById('change-voter').onclick = (e) => {
+  document.getElementById('change-voter').onclick = async (e) => {
     e.preventDefault();
-    localStorage.removeItem('voter');
-    location.reload();
+    const next = (prompt('Your name (used for voting):', VOTER) || '').trim();
+    if (!next || next === VOTER) return;
+    const old = VOTER;
+    // Carry your existing votes over to the new name so you don't lose your picks.
+    const mine = [];
+    for (const [lid, voters] of Object.entries(VOTES)) {
+      if (voters[old]) mine.push([lid, voters[old]]);
+    }
+    VOTER = next;
+    localStorage.setItem('voter', next);
+    for (const [lid, vote] of mine) {
+      try {
+        await fetch('/api/votes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ listing_id: lid, voter: next, vote }) });
+        await fetch('/api/votes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ listing_id: lid, voter: old, vote: null }) });
+      } catch {}
+    }
+    try { VOTES = await fetch('/api/votes').then(r => r.json()); } catch {}
+    render();
   };
 
   const onlyUnder  = document.getElementById('f-under').checked;
@@ -396,7 +412,7 @@ function renderCaveats() {
     </div>`).join('');
   list.querySelectorAll('.caveat-del').forEach(btn => {
     btn.onclick = async () => {
-      const res = await fetch(`/api/caveats/${btn.dataset.id}?key=${encodeURIComponent(ADMIN_KEY)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/caveats/${btn.dataset.id}`, { method: 'DELETE', headers: { 'x-admin-key': ADMIN_KEY } });
       if (res.ok) { CAVEATS = await res.json(); renderCaveats(); }
     };
   });
@@ -414,7 +430,14 @@ function renderInsights() {
   if (!block || !body) return;
   if (!INSIGHTS || !INSIGHTS.analysis) { block.classList.add('hidden'); return; }
   block.classList.remove('hidden');
-  body.innerHTML = mdToHtml(INSIGHTS.analysis);
+  // Stale check: compare the shortlist these insights were built from against
+  // the current shortlist. If it changed, prompt a re-run.
+  const stale = Array.isArray(INSIGHTS.ids)
+    && JSON.stringify(INSIGHTS.ids.slice().sort()) !== JSON.stringify([...SHORTLIST_IDS].sort());
+  const staleNote = stale
+    ? `<div class="insights-stale">⚠️ The shortlist changed since this analysis — re-run “Analyze &amp; compare” for fresh insights.</div>`
+    : '';
+  body.innerHTML = staleNote + mdToHtml(INSIGHTS.analysis);
   if (when && INSIGHTS.created_at) {
     const d = new Date(INSIGHTS.created_at);
     when.textContent = `updated ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
@@ -589,7 +612,7 @@ function attachCardHandlers() {
       btn.textContent = '…';
 
       const endpoint = isSubmitted ? `/api/submitted/${id}` : `/api/listings/${id}`;
-      const res = await fetch(`${endpoint}?key=${encodeURIComponent(ADMIN_KEY)}`, { method: 'DELETE' });
+      const res = await fetch(endpoint, { method: 'DELETE', headers: { 'x-admin-key': ADMIN_KEY } });
 
       if (res.ok) {
         if (isSubmitted) {
@@ -656,7 +679,7 @@ document.getElementById('f-split').addEventListener('input', (e) => {
 async function showApifyUsage() {
   if (!ADMIN_KEY) { alert('Log in as admin first.'); return; }
   try {
-    const res  = await fetch(`/api/admin/apify-usage?key=${encodeURIComponent(ADMIN_KEY)}`);
+    const res  = await fetch('/api/admin/apify-usage', { headers: { 'x-admin-key': ADMIN_KEY } });
     const data = await res.json();
     if (!res.ok) { alert('Error: ' + (data.error || res.status)); return; }
     const used  = data.usageUsd != null ? `$${Number(data.usageUsd).toFixed(3)}` : '—';
@@ -855,8 +878,8 @@ function getShortlistListings() {
     const text  = document.getElementById('itinerary-edit').value.trim();
     itSave.disabled = true;
     try {
-      const res = await fetch(`/api/admin/itinerary?key=${encodeURIComponent(ADMIN_KEY)}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const res = await fetch('/api/admin/itinerary', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
         body: JSON.stringify({ text }),
       });
       const data = await res.json();
@@ -985,10 +1008,29 @@ function getShortlistListings() {
   if (cvText) cvText.addEventListener('keydown', e => { if (e.key === 'Enter') cvSend.click(); });
 })();
 
+// ── Surface load failures to the user ──────────────────────────────────────────
+function showLoadError(msg) {
+  let bar = document.getElementById('load-error');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'load-error';
+    bar.className = 'load-error';
+    document.body.prepend(bar);
+  }
+  bar.innerHTML = `${escapeHtml(msg)} <button id="load-retry">Retry</button>`;
+  document.getElementById('load-retry').onclick = () => location.reload();
+}
+
 // ── Poll for vote updates ─────────────────────────────────────────────────────
 (async () => {
-  await loadData();
-  render();
+  try {
+    await loadData();
+    if (!DATA) throw new Error('no data');
+    render();
+  } catch {
+    showLoadError('Couldn’t load listings — check your connection.');
+    return;
+  }
   setInterval(async () => {
     try {
       const v = await fetch('/api/votes').then(r => r.json());
