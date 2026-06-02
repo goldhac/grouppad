@@ -738,7 +738,9 @@ const PIPELINE_SEED = path.join(__dirname, 'data', 'seed-listings.json'); // sta
 const PIPELINE_BUDGET        = 7000;
 const PIPELINE_TAX           = 0.14;
 const PIPELINE_CLEANING_FEE  = 400;
-const PIPELINE_REGION_MAX_MI = 150;
+const PIPELINE_REGION_MAX_MI = 70;  // ~1 hour drive from DTLA — prioritize big homes within range
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL   = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 const HOT_TUB_RE = /\b(hot tub|hottub|jacuzzi|spa|whirlpool)\b/i;
 
 function getPipelineDb() {
@@ -848,6 +850,71 @@ app.get('/api/pipeline-listings', (req, res) => {
     console.error('[pipeline-listings]', e.message);
     const seed = loadSeedListings();
     res.json({ listings: seed, count: seed.length, note: 'Showing saved snapshot (read error)' });
+  }
+});
+
+// ── AI compare (Gemini) ───────────────────────────────────────────────────────
+// Body: { listings: [{name,bd,ba,sleeps,area,distance_mi,est_5n,pool,hot_tub,
+//          parking,rating,reviews,url,amenities}], itinerary: "free text",
+//          criteria?: "free text" }
+// Returns: { analysis: "markdown text" }
+app.post('/api/compare-listings', async (req, res) => {
+  if (!GEMINI_API_KEY) {
+    return res.status(503).json({ error: 'AI compare is not configured (GEMINI_API_KEY missing).' });
+  }
+  const { listings, itinerary, criteria } = req.body || {};
+  if (!Array.isArray(listings) || listings.length < 2) {
+    return res.status(400).json({ error: 'Pick at least 2 listings to compare.' });
+  }
+
+  // Compact each listing to the fields that matter, capped to keep the prompt small.
+  const compact = listings.slice(0, 12).map((l, i) => ({
+    n: i + 1,
+    name: l.name,
+    beds: l.bd, baths: l.ba, sleeps: l.sleeps,
+    area: l.area, miFromDTLA: l.distance_mi,
+    est_all_in_5n: l.est_5n, displayed_5n: l.displayed_5n,
+    pool: l.pool === 'yes', hot_tub: l.hot_tub === 'yes', parking: l.parking === 'yes',
+    rating: l.rating, reviews: l.reviews,
+    highlights: Array.isArray(l.amenities) ? l.amenities.slice(0, 5) : [],
+    url: l.url,
+  }));
+
+  const prompt =
+`You are helping a group of 14 friends choose a large rental home for a 5-night LA birthday trip (Aug 18–23, 2026), budget ~$7,000 all-in. They prefer mansions / large homes and will accept locations up to ~1 hour from Downtown LA.
+
+${itinerary ? `Their trip itinerary / plans:\n${String(itinerary).slice(0, 4000)}\n` : 'No itinerary was provided.'}
+${criteria ? `Extra criteria they care about:\n${String(criteria).slice(0, 1000)}\n` : ''}
+Here are the candidate listings (JSON):
+${JSON.stringify(compact, null, 1)}
+
+Write a concise, friendly comparison in markdown:
+1. A short ranked recommendation (best fit first) with one-line reasons tied to their itinerary and group size.
+2. A compact comparison table (Listing # | beds/sleeps | ~all-in | distance | pool/hot tub | standout).
+3. Call out any red flags (too far for their planned activities, tight sleeping capacity for 14, over budget, low/no reviews).
+Keep it under ~400 words. Refer to homes by their number and name.`;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      console.error('[compare] Gemini error', r.status, JSON.stringify(data).slice(0, 300));
+      return res.status(502).json({ error: data.error?.message || `Gemini HTTP ${r.status}` });
+    }
+    const analysis = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+    if (!analysis) return res.status(502).json({ error: 'Gemini returned no text.' });
+    res.json({ analysis });
+  } catch (e) {
+    console.error('[compare]', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 

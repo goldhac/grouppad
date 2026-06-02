@@ -357,7 +357,7 @@ async function discoverAirbnb() {
   // Region guard: the scraper sometimes bleeds in out-of-area results
   // (Houston, Atlantic City, etc.). Drop anything whose known coordinates put
   // it well outside greater LA. Keep rows with unknown distance (null).
-  const REGION_MAX_MI = 150;
+  const REGION_MAX_MI = 70;  // ~1 hour drive from DTLA
   const inRegion = mapped.filter(r => r.distance_mi == null || r.distance_mi <= REGION_MAX_MI);
   const dropped = mapped.length - inRegion.length;
   if (dropped > 0) console.log(`  Dropped ${dropped} out-of-region listings (>${REGION_MAX_MI}mi from DTLA)`);

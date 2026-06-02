@@ -50,6 +50,55 @@ function tallyVotes(listingId) {
   return { up, down, mine };
 }
 
+function netVotes(listingId) {
+  const { up, down } = tallyVotes(listingId);
+  return up - down;
+}
+
+// Prioritize mansions / large homes for LA search ordering
+function mansionScore(l) {
+  const t = (l.name || '').toLowerCase();
+  let s = (l.bd || 0) * 2 + (l.sleeps || 0) * 0.3;
+  if (/mansion|estate|villa|manor|chateau|grand|luxur/.test(t)) s += 8;
+  return s;
+}
+
+// Minimal, safe markdown → HTML (bold, headings, lists, pipe tables)
+function mdToHtml(md) {
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`(.+?)`/g, '<code>$1</code>');
+  const lines = md.split('\n');
+  let html = '', i = 0, listType = null;
+  const closeList = () => { if (listType) { html += `</${listType}>`; listType = null; } };
+  while (i < lines.length) {
+    const line = lines[i];
+    // table block
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1])) {
+      closeList();
+      const head = line.split('|').slice(1, -1).map(c => `<th>${inline(c.trim())}</th>`).join('');
+      html += `<table class="cmp-table"><thead><tr>${head}</tr></thead><tbody>`;
+      i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        const cells = lines[i].split('|').slice(1, -1).map(c => `<td>${inline(c.trim())}</td>`).join('');
+        html += `<tr>${cells}</tr>`; i++;
+      }
+      html += '</tbody></table>';
+      continue;
+    }
+    let m;
+    if ((m = line.match(/^(#{1,4})\s+(.*)/))) { closeList(); const lv = Math.min(m[1].length + 2, 6); html += `<h${lv}>${inline(m[2])}</h${lv}>`; }
+    else if ((m = line.match(/^\s*[-*]\s+(.*)/)))  { if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; } html += `<li>${inline(m[1])}</li>`; }
+    else if ((m = line.match(/^\s*\d+\.\s+(.*)/))) { if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; } html += `<li>${inline(m[1])}</li>`; }
+    else if (line.trim() === '') { closeList(); }
+    else { closeList(); html += `<p>${inline(line)}</p>`; }
+    i++;
+  }
+  closeList();
+  return html;
+}
+
+let SHORTLIST_IDS = new Set();
+
 // ── Carousel ──────────────────────────────────────────────────────────────────
 function renderCarousel(listing) {
   const photos = listing.photos || [];
@@ -280,7 +329,11 @@ function render() {
   const needPark   = document.getElementById('f-parking').checked;
   const showManual = document.getElementById('f-manual').checked;
 
+  // Compute the shortlist: member-added homes + anything liked (net upvotes ≥ 1).
+  renderShortlist();
+
   const filtered = listings.filter(l => {
+    if (SHORTLIST_IDS.has(String(l.id)))   return false; // moved up to shortlist
     if (onlyUnder  && l.budget !== 'under' && l.budget !== 'marginal') return false;
     if (needPool   && l.pool    !== 'yes') return false;
     if (needPark   && l.parking !== 'yes') return false;
@@ -299,12 +352,38 @@ function render() {
   attachCardHandlers();
 }
 
-function renderSubmitted() {
-  const section = document.getElementById('submitted-section');
-  const grid    = document.getElementById('submitted-grid');
-  if (!SUBMITTED.length) { section.classList.add('hidden'); return; }
+// Liked (net upvotes ≥ 1) homes + member submissions, pulled to the top.
+function renderShortlist() {
+  const section = document.getElementById('shortlist-section');
+  const grid    = document.getElementById('shortlist-grid');
+  if (!section || !grid) return;
+
+  const base     = (DATA && DATA.listings || []).map(l => ({ l, submitted: false, pipeline: false }));
+  const pipeline = PIPELINE.map(l => ({ l, submitted: false, pipeline: true }));
+  const subs     = SUBMITTED.map(l => ({ l, submitted: true,  pipeline: false }));
+
+  const seen = new Set();
+  const items = [];
+  for (const it of [...subs, ...pipeline, ...base]) {
+    const id = String(it.l.id);
+    if (seen.has(id)) continue;
+    const liked = netVotes(id) >= 1;
+    if (it.submitted || liked) { seen.add(id); items.push(it); }
+  }
+
+  SHORTLIST_IDS = new Set(items.map(it => String(it.l.id)));
+
+  if (!items.length) { section.classList.add('hidden'); return; }
   section.classList.remove('hidden');
-  grid.innerHTML = SUBMITTED.map(l => renderCard(l, true)).join('');
+
+  items.sort((a, b) => (netVotes(String(b.l.id)) - netVotes(String(a.l.id))) || (mansionScore(b.l) - mansionScore(a.l)));
+  grid.innerHTML = items.map(it => renderCard(it.l, it.submitted, it.pipeline)).join('');
+}
+
+function renderSubmitted() {
+  // Submissions are folded into the shortlist now; keep this section hidden.
+  const section = document.getElementById('submitted-section');
+  if (section) section.classList.add('hidden');
 }
 
 function renderPipeline() {
@@ -317,11 +396,14 @@ function renderPipeline() {
   const needPark  = document.getElementById('f-parking').checked;
 
   const filtered = PIPELINE.filter(l => {
+    if (SHORTLIST_IDS.has(String(l.id))) return false; // shown in shortlist instead
     if (onlyUnder && l.budget !== 'under' && l.budget !== 'marginal') return false;
     if (needPool  && l.pool    !== 'yes') return false;
     if (needPark  && l.parking !== 'yes') return false;
     return true;
   });
+  // Prioritize mansions / large homes
+  filtered.sort((a, b) => mansionScore(b) - mansionScore(a));
 
   if (!PIPELINE.length) { section.classList.add('hidden'); return; }
   section.classList.remove('hidden');
@@ -329,7 +411,7 @@ function renderPipeline() {
   // Update header count
   const noteEl = section.querySelector('.pipeline-note');
   if (noteEl) noteEl.textContent =
-    `Pulled from VRBO & Airbnb · ${filtered.length} of ${PIPELINE.length} shown`;
+    `Pulled from VRBO & Airbnb · big homes first · ${filtered.length} of ${PIPELINE.length} shown`;
 
   grid.innerHTML = filtered.length
     ? filtered.map(l => renderCard(l, false, true)).join('')
@@ -552,6 +634,67 @@ document.getElementById('submit-btn').addEventListener('click', async () => {
 document.getElementById('submit-url').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') document.getElementById('submit-btn').click();
 });
+
+// ── AI compare ────────────────────────────────────────────────────────────────
+function getShortlistListings() {
+  const pools = [...SUBMITTED, ...PIPELINE, ...(DATA && DATA.listings || [])];
+  const out = [], seen = new Set();
+  for (const l of pools) {
+    const id = String(l.id);
+    if (SHORTLIST_IDS.has(id) && !seen.has(id)) { seen.add(id); out.push(l); }
+  }
+  return out;
+}
+
+(function wireCompare() {
+  const toggle = document.getElementById('compare-toggle');
+  const panel  = document.getElementById('compare-panel');
+  const runBtn = document.getElementById('compare-run');
+  if (!toggle || !panel || !runBtn) return;
+
+  toggle.addEventListener('click', () => panel.classList.toggle('hidden'));
+
+  runBtn.addEventListener('click', async () => {
+    const msg    = document.getElementById('compare-msg');
+    const result = document.getElementById('compare-result');
+    const items  = getShortlistListings();
+    if (items.length < 2) {
+      msg.textContent = 'Add at least 2 homes to your shortlist (like them or add them) to compare.';
+      msg.className = 'compare-msg err';
+      return;
+    }
+    runBtn.disabled = true;
+    msg.textContent = 'Analyzing with Gemini…';
+    msg.className = 'compare-msg';
+    result.classList.add('hidden');
+
+    try {
+      const res = await fetch('/api/compare-listings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          listings:  items,
+          itinerary: document.getElementById('compare-itinerary').value.trim(),
+          criteria:  document.getElementById('compare-criteria').value.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.analysis) {
+        result.innerHTML = mdToHtml(data.analysis);
+        result.classList.remove('hidden');
+        msg.textContent = `Compared ${items.length} homes.`;
+        msg.className = 'compare-msg ok';
+      } else {
+        msg.textContent = data.error || 'Comparison failed.';
+        msg.className = 'compare-msg err';
+      }
+    } catch {
+      msg.textContent = 'Network error — try again.';
+      msg.className = 'compare-msg err';
+    }
+    runBtn.disabled = false;
+  });
+})();
 
 // ── Poll for vote updates ─────────────────────────────────────────────────────
 (async () => {

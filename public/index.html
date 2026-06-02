@@ -45,6 +45,28 @@
   </div>
 </div>
 
+<div id="shortlist-section" class="shortlist-section hidden">
+  <div class="shortlist-header">
+    <span>⭐ Shortlist</span>
+    <span class="shortlist-note">Liked by members &amp; member-added homes — your group's top picks</span>
+    <span class="spacer"></span>
+    <button id="compare-toggle" class="ai-btn" title="Compare your shortlist with Gemini AI">🤖 Compare with AI</button>
+  </div>
+
+  <div id="compare-panel" class="compare-panel hidden">
+    <label class="compare-label">Paste your trip itinerary / plans (optional — makes the comparison smarter):</label>
+    <textarea id="compare-itinerary" rows="4" placeholder="e.g. Day 1: arrive, dinner in Santa Monica. Day 2: Universal Studios. Day 3: pool day + birthday party at the house. Day 4: Hollywood + Griffith. Need space for a big group dinner and parking for 4 cars…"></textarea>
+    <input type="text" id="compare-criteria" placeholder="Anything else you care about? (e.g. must have hot tub, walkable, quiet street)">
+    <div class="compare-actions">
+      <button id="compare-run" class="ai-btn primary">Analyze &amp; compare shortlist</button>
+      <span id="compare-msg" class="compare-msg"></span>
+    </div>
+    <div id="compare-result" class="compare-result hidden"></div>
+  </div>
+
+  <div id="shortlist-grid" class="grid"></div>
+</div>
+
 <div id="grid" class="grid"></div>
 
 <div id="pipeline-section" class="pipeline-section hidden">
