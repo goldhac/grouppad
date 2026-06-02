@@ -901,7 +901,9 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+        // thinkingBudget:0 keeps 2.5-flash from spending the output budget on
+        // internal reasoning (which was truncating the visible answer).
+        generationConfig: { temperature: 0.4, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
     const data = await r.json();
