@@ -862,19 +862,50 @@ function getShortlistListings() {
     itSave.disabled = false;
   });
 
-  // Admin: load itinerary from a text file into the editor box
+  // Admin: load itinerary from a PDF / text file into the editor box
   const itFile = document.getElementById('itinerary-file');
-  if (itFile) itFile.addEventListener('change', () => {
+  function setItMsg(text, cls) {
+    const itMsg = document.getElementById('itinerary-msg');
+    if (itMsg) { itMsg.textContent = text; itMsg.className = 'compare-msg ' + (cls || ''); }
+  }
+  function fillItBox(text, name) {
+    const box = document.getElementById('itinerary-edit');
+    if (box) box.value = String(text || '').slice(0, 8000);
+    setItMsg(`Loaded “${name}” — click Save to publish.`, 'ok');
+  }
+  async function extractPdfText(file) {
+    if (!window.pdfjsLib) throw new Error('PDF reader not loaded');
+    const buf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    const parts = [];
+    for (let p = 1; p <= pdf.numPages; p++) {
+      const page = await pdf.getPage(p);
+      const content = await page.getTextContent();
+      parts.push(content.items.map(it => it.str).join(' '));
+    }
+    return parts.join('\n\n').replace(/[ \t]+/g, ' ').trim();
+  }
+  if (itFile) itFile.addEventListener('change', async () => {
     const f = itFile.files && itFile.files[0];
     if (!f) return;
+    const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    if (isPdf) {
+      setItMsg(`Reading “${f.name}”…`, '');
+      try {
+        const text = await extractPdfText(f);
+        if (!text) { setItMsg('No selectable text found in that PDF (it may be scanned/image-only).', 'err'); }
+        else fillItBox(text, f.name);
+      } catch (e) {
+        setItMsg('Could not read that PDF: ' + (e.message || 'error'), 'err');
+      }
+      itFile.value = '';
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => {
-      const box = document.getElementById('itinerary-edit');
-      if (box) box.value = String(reader.result || '').slice(0, 8000);
-      const itMsg = document.getElementById('itinerary-msg');
-      if (itMsg) { itMsg.textContent = `Loaded “${f.name}” — click Save to publish.`; itMsg.className = 'compare-msg ok'; }
-    };
+    reader.onload = () => fillItBox(reader.result, f.name);
+    reader.onerror = () => setItMsg('Could not read that file.', 'err');
     reader.readAsText(f);
+    itFile.value = '';
   });
 
   // Selection-driven comparison (tick cards, then compare)
