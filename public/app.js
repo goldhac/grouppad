@@ -384,6 +384,7 @@ function render() {
 }
 
 // Show the single admin-posted itinerary; prefill the admin editor.
+// The text is collapsed behind a toggle button so it doesn't crowd the page.
 function renderItinerary() {
   const disp = document.getElementById('itinerary-display');
   if (disp) {
@@ -394,7 +395,26 @@ function renderItinerary() {
   if (edit && document.activeElement !== edit) edit.value = ITINERARY.text || '';
   const itAdmin = document.getElementById('itinerary-admin');
   if (itAdmin) itAdmin.classList.toggle('hidden', !ADMIN_KEY);
+  // Toggle button label reflects whether anything is posted.
+  const tog = document.getElementById('itinerary-toggle');
+  if (tog) tog.textContent = (disp && !disp.classList.contains('hidden'))
+    ? '📋 Hide itinerary'
+    : (ITINERARY.text ? '📋 View itinerary' : '📋 No itinerary yet');
 }
+
+// Wire the collapse/expand toggle once.
+(function wireItineraryToggle() {
+  const tog = document.getElementById('itinerary-toggle');
+  const disp = document.getElementById('itinerary-display');
+  if (!tog || !disp) return;
+  tog.addEventListener('click', () => {
+    const nowHidden = disp.classList.toggle('hidden');
+    tog.setAttribute('aria-expanded', String(!nowHidden));
+    tog.textContent = nowHidden
+      ? (ITINERARY.text ? '📋 View itinerary' : '📋 No itinerary yet')
+      : '📋 Hide itinerary';
+  });
+})();
 
 // Group caveats chat log + admin delete.
 function renderCaveats() {
@@ -904,13 +924,33 @@ function getShortlistListings() {
     if (!window.pdfjsLib) throw new Error('PDF reader not loaded');
     const buf = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
-    const parts = [];
+    const pages = [];
     for (let p = 1; p <= pdf.numPages; p++) {
       const page = await pdf.getPage(p);
       const content = await page.getTextContent();
-      parts.push(content.items.map(it => it.str).join(' '));
+      // Rebuild lines using each item's end-of-line flag (and a y-position
+      // fallback) so the result keeps the document's line/paragraph structure
+      // instead of collapsing everything into one run-on blob.
+      let line = '';
+      let lastY = null;
+      const lines = [];
+      for (const it of content.items) {
+        const y = it.transform ? it.transform[5] : null;
+        if (lastY != null && y != null && Math.abs(y - lastY) > 3 && line.trim()) {
+          lines.push(line.trimEnd());
+          line = '';
+        }
+        line += it.str;
+        if (it.hasEOL) { lines.push(line.trimEnd()); line = ''; lastY = null; }
+        else { if (it.str && !/\s$/.test(it.str)) line += ' '; lastY = y; }
+      }
+      if (line.trim()) lines.push(line.trimEnd());
+      pages.push(lines.join('\n'));
     }
-    return parts.join('\n\n').replace(/[ \t]+/g, ' ').trim();
+    return pages.join('\n\n')
+      .replace(/[ \t]+/g, ' ')      // collapse runs of spaces
+      .replace(/\n{3,}/g, '\n\n')   // collapse big gaps
+      .trim();
   }
   if (itFile) itFile.addEventListener('change', async () => {
     const f = itFile.files && itFile.files[0];

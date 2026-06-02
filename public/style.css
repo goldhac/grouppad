@@ -390,7 +390,8 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
 /* Itinerary (admin-posted, read by all) — its own always-visible section */
 .muted-note { color: var(--muted); font-weight: normal; font-size: 12px; }
 .itinerary-section { padding: 12px 32px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-.itinerary-header { display: flex; align-items: baseline; gap: 10px; font-weight: 600; font-size: 15px; }
+.itinerary-header { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; }
+.itinerary-header .spacer { flex: 1; }
 .itinerary-display {
   background: #181c23; border: 1px solid var(--border); border-radius: 8px;
   padding: 10px 14px; font-size: 13px; line-height: 1.5; white-space: pre-wrap;

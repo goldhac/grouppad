@@ -49,8 +49,10 @@
   <div class="itinerary-header">
     <span>🗺️ Trip itinerary</span>
     <span class="muted-note">Posted by the organizer — feeds the AI comparison</span>
+    <span class="spacer"></span>
+    <button id="itinerary-toggle" class="ai-btn" aria-expanded="false">📋 View itinerary</button>
   </div>
-  <div id="itinerary-display" class="itinerary-display">No itinerary posted yet.</div>
+  <div id="itinerary-display" class="itinerary-display hidden">No itinerary posted yet.</div>
   <div id="itinerary-admin" class="itinerary-admin hidden">
     <textarea id="itinerary-edit" rows="4" placeholder="Admin: post the one canonical itinerary here. e.g. Day 1: arrive, dinner in Santa Monica. Day 2: Universal Studios. Day 3: pool day + birthday party at the house…"></textarea>
     <div class="compare-actions">

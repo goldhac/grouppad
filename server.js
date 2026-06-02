@@ -1067,24 +1067,33 @@ ${itinerary ? `Their trip itinerary / plans (posted by the trip organizer):\n${S
 ${caveats ? `Individual member caveats / must-haves:\n${caveats.slice(0, 1500)}\n` : ''}
 ${criteria ? `Extra criteria they care about:\n${String(criteria).slice(0, 1000)}\n` : ''}`;
 
+  const hasItinerary = !!itinerary;
+  const itineraryRule = hasItinerary
+    ? 'IMPORTANT: explicitly reference specific items from their itinerary above (named activities, neighborhoods, the party/event) when explaining fit — e.g. "10 min from the Universal Studios day" or "close to the Santa Monica dinner". Tie at least two points directly to the itinerary.'
+    : 'No itinerary was posted, so judge on group size, budget, and distance from DTLA.';
+
   const prompt = headToHead
     ? `${context}
 Head-to-head: compare these TWO homes (JSON):
 ${JSON.stringify(compact, null, 1)}
 
+${itineraryRule}
+
 Write a punchy 1v1 markdown breakdown:
-1. **Winner:** name the better pick in one bold line and why.
+1. **Winner:** name the better pick in one bold line and why${hasItinerary ? ', referencing their itinerary' : ''}.
 2. A tight table (Metric | Home 1 | Home 2) covering beds/sleeps, ~all-in price, distance from DTLA, pool, hot tub, parking, rating/reviews.
-3. "Pick Home 1 if…" / "Pick Home 2 if…" — one line each.
+3. "Pick Home 1 if…" / "Pick Home 2 if…" — one line each, tied to their plans.
 Keep it under ~250 words. Refer to homes by number and name.`
     : `${context}
 Here are the candidate listings (JSON):
 ${JSON.stringify(compact, null, 1)}
 
+${itineraryRule}
+
 Write a concise, friendly comparison in markdown:
-1. A short ranked recommendation (best fit first) with one-line reasons tied to their itinerary and group size.
+1. A short ranked recommendation (best fit first) with one-line reasons explicitly tied to their itinerary and group size.
 2. A compact comparison table (Listing # | beds/sleeps | ~all-in | distance | pool/hot tub | standout).
-3. Call out any red flags (too far for their planned activities, tight sleeping capacity for 14, over budget, low/no reviews).
+3. Call out any red flags (too far for their planned activities, tight sleeping capacity for 16, over budget, low/no reviews).
 Keep it under ~400 words. Refer to homes by their number and name.`;
 
   try {
