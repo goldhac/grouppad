@@ -17,16 +17,18 @@ let SPLIT     = 14;
 let ADMIN_KEY = localStorage.getItem('admin_key') || null;
 let ITINERARY = { text: '', updated_at: null };
 let CAVEATS   = [];
+let INSIGHTS  = null;
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
-  const [data, votes, submitted, pipeline, itinerary, caveats] = await Promise.all([
+  const [data, votes, submitted, pipeline, itinerary, caveats, insights] = await Promise.all([
     fetch('/api/listings').then(r => r.json()),
     fetch('/api/votes').then(r => r.json()).catch(() => ({})),
     fetch('/api/submitted').then(r => r.json()).catch(() => []),
     fetch('/api/pipeline-listings').then(r => r.json()).catch(() => ({ listings: [] })),
     fetch('/api/itinerary').then(r => r.json()).catch(() => ({ text: '', updated_at: null })),
     fetch('/api/caveats').then(r => r.json()).catch(() => []),
+    fetch('/api/insights').then(r => r.json()).catch(() => null),
   ]);
   DATA      = data;
   VOTES     = votes;
@@ -34,6 +36,7 @@ async function loadData() {
   PIPELINE  = pipeline.listings || [];
   ITINERARY = itinerary || { text: '', updated_at: null };
   CAVEATS   = Array.isArray(caveats) ? caveats : [];
+  INSIGHTS  = insights && insights.analysis ? insights : null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -356,6 +359,7 @@ function render() {
   renderPipeline();
   renderItinerary();
   renderCaveats();
+  renderInsights();
   renderH2HOptions();
   updateSplitDisplay();
   attachCardHandlers();
@@ -398,6 +402,21 @@ function renderCaveats() {
 
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Cached AI shortlist analysis, shown to everyone (one Gemini call serves all).
+function renderInsights() {
+  const block = document.getElementById('insights-block');
+  const body  = document.getElementById('insights-body');
+  const when  = document.getElementById('insights-when');
+  if (!block || !body) return;
+  if (!INSIGHTS || !INSIGHTS.analysis) { block.classList.add('hidden'); return; }
+  block.classList.remove('hidden');
+  body.innerHTML = mdToHtml(INSIGHTS.analysis);
+  if (when && INSIGHTS.created_at) {
+    const d = new Date(INSIGHTS.created_at);
+    when.textContent = `updated ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  }
 }
 
 // Populate the two 1v1 dropdowns from the current shortlist (or all pools).
@@ -786,8 +805,11 @@ function getShortlistListings() {
       if (res.ok && data.analysis) {
         result.innerHTML = mdToHtml(data.analysis);
         result.classList.remove('hidden');
-        msg.textContent = `Compared ${items.length} homes.`;
+        msg.textContent = `Compared ${items.length} homes — saved as group insights for everyone.`;
         msg.className = 'compare-msg ok';
+        // This analysis is now the shared group insight; reflect it live.
+        INSIGHTS = { analysis: data.analysis, created_at: new Date().toISOString() };
+        renderInsights();
       } else {
         msg.textContent = data.error || 'Comparison failed.';
         msg.className = 'compare-msg err';

@@ -374,6 +374,11 @@ header p { margin: 0; color: var(--muted); font-size: 14px; }
 .itinerary-admin { display: flex; flex-direction: column; gap: 8px; }
 .itinerary-admin.hidden { display: none; }
 
+/* Shared group AI insights */
+.insights-block { padding: 4px 32px 12px; }
+.insights-block.hidden { display: none; }
+.insights-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; font-weight: 600; }
+
 /* Head-to-head 1v1 */
 .h2h { margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px;
   display: flex; flex-direction: column; gap: 8px; }

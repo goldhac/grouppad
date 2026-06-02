@@ -17,6 +17,7 @@ const VOTES_FILE     = path.join(DATA_DIR, 'votes.json');            // persiste
 const SUBMITTED_FILE = path.join(DATA_DIR, 'submitted.json');        // persisted
 const ITINERARY_FILE = path.join(DATA_DIR, 'itinerary.json');        // persisted (admin)
 const CAVEATS_FILE   = path.join(DATA_DIR, 'caveats.json');          // persisted (members)
+const INSIGHTS_FILE  = path.join(DATA_DIR, 'insights.json');         // persisted (cached AI)
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -47,6 +48,12 @@ function loadCaveats() {
   try { return JSON.parse(fs.readFileSync(CAVEATS_FILE, 'utf8')); } catch { return []; }
 }
 function saveCaveats(c) { fs.writeFileSync(CAVEATS_FILE, JSON.stringify(c, null, 2)); }
+
+// Cached AI shortlist analysis, shared with everyone (one Gemini call per run).
+function loadInsights() {
+  try { return JSON.parse(fs.readFileSync(INSIGHTS_FILE, 'utf8')); } catch { return null; }
+}
+function saveInsights(i) { fs.writeFileSync(INSIGHTS_FILE, JSON.stringify(i, null, 2)); }
 
 // ── Admin middleware ──────────────────────────────────────────────────────────
 
@@ -945,6 +952,11 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
     }
     const analysis = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
     if (!analysis) return res.status(502).json({ error: 'Gemini returned no text.' });
+    // Cache the full-shortlist analysis so everyone sees it without re-spending
+    // on Gemini. 1v1 battles are ad-hoc and not cached.
+    if (!headToHead) {
+      saveInsights({ analysis, count: compact.length, created_at: new Date().toISOString() });
+    }
     res.json({ analysis });
   } catch (e) {
     console.error('[compare]', e.message);
@@ -963,6 +975,9 @@ app.post('/api/admin/run-pipeline', requireAdmin, (req, res) => {
   child.unref();
   res.json({ ok: true, message: 'Pipeline started in background — check server logs' });
 });
+
+// Latest cached AI shortlist analysis, shown to everyone.
+app.get('/api/insights', (req, res) => res.json(loadInsights() || { analysis: '', created_at: null }));
 
 // ── Trip itinerary (admin posts one canonical itinerary; everyone reads it) ─────
 app.get('/api/itinerary', (req, res) => res.json(loadItinerary()));
