@@ -740,7 +740,7 @@ const PIPELINE_TAX           = 0.14;
 const PIPELINE_CLEANING_FEE  = 400;
 const PIPELINE_REGION_MAX_MI = 70;  // ~1 hour drive from DTLA — prioritize big homes within range
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL   = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_MODEL   = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const HOT_TUB_RE = /\b(hot tub|hottub|jacuzzi|spa|whirlpool)\b/i;
 
 function getPipelineDb() {
@@ -901,7 +901,7 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
+        generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
       }),
     });
     const data = await r.json();
