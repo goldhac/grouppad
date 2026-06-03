@@ -600,6 +600,59 @@ function refDistances(lat, lng, refs) {
   return out;
 }
 
+// Geocode a free-text area to coords via Gemini (cached). Used to give community
+// submissions the 3-distance chips when the scrape didn't return coordinates.
+const _geoCache = new Map();
+async function geocodeArea(area) {
+  const key = String(area || '').toLowerCase().trim();
+  if (!key) return null;
+  if (_geoCache.has(key)) return _geoCache.get(key);
+  const gk = process.env.GEMINI_API_KEY;
+  if (!gk) return null;
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const prompt = `Give approximate coordinates for the place "${area}". Respond with JSON only: {"lat":0,"lng":0}`;
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${gk}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0, maxOutputTokens: 60, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' } }),
+    });
+    const d = await r.json();
+    if (!r.ok) { _geoCache.set(key, null); return null; }
+    const j = JSON.parse(d.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '{}');
+    const v = (typeof j.lat === 'number' && typeof j.lng === 'number') ? { lat: j.lat, lng: j.lng } : null;
+    _geoCache.set(key, v);
+    return v;
+  } catch { _geoCache.set(key, null); return null; }
+}
+
+// Distances for a submission: from scraped coords if present, else geocode the area.
+async function submissionDistances(area, lat, lng, tripId) {
+  const refs = tripRefPoints(tripId);
+  if (!refs) return [];
+  if (typeof lat === 'number' && typeof lng === 'number') return refDistances(lat, lng, refs);
+  const c = await geocodeArea(area);
+  return c ? refDistances(c.lat, c.lng, refs) : [];
+}
+
+// One-time boot backfill: existing submissions predate the distances feature and
+// store no coords — geocode their areas and fill in the 3-distance chips. Once
+// every submission has distances this no-ops (no Gemini calls).
+async function backfillSubmissionDistances() {
+  const trips = loadTrips();
+  for (const tripId of Object.keys(trips)) {
+    let subs;
+    try { subs = loadSubmitted(tripId); } catch { continue; }
+    if (!Array.isArray(subs) || subs.length === 0) continue;
+    let changed = false;
+    for (const s of subs) {
+      if (Array.isArray(s.distances) && s.distances.length) continue;
+      const d = await submissionDistances(s.area, s.lat, s.lng, tripId);
+      if (d.length) { s.distances = d; changed = true; }
+    }
+    if (changed) { saveSubmitted(subs, tripId); console.log(`[backfill] submission distances for ${tripId}`); }
+  }
+}
+
 // Pull lat/lng out of raw HTML when JSON-LD doesn't carry geo coordinates.
 function extractLatLng(html) {
   const m = html.match(/"lat(?:itude)?"\s*:\s*(-?\d{1,2}\.\d{3,})\s*,\s*"l(?:ng|on|ongitude)"\s*:\s*(-?\d{2,3}\.\d{3,})/i);
@@ -1440,14 +1493,19 @@ const hSubmit = async (req, res) => {
     distanceFromDTLA(scraped.area) ??
     distanceFromDTLA(scraped.name);
 
+  // 3 distance+time chips — from scraped coords, or geocode the area if missing.
+  const subDistances = await submissionDistances(scraped.area, scraped.lat, scraped.lng, tripId);
+
   const entry = {
     id:            parsed.id,
     source:        parsed.source,
     url:           cleanUrl,
     name:          scraped.name,
     area:          scraped.area,
+    lat:           typeof scraped.lat === 'number' ? scraped.lat : null,
+    lng:           typeof scraped.lng === 'number' ? scraped.lng : null,
     distance_mi:   distance_mi,
-    distances:     refDistances(scraped.lat, scraped.lng, tripRefPoints(tripId)),
+    distances:     subDistances,
     bd:            scraped.bd,
     ba:            scraped.ba,
     sleeps:        scraped.sleeps,
@@ -2133,5 +2191,7 @@ app.listen(PORT, () => {
   console.log(`GroupPad listening on :${PORT}`);
   try { migrateLegacyTripIfNeeded(); } catch (e) { console.error('[migrate] failed:', e.message); }
   try { ensureLaOwner(); } catch (e) { console.error('[repair] failed:', e.message); }
+  // Backfill 3-distance chips on pre-existing community submissions (one-time).
+  backfillSubmissionDistances().catch((e) => console.error('[backfill-sub] failed:', e.message));
   schedulePipeline();
 });

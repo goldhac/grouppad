@@ -9,7 +9,7 @@ import { amenityLabel, fmt, fmtMins, tallyVotes } from '@/lib/utils';
 
 function DistIcon({ kind }: { kind?: string }) {
   const Icon = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
-  return <Icon className="h-4 w-4 text-muted" aria-hidden />;
+  return <Icon className="h-4 w-4" aria-hidden />;
 }
 
 export function DetailModal() {
@@ -21,7 +21,11 @@ export function DetailModal() {
   const l = detailId ? findListing(detailId) : undefined;
   const [photoIdx, setPhotoIdx] = useState(0);
   const [copied, setCopied] = useState(false);
-  useEffect(() => setPhotoIdx(0), [detailId]);
+  const [refIdx, setRefIdx] = useState(0); // which reference point the map routes to
+  useEffect(() => {
+    setPhotoIdx(0);
+    setRefIdx(0);
+  }, [detailId]);
 
   const copyLink = async () => {
     if (!trip || !l) return;
@@ -50,6 +54,14 @@ export function DetailModal() {
   const photos = l.photos ?? [];
   const pp = l.est_5n ? Math.ceil(l.est_5n / split) : null;
   const mapQuery = encodeURIComponent(`${l.area ?? ''} ${trip?.destination ?? 'Los Angeles'}`);
+  // Map re-centers on the toggled reference point (downtown by default); the chips
+  // carry the distance + drive time. (Keyless directions embeds no longer render,
+  // so we center on the place via the reliable q= embed.)
+  const dists = l.distances ?? [];
+  const activeRef = dists[refIdx] ?? null;
+  const mapSrc = activeRef
+    ? `https://www.google.com/maps?q=${encodeURIComponent(`${activeRef.label} ${trip?.destination ?? ''}`.trim())}&z=11&output=embed`
+    : `https://www.google.com/maps?q=${mapQuery}&z=11&output=embed`;
 
   return (
     <Dialog open onOpenChange={(o) => !o && closeDetail()}>
@@ -165,13 +177,34 @@ export function DetailModal() {
           </div>
         )}
 
-        {/* Map */}
+        {/* Map — routes to a reference point; toggle the 3 (defaults to downtown) */}
+        {dists.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {dists.map((d, i) => (
+              <button
+                key={i}
+                onClick={() => setRefIdx(i)}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors',
+                  i === refIdx
+                    ? 'border-accent bg-accent/15 text-accent'
+                    : 'border-border text-muted hover:text-text',
+                )}
+              >
+                <DistIcon kind={d.kind} />
+                <span className="font-medium">{d.label}</span>
+                <span className="opacity-70">· {d.mi} mi · {fmtMins(d.min)}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <iframe
-          title="Area map"
+          key={mapSrc}
+          title={activeRef ? `Route to ${activeRef.label}` : 'Area map'}
           className="aspect-[16/7] w-full rounded-lg border border-border"
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
-          src={`https://www.google.com/maps?q=${mapQuery}&z=11&output=embed`}
+          src={mapSrc}
         />
 
         {/* Actions */}

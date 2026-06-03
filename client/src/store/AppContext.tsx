@@ -349,10 +349,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const closeDetail = useCallback(() => setDetailId(null), []);
 
   const findListing = useCallback(
-    (id: string): Listing | undefined =>
-      submitted.find((l) => l.id === id) ??
-      pipeline.find((l) => l.id === id) ??
-      listings.find((l) => l.id === id),
+    (id: string): Listing | undefined => {
+      // A listing can appear in more than one pool (e.g. curated + live pipeline);
+      // prefer the copy that carries the distance chips, else the first match.
+      const matches = [
+        submitted.find((l) => l.id === id),
+        pipeline.find((l) => l.id === id),
+        listings.find((l) => l.id === id),
+      ].filter(Boolean) as Listing[];
+      return matches.find((l) => l.distances?.length) ?? matches[0];
+    },
     [submitted, pipeline, listings],
   );
 
