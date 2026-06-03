@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #0f1115;
+  --panel: #181b22;
+  --panel-2: #1f232c;
+  --border: #2a2f3a;
+  --text: #e7ebf3;
+  --muted: #8a93a4;
+  --accent: #56d364;
+  --warn: #f0b440;
+  --danger: #f47070;
+  --link: #7ec5ff;
+  --radius: 14px;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100dvh;
+  }
+  a {
+    color: var(--link);
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+  /* Respect reduced-motion globally (a11y rule reduced-motion). */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Thin custom scrollbar for the dark theme. */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 8px;
+  }
+}
+
+/* Lightweight markdown rendering for AI compare / insights output. */
+.md h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0.8em 0 0.3em;
+}
+.md h4,
+.md h5,
+.md h6 {
+  font-weight: 600;
+  margin: 0.7em 0 0.25em;
+}
+.md p {
+  margin: 0.5em 0;
+}
+.md ul,
+.md ol {
+  margin: 0.4em 0;
+  padding-left: 1.4em;
+}
+.md li {
+  margin: 0.2em 0;
+}
+.md code {
+  background: var(--panel-2);
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  font-size: 0.9em;
+}
+.md strong {
+  color: var(--text);
+  font-weight: 700;
+}
+.md table.cmp-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.6em 0;
+  font-size: 0.9rem;
+}
+.md table.cmp-table th,
+.md table.cmp-table td {
+  border: 1px solid var(--border);
+  padding: 6px 9px;
+  text-align: left;
+}
+.md table.cmp-table th {
+  background: var(--panel-2);
+}

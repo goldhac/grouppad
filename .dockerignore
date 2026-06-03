@@ -1,0 +1,9 @@
+node_modules
+client/node_modules
+client/dist
+.git
+.env
+*.log
+.DS_Store
+data/pipeline.db-shm
+data/pipeline.db-wal

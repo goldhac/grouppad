@@ -1,4 +1,4 @@
-# ── Stage 1: compile native modules (better-sqlite3 needs gcc) ────────────────
+# ── Stage 1: compile server native modules (better-sqlite3 needs gcc) ─────────
 FROM node:20-bookworm-slim AS builder
 
 RUN apt-get update && apt-get install -y python3 make g++ --no-install-recommends \
@@ -8,7 +8,16 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# ── Stage 2: lean runtime image (no build tools) ──────────────────────────────
+# ── Stage 2: build the React client (Vite → client/dist) ──────────────────────
+FROM node:20-bookworm-slim AS client
+
+WORKDIR /app/client
+COPY client/package*.json ./
+RUN npm ci
+COPY client/ ./
+RUN npm run build
+
+# ── Stage 3: lean runtime image (no build tools) ──────────────────────────────
 FROM node:20-bookworm-slim AS runtime
 
 RUN apt-get update && apt-get install -y \
@@ -32,9 +41,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy compiled node_modules from builder (no g++ needed at runtime)
+# Server deps (compiled in stage 1, no g++ needed at runtime)
 COPY --from=builder /app/node_modules ./node_modules
+# App source
 COPY . .
+# Compiled client (overlays any source client/ copied above)
+COPY --from=client /app/client/dist ./client/dist
 
 ENV CHROMIUM_PATH=/usr/bin/chromium
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1

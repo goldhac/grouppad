@@ -35,9 +35,16 @@ const INSIGHTS_FILE  = path.join(DATA_DIR, 'insights.json');         // persiste
 const USERS_FILE     = path.join(DATA_DIR, 'users.json');            // persisted (accounts)
 const SESSIONS_FILE  = path.join(DATA_DIR, 'sessions.json');         // persisted (login sessions)
 const MAGIC_FILE     = path.join(DATA_DIR, 'magic.json');            // persisted (pending magic links)
+const FINALVOTES_FILE = path.join(DATA_DIR, 'finalvotes.json');      // persisted (each member's single top pick)
+const DECISION_FILE   = path.join(DATA_DIR, 'decision.json');        // persisted (admin-locked final pick)
+const USAGE_FILE      = path.join(DATA_DIR, 'usage.json');           // persisted (app-side API meter, by month)
 
 app.use(express.json());
 app.use((req, res, next) => attachUser(req, res, next));
+// Serve the compiled React client (Vite build) first; fall back to the legacy
+// static `public/` assets for anything not produced by the build. The client
+// uses HashRouter, so the server only ever needs to serve `/` → index.html.
+app.use(express.static(path.join(__dirname, 'client', 'dist')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── File helpers ─────────────────────────────────────────────────────────────
@@ -84,6 +91,38 @@ function loadInsights() {
 }
 function saveInsights(i) { writeJsonAtomic(INSIGHTS_FILE, i); }
 
+// Final pick: each member's single top choice (a poll separate from up/down
+// likes), plus the admin-locked official decision.
+function loadFinalVotes() {
+  try { return JSON.parse(fs.readFileSync(FINALVOTES_FILE, 'utf8')); } catch { return {}; }
+}
+function saveFinalVotes(v) { writeJsonAtomic(FINALVOTES_FILE, v); }
+function loadDecision() {
+  try { return JSON.parse(fs.readFileSync(DECISION_FILE, 'utf8')); } catch { return null; }
+}
+function saveDecision(d) { writeJsonAtomic(DECISION_FILE, d); }
+
+// App-side API meter. Google gives no per-key billing endpoint for Gemini, so we
+// count calls + tokens ourselves; Firecrawl/Apify calls are counted too as a
+// cross-check against each provider's own balance. Segmented by calendar month.
+function usageMonth() { return new Date().toISOString().slice(0, 7); } // YYYY-MM
+function loadUsage() {
+  try { return JSON.parse(fs.readFileSync(USAGE_FILE, 'utf8')); } catch { return {}; }
+}
+function bumpUsage(service, fields) {
+  try {
+    const u = loadUsage();
+    const m = usageMonth();
+    u[m] = u[m] || {};
+    u[m][service] = u[m][service] || {};
+    for (const [k, v] of Object.entries(fields)) {
+      u[m][service][k] = (u[m][service][k] || 0) + (Number(v) || 0);
+    }
+    u[m].updated_at = new Date().toISOString();
+    writeJsonAtomic(USAGE_FILE, u);
+  } catch (e) { console.error('[usage] bump failed:', e.message); }
+}
+
 // ── Accounts (passwordless magic-link auth) ────────────────────────────────────
 // users.json    : { [userId]: { id, email, name, created_at } }
 // sessions.json : { [sessionId]: { user_id, created_at, expires_at } }
@@ -114,14 +153,17 @@ function parseCookies(req) {
   return out;
 }
 
-// Find or create a user by email; display name defaults to the address local-part.
-function findOrCreateUser(email) {
+// Find or create a user by email. For new users the display name defaults to
+// the address local-part, unless a friendlier name is supplied (e.g. the name
+// from a Google profile).
+function findOrCreateUser(email, displayName) {
   const e = String(email).trim().toLowerCase();
   const users = loadUsers();
   let user = Object.values(users).find(u => u.email === e);
   if (!user) {
     const id = crypto.randomBytes(12).toString('hex');
-    user = { id, email: e, name: e.split('@')[0].slice(0, 40), created_at: new Date().toISOString() };
+    const name = String(displayName || '').trim().slice(0, 40) || e.split('@')[0].slice(0, 40);
+    user = { id, email: e, name, created_at: new Date().toISOString() };
     users[id] = user;
     saveUsers(users);
   }
@@ -660,6 +702,7 @@ async function fetchPriceWithPlaywright(cleanUrl, source) {
 // Firecrawl v2: renders the page with a managed browser + uses LLM to extract price
 async function fetchPriceViaFirecrawl(listingUrl) {
   if (!FIRECRAWL_KEY) return null;
+  bumpUsage('firecrawl', { calls: 1 }); // each scrape spends Firecrawl credits
   try {
     const ctrl = new AbortController();
     const tid  = setTimeout(() => ctrl.abort(), 45000); // Firecrawl renders JS; can take ~15–25s
@@ -951,6 +994,98 @@ app.post('/api/auth/logout', (req, res) => {
   if (sid) { const s = loadSessions(); if (s[sid]) { delete s[sid]; saveSessions(s); } }
   clearSessionCookie(req, res);
   res.json({ ok: true });
+});
+
+// Admin: invalidate every active session at once (forces all members to sign in
+// again). Used to reset state for testing / after a sign-in change.
+app.post('/api/admin/logout-all', requireAdmin, (req, res) => {
+  const count = Object.keys(loadSessions()).length;
+  saveSessions({});
+  clearSessionCookie(req, res);
+  res.json({ ok: true, cleared: count });
+});
+
+// ── Auth: Sign in with Google (OAuth 2.0 authorization-code flow) ────────────────
+const OAUTH_STATE_COOKIE = 'gp_oauth_state';
+const googleConfigured = () => !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+// The redirect URI must match exactly what's registered in Google Cloud. We build
+// it from the request (trust-proxy makes this https on Railway) but allow an env
+// override for safety.
+function googleRedirectUri(req) {
+  return process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+}
+
+// Kick off the flow: stash a random state in a short-lived cookie (CSRF guard)
+// and bounce the user to Google's consent screen.
+app.get('/api/auth/google', (req, res) => {
+  if (!googleConfigured()) return res.status(503).send('Google sign-in is not configured.');
+  const state = crypto.randomBytes(16).toString('hex');
+  const parts = [`${OAUTH_STATE_COOKIE}=${state}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=600'];
+  if (req.secure) parts.push('Secure');
+  res.append('Set-Cookie', parts.join('; '));
+  const params = new URLSearchParams({
+    client_id: process.env.GOOGLE_CLIENT_ID,
+    redirect_uri: googleRedirectUri(req),
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    access_type: 'online',
+    prompt: 'select_account',
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+});
+
+// Google redirects back here with ?code & ?state. Verify state, swap the code
+// for tokens, read the verified email/name, then create our own session.
+app.get('/api/auth/google/callback', async (req, res) => {
+  try {
+    if (!googleConfigured()) return res.status(503).send('Google sign-in is not configured.');
+    const { code, state, error } = req.query;
+    if (error) return res.status(400).send('<p>Google sign-in was cancelled. <a href="/">Back</a></p>');
+    const cookieState = parseCookies(req)[OAUTH_STATE_COOKIE];
+    if (!code || !state || !cookieState || state !== cookieState) {
+      return res.status(400).send('<p>Sign-in could not be verified. <a href="/api/auth/google">Try again</a></p>');
+    }
+    // Clear the state cookie now that it's been used.
+    const clr = [`${OAUTH_STATE_COOKIE}=`, 'Path=/', 'HttpOnly', 'SameSite=Lax', 'Max-Age=0'];
+    if (req.secure) clr.push('Secure');
+    res.append('Set-Cookie', clr.join('; '));
+
+    const tokenResp = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code: String(code),
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri: googleRedirectUri(req),
+        grant_type: 'authorization_code',
+      }),
+    });
+    if (!tokenResp.ok) {
+      console.error('[auth] Google token exchange failed:', tokenResp.status, (await tokenResp.text().catch(() => '')).slice(0, 300));
+      return res.status(502).send('<p>Google sign-in failed. <a href="/api/auth/google">Try again</a></p>');
+    }
+    const tokens = await tokenResp.json();
+    const infoResp = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.access_token}` },
+    });
+    if (!infoResp.ok) {
+      console.error('[auth] Google userinfo failed:', infoResp.status);
+      return res.status(502).send('<p>Google sign-in failed. <a href="/api/auth/google">Try again</a></p>');
+    }
+    const info = await infoResp.json();
+    if (!info.email || !info.email_verified) {
+      return res.status(400).send('<p>Your Google account has no verified email. <a href="/">Back</a></p>');
+    }
+    const user = findOrCreateUser(info.email, info.name);
+    const sid = createSession(user.id);
+    setSessionCookie(req, res, sid);
+    res.redirect('/');
+  } catch (e) {
+    console.error('[auth] Google callback error:', e && e.message);
+    res.status(500).send('<p>Something went wrong signing in. <a href="/api/auth/google">Try again</a></p>');
+  }
 });
 
 app.get('/api/listings', (req, res) => res.json(loadListings()));
@@ -1294,6 +1429,14 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
       console.error('[compare] Gemini error', r.status, JSON.stringify(data).slice(0, 300));
       return res.status(502).json({ error: data.error?.message || `Gemini HTTP ${r.status}` });
     }
+    // Meter token spend (Gemini has no per-key billing API, so we track it here).
+    const um = data.usageMetadata || {};
+    bumpUsage('gemini', {
+      calls: 1,
+      promptTokens: um.promptTokenCount || 0,
+      candidatesTokens: um.candidatesTokenCount || 0,
+      totalTokens: um.totalTokenCount || ((um.promptTokenCount || 0) + (um.candidatesTokenCount || 0)),
+    });
     const analysis = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
     if (!analysis) return res.status(502).json({ error: 'Gemini returned no text.' });
     // Cache the full-shortlist analysis so everyone sees it without re-spending
@@ -1357,6 +1500,54 @@ app.delete('/api/caveats/:id', requireAdmin, (req, res) => {
   res.json(updated);
 });
 
+// ── Final pick: member "top choice" poll + admin-locked official decision ───────
+// Aggregate counts only — never expose who voted for which listing.
+app.get('/api/final', (req, res) => {
+  const votes = loadFinalVotes();
+  const counts = {};
+  let total = 0;
+  for (const lid of Object.values(votes)) {
+    if (!lid) continue;
+    counts[lid] = (counts[lid] || 0) + 1;
+    total++;
+  }
+  const myPick = req.user ? (votes[req.user.id] || null) : null;
+  res.json({ counts, total, myPick, decision: loadDecision() });
+});
+
+app.post('/api/final-vote', requireAuth, (req, res) => {
+  const raw = req.body && req.body.listing_id;
+  const votes = loadFinalVotes();
+  if (raw === null || raw === undefined || raw === '') {
+    delete votes[req.user.id]; // allow clearing your top choice
+  } else {
+    votes[req.user.id] = String(raw).slice(0, 80);
+  }
+  saveFinalVotes(votes);
+  const counts = {};
+  let total = 0;
+  for (const lid of Object.values(votes)) {
+    if (!lid) continue;
+    counts[lid] = (counts[lid] || 0) + 1;
+    total++;
+  }
+  res.json({ counts, total, myPick: votes[req.user.id] || null, decision: loadDecision() });
+});
+
+app.post('/api/admin/decision', requireAdmin, (req, res) => {
+  const raw = req.body && req.body.listing_id;
+  if (raw === null || raw === undefined || raw === '') {
+    saveDecision(null); // unlock
+    return res.json({ decision: null });
+  }
+  const decision = {
+    listing_id: String(raw).slice(0, 80),
+    locked_at: new Date().toISOString(),
+  };
+  saveDecision(decision);
+  res.json({ decision });
+});
+
 // ── Admin: Apify token usage (current month spend vs the $5 free cap) ───────────
 app.get('/api/admin/apify-usage', requireAdmin, async (req, res) => {
   const token = process.env.APIFY_TOKEN;
@@ -1385,6 +1576,97 @@ app.get('/api/admin/apify-usage', requireAdmin, async (req, res) => {
     console.error('[apify-usage]', e.message);
     res.status(502).json({ error: e.message });
   }
+});
+
+// ── Admin: consolidated API usage across Apify, Firecrawl & Gemini ──────────────
+// One screen instead of three popups. Apify = live $ spend; Firecrawl = live
+// credit balance; Gemini = app-side token meter (no per-key billing API exists)
+// turned into an *estimated* dollar cost from published gemini-2.5-flash rates.
+const GEMINI_IN_RATE  = Number(process.env.GEMINI_IN_RATE  ?? 0.30) / 1e6; // $/input token
+const GEMINI_OUT_RATE = Number(process.env.GEMINI_OUT_RATE ?? 2.50) / 1e6; // $/output token
+
+async function fetchFirecrawlCredits() {
+  if (!process.env.FIRECRAWL_API_KEY) return null;
+  for (const url of ['https://api.firecrawl.dev/v2/team/credit-usage', 'https://api.firecrawl.dev/v1/team/credit-usage']) {
+    try {
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${process.env.FIRECRAWL_API_KEY}` } });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const remaining = d?.data?.remaining_credits ?? d?.remaining_credits ?? null;
+      const plan      = d?.data?.plan_credits ?? d?.plan_credits ?? null;
+      if (remaining != null || plan != null) return { remaining, plan };
+    } catch { /* try next path */ }
+  }
+  return null;
+}
+
+async function fetchApifySummary() {
+  const token = process.env.APIFY_TOKEN;
+  if (!token) return null;
+  try {
+    const [limitsR, runsR] = await Promise.all([
+      fetch(`https://api.apify.com/v2/users/me/limits?token=${token}`),
+      fetch(`https://api.apify.com/v2/actor-runs?token=${token}&limit=8&desc=1`),
+    ]);
+    const limits = await limitsR.json();
+    const runs   = await runsR.json();
+    const usageUsd = limits?.data?.current?.monthlyUsageUsd ?? limits?.data?.monthlyUsageUsd ?? null;
+    const limitUsd = limits?.data?.limits?.maxMonthlyUsageUsd ?? limits?.data?.maxMonthlyUsageUsd ?? null;
+    const recent = (runs?.data?.items || []).map(r => ({
+      startedAt: r.startedAt, status: r.status, costUsd: r.usageTotalUsd ?? null,
+    }));
+    return { usageUsd, limitUsd, recent };
+  } catch (e) { console.error('[usage/apify]', e.message); return null; }
+}
+
+app.get('/api/admin/usage', requireAdmin, async (req, res) => {
+  const month = usageMonth();
+  const meter = (loadUsage()[month]) || {};
+  const g = meter.gemini || {};
+  const promptTokens = g.promptTokens || 0;
+  const candidatesTokens = g.candidatesTokens || 0;
+  const estCostUsd = promptTokens * GEMINI_IN_RATE + candidatesTokens * GEMINI_OUT_RATE;
+
+  const [firecrawl, apify] = await Promise.all([fetchFirecrawlCredits(), fetchApifySummary()]);
+
+  // Group pulse — a quick read on engagement, no per-user detail exposed.
+  const votesObj = loadVotes();
+  const votes = Object.values(votesObj).reduce((n, m) => n + Object.keys(m || {}).length, 0);
+  let trip = null;
+  try { trip = (loadListings() || {}).trip || null; } catch { /* ignore */ }
+
+  res.json({
+    month,
+    gemini: {
+      configured: !!process.env.GEMINI_API_KEY,
+      model: GEMINI_MODEL,
+      calls: g.calls || 0,
+      promptTokens, candidatesTokens,
+      totalTokens: g.totalTokens || (promptTokens + candidatesTokens),
+      estCostUsd,
+      rates: { inputPerM: GEMINI_IN_RATE * 1e6, outputPerM: GEMINI_OUT_RATE * 1e6 },
+    },
+    firecrawl: {
+      configured: !!process.env.FIRECRAWL_API_KEY,
+      callsThisMonth: (meter.firecrawl && meter.firecrawl.calls) || 0,
+      remainingCredits: firecrawl ? firecrawl.remaining : null,
+      planCredits: firecrawl ? firecrawl.plan : null,
+    },
+    apify: {
+      configured: !!process.env.APIFY_TOKEN,
+      spentUsd: apify ? apify.usageUsd : null,
+      limitUsd: apify ? apify.limitUsd : null,
+      recent: apify ? apify.recent : [],
+    },
+    group: {
+      members: Object.keys(loadUsers()).length,
+      votes,
+      picks: Object.keys(loadFinalVotes()).length,
+      submissions: loadSubmitted().length,
+      decisionLocked: !!loadDecision(),
+      refreshedAt: trip ? trip.refreshed_at : null,
+    },
+  });
 });
 
 // ── Pipeline scheduler ────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 node_modules/
+client/dist/
 data/votes.json
 data/submitted.json
 data/itinerary.json

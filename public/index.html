@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>GroupPad — LA Group Trip Rentals</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="/style.css?v=5">
+<link rel="stylesheet" href="/style.css?v=10">
 </head>
 <body>
 <header>
@@ -13,6 +13,70 @@
   <div class="params" id="params-line"></div>
 </header>
 
+<nav class="topnav" id="topnav">
+  <a href="#/board" class="nav-link" data-view="board">🏠 Board</a>
+  <a href="#/help" class="nav-link" data-view="help">❓ How it works</a>
+  <a href="#/admin" class="nav-link nav-admin hidden" data-view="admin">📊 Admin</a>
+</nav>
+
+<section id="welcome-view" class="view welcome-view hidden">
+  <div class="welcome-hero">
+    <h2>Pick the LA house for 14 — together.</h2>
+    <p id="welcome-trip" class="welcome-trip">Loading the trip…</p>
+    <div class="welcome-cta">
+      <button id="welcome-google" class="welcome-btn primary">Sign in with Google</button>
+      <button id="welcome-email" class="welcome-btn ghost">or use email</button>
+    </div>
+    <a href="#/board" id="welcome-browse" class="welcome-browse">Just browse the listings →</a>
+    <button type="button" id="welcome-tour" class="welcome-tour">▶ Take the 30-second tour</button>
+  </div>
+  <div class="welcome-steps">
+    <div class="welcome-step"><span class="step-num">1</span><h3>Browse &amp; like</h3><p>Skim every 7+ bedroom home, open one for full photos, price breakdown &amp; map. 👍 the ones you'd stay in.</p></div>
+    <div class="welcome-step"><span class="step-num">2</span><h3>Shortlist &amp; compare</h3><p>Liked homes rise into a shared shortlist. Tap 🤖 to let AI weigh them against the itinerary &amp; budget.</p></div>
+    <div class="welcome-step"><span class="step-num">3</span><h3>Pick the winner</h3><p>Everyone casts one ⭐ top choice. The organizer locks the ✅ official pick when the group converges.</p></div>
+  </div>
+</section>
+
+<section id="help-view" class="view help-view hidden">
+  <h2 class="help-title">How GroupPad works</h2>
+  <div class="help-card">
+    <h3>👍 Like vs ⭐ Top choice vs ✅ Official pick</h3>
+    <ul>
+      <li><strong>👍 / 👎 Like</strong> — your quick read on a home. Any home with net likes ≥ 1 rises into the <strong>Shortlist</strong>. Like as many as you want.</li>
+      <li><strong>⭐ Top choice</strong> — your <em>single</em> favorite. Everyone gets one. The tally shows the group's leaderboard (your individual pick stays private — only totals show).</li>
+      <li><strong>✅ Official pick</strong> — the organizer locks the final decision. It pins a banner to the top so everyone knows what we're booking.</li>
+    </ul>
+  </div>
+  <div class="help-card">
+    <h3>🏠 Browsing &amp; details</h3>
+    <p>Tap any card to open the full detail view: bigger gallery, all amenities, the price broken down, your per-person share, and a map of the area. Use the filters up top (under budget, pool, parking) to narrow the list, and the split slider to see cost per person for any headcount.</p>
+  </div>
+  <div class="help-card">
+    <h3>➕ Add a listing</h3>
+    <p>Found one we missed? Paste any VRBO / Airbnb / Booking.com URL into <strong>“+ Add a listing.”</strong> We fetch the details and price for Aug 18–23 automatically. It shows under <strong>Community Submissions</strong> until it earns a like.</p>
+  </div>
+  <div class="help-card">
+    <h3>🤖 AI compare &amp; 💬 caveats</h3>
+    <p>From the shortlist, hit <strong>Compare with AI</strong> for a side-by-side weighing against the itinerary and budget — or tick the “compare” box on two cards for a 1v1. Drop must-haves and dealbreakers in <strong>Group caveats</strong>; they feed the AI ranking.</p>
+  </div>
+  <div class="help-card">
+    <h3>🔐 Signing in</h3>
+    <p>Sign in with Google (or an email magic-link) so your votes and picks are tied to you across devices. You can browse without signing in, but you'll need an account to vote, add homes, or post caveats.</p>
+  </div>
+</section>
+
+<section id="admin-view" class="view admin-view hidden">
+  <div class="admin-head">
+    <h2>📊 Admin · API usage &amp; group pulse</h2>
+    <div class="admin-head-actions">
+      <button id="admin-refresh" class="ai-btn">↻ Refresh</button>
+      <button id="admin-run-pipeline" class="ai-btn">⟳ Run pipeline</button>
+    </div>
+  </div>
+  <div id="admin-dash" class="admin-dash"><div class="admin-loading">Log in as admin to view usage.</div></div>
+</section>
+
+<main id="board-view" class="view">
 <div class="filter-bar">
   <label><input type="checkbox" id="f-under" checked> Under budget only</label>
   <label><input type="checkbox" id="f-pool"> Pool required</label>
@@ -63,6 +127,8 @@
     </div>
   </div>
 </div>
+
+<div id="decision-section" class="decision-section hidden"></div>
 
 <div id="shortlist-section" class="shortlist-section hidden">
   <div class="shortlist-header">
@@ -135,10 +201,57 @@
   </div>
   <div id="pipeline-grid" class="grid"></div>
 </div>
+</main>
 
 <footer>
   Prices labeled "est all-in" include the listing's displayed total for the dates above plus a 14% LA transient-occupancy-tax buffer. Airbnb cards generally show a total that already includes the cleaning fee but excludes tax — verify with each listing's price breakdown at the booking step. VRBO Covina uses VRBO's base 5-night subtotal plus a $400 cleaning placeholder plus 14% tax. "Check manually" entries didn't return a date-specific quote during the run. Distances are approximate driving miles to Downtown LA (City Hall).
 </footer>
+
+<!-- Sign-in modal (replaces native prompt/confirm popups) -->
+<div id="auth-modal" class="auth-modal hidden" role="dialog" aria-modal="true" aria-label="Sign in">
+  <div class="auth-backdrop" id="auth-backdrop"></div>
+  <div class="auth-panel" id="auth-panel">
+    <button class="auth-close" id="auth-close" aria-label="Close">✕</button>
+    <div class="auth-logo">🏡</div>
+    <h2 class="auth-title">Sign in to GroupPad</h2>
+    <p class="auth-sub" id="auth-sub">Sign in so your votes and picks are saved and tied to you across devices.</p>
+    <button id="auth-google" class="auth-btn google">
+      <span class="g-mark">G</span> Continue with Google
+    </button>
+    <div class="auth-divider"><span>or use email</span></div>
+    <form id="auth-email-form" class="auth-email-row" novalidate>
+      <input type="email" id="auth-email-input" class="auth-email-input" placeholder="you@example.com" autocomplete="email" inputmode="email">
+      <button type="submit" id="auth-email-send" class="auth-btn email">Email me a link</button>
+    </form>
+    <p class="auth-msg" id="auth-msg" aria-live="polite"></p>
+    <p class="auth-fine">We'll never post anything. A one-time link signs you in — no password to remember.</p>
+  </div>
+</div>
+
+<!-- Onboarding tour (teaches how the app works on first visit) -->
+<div id="onboard-modal" class="onboard-modal hidden" role="dialog" aria-modal="true" aria-label="How GroupPad works">
+  <div class="onboard-backdrop" id="onboard-backdrop"></div>
+  <div class="onboard-panel" id="onboard-panel">
+    <button class="onboard-skip" id="onboard-skip">Skip</button>
+    <div class="onboard-stage" id="onboard-stage"><!-- slide injected by JS --></div>
+    <div class="onboard-dots" id="onboard-dots"></div>
+    <div class="onboard-nav">
+      <button class="onboard-btn ghost" id="onboard-back">Back</button>
+      <button class="onboard-btn primary" id="onboard-next">Next</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast stack (replaces blocking alert popups) -->
+<div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+<div id="detail-modal" class="detail-modal hidden" role="dialog" aria-modal="true" aria-label="Listing details">
+  <div class="detail-backdrop" id="detail-backdrop"></div>
+  <div class="detail-panel" id="detail-panel">
+    <button class="detail-close" id="detail-close" aria-label="Close">✕</button>
+    <div id="detail-body" class="detail-body"></div>
+  </div>
+</div>
 
 <div id="compare-dock" class="compare-dock hidden">
   <span id="dock-count" class="dock-count">0 selected</span>
@@ -154,6 +267,6 @@
       'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
   }
 </script>
-<script src="/app.js?v=5"></script>
+<script src="/app.js?v=10"></script>
 </body>
 </html>

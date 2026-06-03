@@ -10,30 +10,82 @@ let ITINERARY = { text: '', updated_at: null };
 let CAVEATS   = [];
 let INSIGHTS  = null;
 let SELECTED  = new Set();   // listing ids ticked for comparison
+let FINAL     = { counts: {}, total: 0, myPick: null, decision: null };  // final-pick poll + official decision
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// ── Auth actions (passwordless magic-link) ──────────────────────────────────────
+// ── Auth actions (Google sign-in, with email magic-link as a fallback) ──────────
 async function loadUser() {
   try { const d = await fetch('/api/auth/me').then(r => r.json()); USER = d.user || null; }
   catch { USER = null; }
 }
-async function signIn() {
-  const email = (prompt("Enter your email — we'll send you a one-time sign-in link:") || '').trim();
-  if (!email) return;
-  if (!EMAIL_RE.test(email)) { alert("That doesn't look like a valid email."); return; }
+// Primary: bounce to Google's OAuth flow (server handles the rest, then lands home).
+function signInGoogle() { window.location.href = '/api/auth/google'; }
+
+// ── Toast (non-blocking, replaces alert) ────────────────────────────────────────
+function toast(msg, type = 'info', ms = 4200) {
+  const stack = document.getElementById('toast-stack');
+  if (!stack) { return; }
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icon = type === 'success' ? '✅' : type === 'error' ? '⚠️' : 'ℹ️';
+  el.innerHTML = `<span class="toast-icon">${icon}</span><span class="toast-msg"></span>`;
+  el.querySelector('.toast-msg').textContent = msg;
+  stack.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  const kill = () => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); };
+  el.addEventListener('click', kill);
+  setTimeout(kill, ms);
+}
+
+// ── Sign-in modal (replaces native prompt/confirm) ──────────────────────────────
+function openAuthModal(reason) {
+  const m = document.getElementById('auth-modal');
+  if (!m) { signInGoogle(); return; }
+  const sub = document.getElementById('auth-sub');
+  if (sub) sub.textContent = reason
+    ? `Sign in to ${reason}. Your votes and picks stay tied to you across devices.`
+    : 'Sign in so your votes and picks are saved and tied to you across devices.';
+  const msg = document.getElementById('auth-msg');
+  if (msg) { msg.textContent = ''; msg.className = 'auth-msg'; }
+  m.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+  setTimeout(() => { const i = document.getElementById('auth-email-input'); if (i) i.focus(); }, 60);
+}
+function closeAuthModal() {
+  const m = document.getElementById('auth-modal');
+  if (m) m.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+}
+// Send the passwordless magic-link from the modal's email field.
+async function sendMagicLink() {
+  const input = document.getElementById('auth-email-input');
+  const msg = document.getElementById('auth-msg');
+  const btn = document.getElementById('auth-email-send');
+  const email = ((input && input.value) || '').trim();
+  const setMsg = (t, cls) => { if (msg) { msg.textContent = t; msg.className = `auth-msg ${cls || ''}`; } };
+  if (!EMAIL_RE.test(email)) { setMsg("That doesn't look like a valid email address.", 'err'); if (input) input.focus(); return; }
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
   try {
     const r = await fetch('/api/auth/request-link', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }),
     });
     const d = await r.json().catch(() => ({}));
-    if (r.ok) alert('Check your email for a sign-in link (it expires in 15 minutes).');
-    else alert(d.error || 'Could not send the link.');
-  } catch { alert('Network error — try again.'); }
+    if (r.ok) {
+      setMsg('Check your inbox — your sign-in link expires in 15 minutes.', 'ok');
+      if (input) input.value = '';
+    } else setMsg(d.error || 'Could not send the link. Try again.', 'err');
+  } catch { setMsg('Network error — please try again.', 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Email me a link'; } }
 }
+// Header / welcome "or use email" entry point — opens the modal.
+function signInEmail() { openAuthModal(); }
+// Default sign-in action used across the UI.
+function signIn() { openAuthModal(); }
 async function signOut() {
   try { await fetch('/api/auth/logout', { method: 'POST' }); } catch {}
   USER = null; render();
+  toast('Signed out.', 'info');
 }
 async function renameUser() {
   if (!USER) return;
@@ -44,19 +96,20 @@ async function renameUser() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }),
     });
     const d = await r.json().catch(() => ({}));
-    if (r.ok) { USER = d.user; render(); } else alert(d.error || 'Could not update name.');
-  } catch { alert('Network error.'); }
+    if (r.ok) { USER = d.user; render(); toast('Name updated.', 'success'); }
+    else toast(d.error || 'Could not update name.', 'error');
+  } catch { toast('Network error.', 'error'); }
 }
-// Gate an action behind sign-in; offers to send a link if signed out.
+// Gate an action behind sign-in; opens the sign-in modal if signed out.
 function requireSignIn(action) {
   if (USER) return true;
-  if (confirm(`Please sign in to ${action || 'do that'}. Send a one-time sign-in link to your email now?`)) signIn();
+  openAuthModal(action);
   return false;
 }
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function loadData() {
-  const [me, data, votes, submitted, pipeline, itinerary, caveats, insights] = await Promise.all([
+  const [me, data, votes, submitted, pipeline, itinerary, caveats, insights, final] = await Promise.all([
     fetch('/api/auth/me').then(r => r.json()).catch(() => ({ user: null })),
     fetch('/api/listings').then(r => r.json()),
     fetch('/api/votes').then(r => r.json()).catch(() => ({})),
@@ -65,6 +118,7 @@ async function loadData() {
     fetch('/api/itinerary').then(r => r.json()).catch(() => ({ text: '', updated_at: null })),
     fetch('/api/caveats').then(r => r.json()).catch(() => []),
     fetch('/api/insights').then(r => r.json()).catch(() => null),
+    fetch('/api/final').then(r => r.json()).catch(() => ({ counts: {}, total: 0, myPick: null, decision: null })),
   ]);
   USER      = (me && me.user) || null;
   DATA      = data;
@@ -74,6 +128,13 @@ async function loadData() {
   ITINERARY = itinerary || { text: '', updated_at: null };
   CAVEATS   = Array.isArray(caveats) ? caveats : [];
   INSIGHTS  = insights && insights.analysis ? insights : null;
+  FINAL     = final && final.counts ? final : { counts: {}, total: 0, myPick: null, decision: null };
+}
+
+// Resolve a listing id to its full object across every pool (base/pipeline/submitted).
+function findListingById(id) {
+  const all = [...SUBMITTED, ...PIPELINE, ...(DATA && DATA.listings || [])];
+  return all.find(x => String(x.id) === String(id)) || null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -99,6 +160,40 @@ function tallyVotes(listingId) {
 function netVotes(listingId) {
   const { up, down } = tallyVotes(listingId);
   return up - down;
+}
+
+// ── Final pick (top-choice poll + admin-locked official decision) ───────────────
+function finalCount(listingId) { return (FINAL.counts && FINAL.counts[String(listingId)]) || 0; }
+function isMyPick(listingId)   { return String(FINAL.myPick) === String(listingId); }
+function isDecision(listingId) { return !!(FINAL.decision && String(FINAL.decision.listing_id) === String(listingId)); }
+function decisionLocked()      { return !!(FINAL.decision && FINAL.decision.listing_id); }
+
+// Toggle this listing as my single top choice (clears if already mine).
+async function toggleFinalPick(listingId) {
+  if (!requireSignIn('pick a favorite')) return;
+  const next = isMyPick(listingId) ? null : String(listingId);
+  try {
+    const res = await fetch('/api/final-vote', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listing_id: next }),
+    });
+    if (res.ok) { FINAL = await res.json(); render(); }
+    else if (res.status === 401) { USER = null; requireSignIn('pick a favorite'); }
+  } catch { /* ignore network blips */ }
+}
+
+// Admin: lock this listing as the official decision (or unlock by passing null).
+async function setDecision(listingId) {
+  if (!ADMIN_KEY) { alert('Log in as admin first.'); return; }
+  try {
+    const res = await fetch('/api/admin/decision', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-key': ADMIN_KEY },
+      body: JSON.stringify({ listing_id: listingId == null ? null : String(listingId) }),
+    });
+    const data = await res.json();
+    if (res.ok) { FINAL = { ...FINAL, decision: data.decision }; render(); }
+    else alert(data.error || 'Could not update the decision.');
+  } catch { alert('Network error — try again.'); }
 }
 
 // Prioritize mansions / large homes for LA search ordering
@@ -192,6 +287,7 @@ function renderCard(l, isSubmitted, isPipeline = false) {
     isSubmitted     ? 'submitted'    : '',
     isPipeline      ? 'pipeline-card': '',
     SELECTED.has(String(l.id)) ? 'is-selected' : '',
+    isDecision(l.id) ? 'is-decision' : '',
   ].filter(Boolean).join(' ');
 
   const budgetBadge = l.budget === 'under'    ? '<span class="badge under">under budget</span>'
@@ -238,8 +334,18 @@ function renderCard(l, isSubmitted, isPipeline = false) {
 
   const { up, down, mine } = tallyVotes(l.id);
 
+  const fCount  = finalCount(l.id);
+  const finalBtn = `<button class="final-btn ${isMyPick(l.id) ? 'mine' : ''}" data-final="${l.id}" title="Mark as your one top choice">
+      <span>⭐</span><span class="final-label">${isMyPick(l.id) ? 'My pick' : 'Top choice'}</span>${fCount ? `<span class="count">${fCount}</span>` : ''}
+    </button>`;
+  const officialBtn = ADMIN_KEY
+    ? `<button class="official-btn ${isDecision(l.id) ? 'active' : ''}" data-official="${l.id}" title="${isDecision(l.id) ? 'Unlock the official pick' : 'Lock this as the official pick'}">${isDecision(l.id) ? '🔓 Unlock' : '📌 Make official'}</button>`
+    : '';
+  const decisionRibbon = isDecision(l.id) ? `<div class="decision-ribbon">✅ Official pick</div>` : '';
+
   return `
     <div class="${cls}" data-id="${l.id}">
+      ${decisionRibbon}
       ${renderCarousel(l)}
       <div class="card-body">
         <div class="rank-row">
@@ -277,6 +383,10 @@ function renderCard(l, isSubmitted, isPipeline = false) {
               <span>👎</span><span class="count">${down}</span>
             </button>
           </div>
+        </div>
+        <div class="final-row">
+          ${finalBtn}
+          ${officialBtn}
         </div>
       </div>
     </div>
@@ -356,6 +466,11 @@ function render() {
   document.getElementById('trip-line').textContent =
     `${t.checkin} → ${t.checkout_5n} (5 nights) · ${t.adults} guests · budget $${t.budget.toLocaleString()} all-in`;
 
+  const wt = document.getElementById('welcome-trip');
+  if (wt) wt.textContent =
+    `${t.checkin} → ${t.checkout_5n} · ${t.adults} guests · $${t.budget.toLocaleString()} all-in budget · ${DATA.listings.length} homes to browse`;
+  updateNav();
+
   const listings   = DATA.listings;
   const underCount = listings.filter(l => l.budget === 'under').length;
 
@@ -363,7 +478,8 @@ function render() {
     ? `<span class="auth-state"><strong>Signed in:</strong> ${escapeHtml(USER.name)} ` +
       `<a href="#" id="auth-rename" style="color:var(--link)">rename</a> · ` +
       `<a href="#" id="auth-signout" style="color:var(--link)">sign out</a></span>`
-    : `<span class="auth-state"><a href="#" id="auth-signin" style="color:var(--link)"><strong>Sign in to vote →</strong></a></span>`;
+    : `<span class="auth-state"><a href="#" id="auth-signin" style="color:var(--link)"><strong>Sign in with Google to vote →</strong></a> ` +
+      `<a href="#" id="auth-signin-email" style="color:var(--muted);font-size:.85em">or use email</a></span>`;
 
   document.getElementById('params-line').innerHTML =
     `<span><strong>Sites:</strong> VRBO · Airbnb · Booking.com</span>` +
@@ -373,7 +489,8 @@ function render() {
     authSpan;
 
   const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = (e) => { e.preventDefault(); fn(); }; };
-  bind('auth-signin', signIn);
+  bind('auth-signin', signInGoogle);
+  bind('auth-signin-email', signInEmail);
   bind('auth-rename', renameUser);
   bind('auth-signout', signOut);
 
@@ -381,6 +498,9 @@ function render() {
   const needPool   = document.getElementById('f-pool').checked;
   const needPark   = document.getElementById('f-parking').checked;
   const showManual = document.getElementById('f-manual').checked;
+
+  // Official decision banner / top-choice leaderboard.
+  renderDecision();
 
   // Compute the shortlist: member-added homes + anything liked (net upvotes ≥ 1).
   renderShortlist();
@@ -517,6 +637,65 @@ function getSelectedListings() {
   return out;
 }
 
+// Final-pick banner: shows the admin's official locked pick, or — if none is
+// locked yet — a live "top choice" leaderboard tallied from members' single picks.
+function renderDecision() {
+  const sec = document.getElementById('decision-section');
+  if (!sec) return;
+
+  // 1) Official, admin-locked decision wins the banner.
+  if (decisionLocked()) {
+    const l = findListingById(FINAL.decision.listing_id);
+    const when = FINAL.decision.locked_at ? new Date(FINAL.decision.locked_at) : null;
+    const whenStr = when ? `${when.toLocaleDateString()}` : '';
+    const name = l ? escapeHtml(l.name) : 'the chosen home';
+    const sub  = l ? `${escapeHtml(l.area || '')}${l.est_5n ? ' · ' + fmt(l.est_5n) + ' for 5 nights · ' + fmt(Math.ceil(l.est_5n / SPLIT)) + '/person' : ''}` : '';
+    const link = l ? `<a class="decision-link" href="${l.url}" target="_blank" rel="noopener">View on ${escapeHtml(l.source || 'site')} →</a>` : '';
+    const viewBtn = l ? `<button class="decision-view" data-detail="${l.id}">See details</button>` : '';
+    const adminUnlock = ADMIN_KEY ? `<button class="decision-unlock" id="decision-unlock">🔓 Unlock</button>` : '';
+    sec.className = 'decision-section locked';
+    sec.innerHTML = `
+      <div class="decision-flag">✅ It's official — we're booking this one${whenStr ? ` · locked ${whenStr}` : ''}</div>
+      <div class="decision-name">${name}</div>
+      ${sub ? `<div class="decision-sub">${sub}</div>` : ''}
+      <div class="decision-actions">${viewBtn}${link}${adminUnlock}</div>
+    `;
+    const ub = document.getElementById('decision-unlock');
+    if (ub) ub.onclick = () => { if (confirm('Unlock the official pick? This reopens the decision.')) setDecision(null); };
+    const vb = sec.querySelector('.decision-view');
+    if (vb) vb.onclick = () => openDetail(vb.dataset.detail);
+    return;
+  }
+
+  // 2) No official pick yet — show the top-choice leaderboard if anyone has voted.
+  const entries = Object.entries(FINAL.counts || {})
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  if (!entries.length) { sec.className = 'decision-section hidden'; sec.innerHTML = ''; return; }
+
+  const rows = entries.map(([id, n]) => {
+    const l = findListingById(id);
+    const label = l ? escapeHtml(l.name) : `Listing ${escapeHtml(id)}`;
+    const pct = FINAL.total ? Math.round((n / FINAL.total) * 100) : 0;
+    const mine = isMyPick(id) ? '<span class="lead-mine">your pick</span>' : '';
+    return `
+      <button class="lead-row" data-detail="${escapeHtml(String(id))}">
+        <span class="lead-bar" style="width:${pct}%"></span>
+        <span class="lead-name">${label} ${mine}</span>
+        <span class="lead-count">${n} ${n === 1 ? 'pick' : 'picks'}</span>
+      </button>`;
+  }).join('');
+
+  sec.className = 'decision-section poll';
+  sec.innerHTML = `
+    <div class="decision-flag">🏆 Top choices so far <span class="decision-total">${FINAL.total} member${FINAL.total === 1 ? '' : 's'} voted</span></div>
+    <div class="lead-list">${rows}</div>
+    <div class="decision-hint">Tap ⭐ <strong>Top choice</strong> on any home to cast your single pick.${ADMIN_KEY ? ' Admins can “📌 Make official” to lock the final decision.' : ''}</div>
+  `;
+  sec.querySelectorAll('.lead-row').forEach(b => { b.onclick = () => openDetail(b.dataset.detail); });
+}
+
 // The members' shortlist: anything liked (net upvotes ≥ 1), ranked by votes.
 // Community submissions live in their own section below and only rise into the
 // shortlist once they get a net upvote — so a freshly-added home is never lost.
@@ -646,6 +825,31 @@ function attachCardHandlers() {
     };
   });
 
+  // Final pick (member's single top choice)
+  document.querySelectorAll('.final-btn').forEach(btn => {
+    btn.onclick = (e) => { e.stopPropagation(); toggleFinalPick(btn.dataset.final); };
+  });
+
+  // Admin: lock/unlock the official decision
+  document.querySelectorAll('.official-btn').forEach(btn => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.official;
+      if (isDecision(id)) { if (confirm('Unlock the official pick? This reopens the decision.')) setDecision(null); }
+      else { if (confirm('Lock this as the group’s official pick? Everyone will see it at the top.')) setDecision(id); }
+    };
+  });
+
+  // Open the detail view when the card body (not an inner control) is clicked.
+  document.querySelectorAll('.card').forEach(card => {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', (e) => {
+      // Let links (the "book" button) and form controls behave normally.
+      if (e.target.closest('a, button, input, label')) return;
+      openDetail(card.dataset.id);
+    });
+  });
+
   // Admin delete
   document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.onclick = async (e) => {
@@ -677,6 +881,345 @@ function attachCardHandlers() {
     };
   });
 }
+
+// ── Listing detail modal ────────────────────────────────────────────────────────
+let DETAIL_ID = null;
+
+function detailGallery(l) {
+  const photos = l.photos || [];
+  if (!photos.length) return `<div class="detail-photo placeholder">no image</div>`;
+  const main = `<div class="detail-photo"><img id="detail-main-img" loading="lazy" src="${photos[0]}" alt=""></div>`;
+  const thumbs = photos.length > 1
+    ? `<div class="detail-thumbs">${photos.map((p, i) =>
+        `<img class="detail-thumb${i === 0 ? ' active' : ''}" data-src="${p}" loading="lazy" src="${p}" alt="">`).join('')}</div>`
+    : '';
+  return main + thumbs;
+}
+
+function renderDetail(l) {
+  const { up, down, mine } = tallyVotes(l.id);
+  const specs = [
+    l.bd     != null ? `<span>${l.bd} bd</span>` : '',
+    l.ba     != null ? `<span>${l.ba} ba</span>` : '',
+    l.sleeps != null ? `<span>sleeps ${l.sleeps}</span>` : '',
+  ].filter(Boolean).join('');
+
+  const reviews = l.rating != null
+    ? `<div class="reviews"><strong>${l.rating}★</strong> (${l.reviews ?? '?'} reviews)${l.superhost ? ' · Superhost' : ''}</div>`
+    : (l.reviews ? `<div class="reviews">(${l.reviews} reviews)</div>` : '<div class="reviews">no rating yet</div>');
+
+  const amenities = Array.isArray(l.amenities) && l.amenities.length
+    ? `<div class="detail-amenities">${l.amenities.map(a => `<span class="amenity">${escapeHtml(a)}</span>`).join('')}</div>`
+    : '';
+
+  const budgetBadge = l.budget === 'under' ? '<span class="badge under">under budget</span>'
+    : l.budget === 'over' ? '<span class="badge over">over budget</span>'
+    : l.budget === 'marginal' ? '<span class="badge marginal">marginal</span>'
+    : '<span class="badge unknown">unknown</span>';
+
+  // Price breakdown
+  const breakdown = `
+    <div class="detail-breakdown">
+      <div class="bd-row"><span>5-night est all-in</span><strong>${fmt(l.est_5n)}</strong></div>
+      ${l.displayed_5n ? `<div class="bd-row"><span>Displayed (5 nights)</span><span>${fmt(l.displayed_5n)}</span></div>` : ''}
+      ${l.est_4n ? `<div class="bd-row"><span>4-night est</span><span>${fmt(l.est_4n)}</span></div>` : ''}
+      <div class="bd-row total"><span>Per person · split ${SPLIT}</span><strong>${l.est_5n ? fmt(Math.ceil(l.est_5n / SPLIT)) : '—'}</strong></div>
+    </div>`;
+
+  // Map embed by area (no lat/lng in the data, so query by place name).
+  const q = encodeURIComponent(`${l.area || ''} ${(DATA && DATA.trip.destination) || 'Los Angeles'}`.trim());
+  const map = `<iframe class="detail-map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+      src="https://maps.google.com/maps?q=${q}&z=11&output=embed" title="Map of ${escapeHtml(l.area || 'area')}"></iframe>`;
+
+  const fCount = finalCount(l.id);
+
+  return `
+    <div class="detail-head">
+      <h2 class="detail-name">${escapeHtml(l.name)}</h2>
+      ${isDecision(l.id) ? '<span class="decision-ribbon inline">✅ Official pick</span>' : ''}
+    </div>
+    <div class="detail-loc">${escapeHtml(l.area || '')}${l.distance_mi ? ` · 📍 ${l.distance_mi} mi from DTLA` : ''} · <span class="source">${escapeHtml(l.source || '')}</span></div>
+    <div class="detail-gallery">${detailGallery(l)}</div>
+    <div class="detail-specs">${specs}</div>
+    ${reviews}
+    <div class="price-row"><span class="price">${fmt(l.est_5n)}</span> ${budgetBadge}</div>
+    ${breakdown}
+    ${l.note ? `<div class="note">${escapeHtml(l.note)}</div>` : ''}
+    ${amenities}
+    ${map}
+    <div class="detail-actions">
+      <a class="book" href="${l.url}" target="_blank" rel="noopener">${l.check_manual ? 'Check manually →' : 'View on ' + escapeHtml(l.source || 'site') + ' →'}</a>
+      <div class="vote-bar">
+        <button class="vote-btn up ${mine === 'up' ? 'mine' : ''}" data-detail-vote="up" title="Upvote"><span>👍</span><span class="count">${up}</span></button>
+        <button class="vote-btn down ${mine === 'down' ? 'mine' : ''}" data-detail-vote="down" title="Downvote"><span>👎</span><span class="count">${down}</span></button>
+      </div>
+      <button class="final-btn ${isMyPick(l.id) ? 'mine' : ''}" data-detail-final="${l.id}"><span>⭐</span><span class="final-label">${isMyPick(l.id) ? 'My pick' : 'Top choice'}</span>${fCount ? `<span class="count">${fCount}</span>` : ''}</button>
+      ${ADMIN_KEY ? `<button class="official-btn ${isDecision(l.id) ? 'active' : ''}" data-detail-official="${l.id}">${isDecision(l.id) ? '🔓 Unlock' : '📌 Make official'}</button>` : ''}
+    </div>
+  `;
+}
+
+function wireDetailHandlers(l) {
+  const body = document.getElementById('detail-body');
+  if (!body) return;
+
+  // Gallery thumbnails swap the main image.
+  body.querySelectorAll('.detail-thumb').forEach(t => {
+    t.onclick = () => {
+      const main = document.getElementById('detail-main-img');
+      if (main) main.src = t.dataset.src;
+      body.querySelectorAll('.detail-thumb').forEach(x => x.classList.toggle('active', x === t));
+    };
+  });
+
+  // Voting from within the modal.
+  body.querySelectorAll('[data-detail-vote]').forEach(btn => {
+    btn.onclick = async () => {
+      if (!requireSignIn('vote')) return;
+      const myVote  = btn.dataset.detailVote;
+      const current = (VOTES[String(l.id)] || {})[USER.id];
+      const next    = current === myVote ? null : myVote;
+      const res = await fetch('/api/votes', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ listing_id: String(l.id), vote: next }),
+      });
+      if (res.ok) { VOTES = await res.json(); render(); openDetail(l.id); }
+      else if (res.status === 401) { USER = null; requireSignIn('vote'); }
+    };
+  });
+
+  const fb = body.querySelector('[data-detail-final]');
+  if (fb) fb.onclick = async () => { await toggleFinalPick(l.id); if (DETAIL_ID) openDetail(l.id); };
+
+  const ob = body.querySelector('[data-detail-official]');
+  if (ob) ob.onclick = async () => {
+    if (isDecision(l.id)) { if (confirm('Unlock the official pick? This reopens the decision.')) { await setDecision(null); openDetail(l.id); } }
+    else { if (confirm('Lock this as the group’s official pick?')) { await setDecision(l.id); openDetail(l.id); } }
+  };
+}
+
+function openDetail(id) {
+  const l = findListingById(id);
+  if (!l) return;
+  DETAIL_ID = String(id);
+  const modal = document.getElementById('detail-modal');
+  const body  = document.getElementById('detail-body');
+  if (!modal || !body) return;
+  body.innerHTML = renderDetail(l);
+  body.scrollTop = 0;
+  modal.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+  wireDetailHandlers(l);
+}
+
+function closeDetail() {
+  DETAIL_ID = null;
+  const modal = document.getElementById('detail-modal');
+  if (modal) modal.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+}
+
+(function wireDetailModal() {
+  const close   = document.getElementById('detail-close');
+  const backdrop = document.getElementById('detail-backdrop');
+  if (close)    close.onclick = closeDetail;
+  if (backdrop) backdrop.onclick = closeDetail;
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && DETAIL_ID) closeDetail(); });
+})();
+
+// ── Page routing (board / welcome / help / admin) ──────────────────────────────
+const VIEW_IDS = { board: 'board-view', welcome: 'welcome-view', help: 'help-view', admin: 'admin-view' };
+
+function viewFromHash() {
+  const h = (location.hash || '').replace(/^#\/?/, '').toLowerCase();
+  if (h === 'help' || h === 'admin' || h === 'welcome' || h === 'board') return h;
+  return null; // no/unknown hash → caller picks a default
+}
+
+function updateNav() {
+  const link = document.querySelector('.nav-admin');
+  if (link) link.classList.toggle('hidden', !ADMIN_KEY);
+}
+
+function showView(name) {
+  closeDetail(); // never leave the listing modal open across a view change
+  for (const [key, id] of Object.entries(VIEW_IDS)) {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('hidden', key !== name);
+  }
+  document.querySelectorAll('.nav-link').forEach(a =>
+    a.classList.toggle('active', a.dataset.view === name));
+  // The floating compare dock only makes sense on the board.
+  const dock = document.getElementById('compare-dock');
+  if (dock && name !== 'board') dock.classList.add('hidden');
+  window.scrollTo(0, 0);
+}
+
+function route() {
+  let name = viewFromHash();
+  if (name === null) name = USER ? 'board' : 'welcome'; // default depends on sign-in
+  showView(name);
+  if (name === 'board') updateSelectionUI(); // restore dock state if anything is ticked
+  if (name === 'admin') renderAdminDash();
+  updateNav();
+}
+
+window.addEventListener('hashchange', route);
+
+// ── Admin dashboard (Apify / Firecrawl / Gemini usage + group pulse) ───────────
+function _money(n) { return n == null ? '—' : '$' + Number(n).toFixed(2); }
+function _num(n)   { return n == null ? '—' : Number(n).toLocaleString(); }
+
+function adminDashHtml(d) {
+  const g = d.gemini || {}, f = d.firecrawl || {}, a = d.apify || {}, grp = d.group || {};
+  const apifyPct = (a.spentUsd != null && a.limitUsd) ? Math.min(100, Math.round(a.spentUsd / a.limitUsd * 100)) : null;
+  const runs = (a.recent || []).slice(0, 6).map(r =>
+    `<div class="run-row"><span>${(r.startedAt || '').slice(0, 16).replace('T', ' ')}</span><span>${r.costUsd != null ? _money(r.costUsd) : '—'}</span><span class="run-status ${r.status === 'SUCCEEDED' ? 'ok' : ''}">${escapeHtml(r.status || '')}</span></div>`
+  ).join('') || '<div class="run-row muted">no recent runs</div>';
+
+  return `
+  <div class="dash-grid">
+    <div class="dash-card">
+      <div class="dash-card-head"><span>🤖 Gemini</span><span class="dash-tag">${g.configured ? escapeHtml(g.model || '') : 'not configured'}</span></div>
+      <div class="dash-big">${_money(g.estCostUsd)} <span class="dash-est">est. this month</span></div>
+      <div class="dash-rows">
+        <div><span>Calls</span><strong>${_num(g.calls)}</strong></div>
+        <div><span>Input tokens</span><strong>${_num(g.promptTokens)}</strong></div>
+        <div><span>Output tokens</span><strong>${_num(g.candidatesTokens)}</strong></div>
+      </div>
+      <div class="dash-note">Estimate from $${g.rates ? g.rates.inputPerM : '?'} in / $${g.rates ? g.rates.outputPerM : '?'} out per 1M tokens — Google has no per-key billing API.</div>
+    </div>
+
+    <div class="dash-card">
+      <div class="dash-card-head"><span>🔥 Firecrawl</span><span class="dash-tag">${f.configured ? 'live' : 'not configured'}</span></div>
+      <div class="dash-big">${f.remainingCredits != null ? _num(f.remainingCredits) : '—'} <span class="dash-est">credits left</span></div>
+      <div class="dash-rows">
+        <div><span>Plan credits</span><strong>${f.planCredits != null ? _num(f.planCredits) : '—'}</strong></div>
+        <div><span>Scrapes this month</span><strong>${_num(f.callsThisMonth)}</strong></div>
+      </div>
+      <div class="dash-note">Last-resort price scraper for submitted listings.</div>
+    </div>
+
+    <div class="dash-card">
+      <div class="dash-card-head"><span>🕷️ Apify</span><span class="dash-tag">${a.configured ? 'live' : 'not configured'}</span></div>
+      <div class="dash-big">${_money(a.spentUsd)} <span class="dash-est">of ${a.limitUsd != null ? _money(a.limitUsd) : '$5.00 free'}</span></div>
+      ${apifyPct != null ? `<div class="dash-bar"><span style="width:${apifyPct}%" class="${apifyPct >= 80 ? 'hot' : ''}"></span></div>` : ''}
+      <div class="dash-runs"><div class="run-row head"><span>Recent runs</span><span>cost</span><span>status</span></div>${runs}</div>
+    </div>
+
+    <div class="dash-card">
+      <div class="dash-card-head"><span>👥 Group pulse</span><span class="dash-tag">${grp.decisionLocked ? 'decision locked ✅' : 'open'}</span></div>
+      <div class="dash-rows wide">
+        <div><span>Members</span><strong>${_num(grp.members)}</strong></div>
+        <div><span>Votes cast</span><strong>${_num(grp.votes)}</strong></div>
+        <div><span>Top-choice picks</span><strong>${_num(grp.picks)}</strong></div>
+        <div><span>Submissions</span><strong>${_num(grp.submissions)}</strong></div>
+      </div>
+      <div class="dash-note">Listings refreshed: ${escapeHtml(grp.refreshedAt || '—')} · usage month ${escapeHtml(d.month || '')}</div>
+    </div>
+  </div>`;
+}
+
+async function renderAdminDash() {
+  const box = document.getElementById('admin-dash');
+  if (!box) return;
+  if (!ADMIN_KEY) {
+    box.innerHTML = `<div class="admin-loading">You need admin access to view API usage.
+      <button id="admin-login-cta" class="ai-btn primary">🔑 Enter admin key</button></div>`;
+    const b = document.getElementById('admin-login-cta');
+    if (b) b.onclick = async () => { await toggleAdmin(); if (ADMIN_KEY) renderAdminDash(); };
+    return;
+  }
+  box.innerHTML = '<div class="admin-loading">Loading usage…</div>';
+  try {
+    const res = await fetch('/api/admin/usage', { headers: { 'x-admin-key': ADMIN_KEY } });
+    if (!res.ok) { box.innerHTML = `<div class="admin-loading">Couldn’t load usage (HTTP ${res.status}).</div>`; return; }
+    box.innerHTML = adminDashHtml(await res.json());
+  } catch { box.innerHTML = '<div class="admin-loading">Network error loading usage.</div>'; }
+}
+
+// Wire nav links, welcome CTAs, and admin-view buttons once.
+(function wirePages() {
+  const wg = document.getElementById('welcome-google');
+  const we = document.getElementById('welcome-email');
+  if (wg) wg.onclick = signInGoogle;
+  if (we) we.onclick = () => openAuthModal();
+  const wtour = document.getElementById('welcome-tour');
+  if (wtour) wtour.onclick = () => startOnboarding(true);
+
+  const ar = document.getElementById('admin-refresh');
+  if (ar) ar.onclick = renderAdminDash;
+  const arp = document.getElementById('admin-run-pipeline');
+  if (arp) arp.onclick = triggerPipeline;
+
+  // Sign-in modal wiring.
+  const ag = document.getElementById('auth-google');
+  if (ag) ag.onclick = signInGoogle;
+  const aform = document.getElementById('auth-email-form');
+  if (aform) aform.addEventListener('submit', (e) => { e.preventDefault(); sendMagicLink(); });
+  const aclose = document.getElementById('auth-close');
+  if (aclose) aclose.onclick = closeAuthModal;
+  const aback = document.getElementById('auth-backdrop');
+  if (aback) aback.onclick = closeAuthModal;
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (!document.getElementById('auth-modal').classList.contains('hidden')) closeAuthModal();
+    if (!document.getElementById('onboard-modal').classList.contains('hidden')) endOnboarding();
+  });
+})();
+
+// ── Onboarding tour (teaches how the app works) ─────────────────────────────────
+const ONBOARD_SLIDES = [
+  { icon: '🏡', title: 'Welcome to GroupPad', body: "One shared board to pick the LA house for 14 — together. Here's the 30-second tour." },
+  { icon: '👍', title: 'Browse & like', body: 'Skim every 7+ bedroom home. Open any card for full photos, the price broken down, your per-person share, and a map. 👍 the ones you’d actually stay in.' },
+  { icon: '⭐', title: 'Shortlist & compare', body: 'Liked homes rise into a shared shortlist. Tap 🤖 Compare with AI to weigh them against the itinerary and budget — or tick two cards for a 1v1.' },
+  { icon: '✅', title: 'Pick the winner', body: 'Everyone casts one ⭐ top choice (your individual pick stays private — only totals show). The organizer locks the ✅ official pick when the group converges.' },
+  { icon: '➕', title: 'Add & sign in', body: 'Found one we missed? Paste any VRBO / Airbnb / Booking.com link to add it. Sign in with Google or an email link so your votes follow you across devices.' },
+];
+let _onboardIdx = 0;
+
+function renderOnboardSlide() {
+  const s = ONBOARD_SLIDES[_onboardIdx];
+  const stage = document.getElementById('onboard-stage');
+  if (stage) stage.innerHTML =
+    `<div class="onboard-slide"><div class="onboard-icon">${s.icon}</div>` +
+    `<h3 class="onboard-h">${escapeHtml(s.title)}</h3>` +
+    `<p class="onboard-p">${escapeHtml(s.body)}</p></div>`;
+  const dots = document.getElementById('onboard-dots');
+  if (dots) dots.innerHTML = ONBOARD_SLIDES.map((_, i) =>
+    `<span class="onboard-dot ${i === _onboardIdx ? 'on' : ''}"></span>`).join('');
+  const back = document.getElementById('onboard-back');
+  if (back) back.style.visibility = _onboardIdx === 0 ? 'hidden' : 'visible';
+  const next = document.getElementById('onboard-next');
+  if (next) next.textContent = _onboardIdx === ONBOARD_SLIDES.length - 1 ? 'Get started' : 'Next';
+}
+function startOnboarding(force) {
+  if (!force && localStorage.getItem('gp_onboarded')) return;
+  _onboardIdx = 0;
+  renderOnboardSlide();
+  const m = document.getElementById('onboard-modal');
+  if (m) m.classList.remove('hidden');
+  document.body.classList.add('modal-open');
+}
+function endOnboarding() {
+  const m = document.getElementById('onboard-modal');
+  if (m) m.classList.add('hidden');
+  document.body.classList.remove('modal-open');
+  localStorage.setItem('gp_onboarded', '1');
+}
+(function wireOnboarding() {
+  const next = document.getElementById('onboard-next');
+  if (next) next.onclick = () => {
+    if (_onboardIdx >= ONBOARD_SLIDES.length - 1) { endOnboarding(); return; }
+    _onboardIdx++; renderOnboardSlide();
+  };
+  const back = document.getElementById('onboard-back');
+  if (back) back.onclick = () => { if (_onboardIdx > 0) { _onboardIdx--; renderOnboardSlide(); } };
+  const skip = document.getElementById('onboard-skip');
+  if (skip) skip.onclick = endOnboarding;
+  const bd = document.getElementById('onboard-backdrop');
+  if (bd) bd.onclick = endOnboarding;
+})();
 
 // ── Filter listeners ──────────────────────────────────────────────────────────
 for (const id of ['f-under', 'f-pool', 'f-parking', 'f-manual']) {
@@ -718,7 +1261,7 @@ document.getElementById('f-split').addEventListener('input', (e) => {
   usageBtn.className  = 'admin-btn';
   usageBtn.title      = 'Apify token spend this month';
   usageBtn.textContent = '📊 API usage';
-  usageBtn.onclick   = showApifyUsage;
+  usageBtn.onclick   = () => { location.hash = '#/admin'; };
   usageBtn.style.display = ADMIN_KEY ? '' : 'none';
   bar.appendChild(usageBtn);
 })();
@@ -1114,14 +1657,22 @@ function showLoadError(msg) {
     await loadData();
     if (!DATA) throw new Error('no data');
     render();
+    route();
+    // First-time visitors who aren't signed in get the quick tour.
+    if (!USER) startOnboarding(false);
   } catch {
     showLoadError('Couldn’t load listings — check your connection.');
     return;
   }
   setInterval(async () => {
     try {
-      const v = await fetch('/api/votes').then(r => r.json());
-      if (JSON.stringify(v) !== JSON.stringify(VOTES)) { VOTES = v; render(); }
+      const [v, f] = await Promise.all([
+        fetch('/api/votes').then(r => r.json()),
+        fetch('/api/final').then(r => r.json()).catch(() => FINAL),
+      ]);
+      const changed = JSON.stringify(v) !== JSON.stringify(VOTES)
+                   || JSON.stringify(f) !== JSON.stringify(FINAL);
+      if (changed) { VOTES = v; if (f && f.counts) FINAL = f; render(); }
     } catch {}
   }, 8000);
 })();

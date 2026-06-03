@@ -1,0 +1,181 @@
+// Domain types mirrored 1:1 from the Express API contract (server.js).
+// Three different response envelopes exist — keep them distinct.
+
+export type YesNoUnknown = 'yes' | 'no' | 'unknown';
+export type BudgetTier = 'under' | 'marginal' | 'over' | 'unknown';
+export type VoteDir = 'up' | 'down';
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface Trip {
+  destination: string;
+  checkin: string; // YYYY-MM-DD
+  checkout_5n: string;
+  checkout_4n?: string;
+  adults: number;
+  budget: number;
+  tax_rate?: number;
+  cleaning_placeholder?: number;
+  refreshed_at?: string;
+}
+
+/**
+ * A rental listing. The backend has three sources (curated `listings.json`,
+ * the scraped pipeline, and community submissions) whose shapes overlap but
+ * differ in a few fields — all optional fields below capture that variance.
+ * `id` is always a string. `source` casing differs by origin (curated/submitted
+ * are capitalized e.g. "Airbnb"; pipeline is lowercase e.g. "airbnb").
+ */
+export interface Listing {
+  id: string;
+  name: string;
+  url: string;
+  source: string;
+  area?: string;
+  distance_mi?: number | null;
+  bd?: number | null;
+  ba?: number | null;
+  sleeps?: number | null;
+  pool?: YesNoUnknown;
+  parking?: YesNoUnknown;
+  hot_tub?: YesNoUnknown;
+  rating?: number | null;
+  reviews?: number | null;
+  superhost?: boolean;
+  budget?: BudgetTier;
+  check_manual?: boolean;
+  displayed_5n?: number | null;
+  est_5n?: number | null;
+  est_4n?: number | null;
+  note?: string;
+  photos?: string[];
+  amenities?: string[];
+  // curated only
+  rank?: number;
+  // submitted only
+  submitted_by?: string;
+  submitted_at?: string;
+  // pipeline only
+  last_seen?: string;
+  enriched?: boolean;
+}
+
+export interface ListingsResponse {
+  trip: Trip;
+  listings: Listing[];
+}
+
+export interface PipelineResponse {
+  listings: Listing[];
+  count: number;
+  note?: string;
+}
+
+/** votes: { [listingId]: { [userId]: 'up' | 'down' } } */
+export type VotesMap = Record<string, Record<string, VoteDir>>;
+
+export interface Itinerary {
+  text: string;
+  updated_at: string | null;
+}
+
+export interface Caveat {
+  id: string;
+  user_id: string;
+  name: string;
+  text: string;
+  created_at: string;
+}
+
+export interface Insights {
+  analysis: string;
+  count?: number;
+  ids?: string[];
+  created_at: string | null;
+}
+
+export interface Decision {
+  listing_id: string;
+  locked_at: string;
+}
+
+export interface FinalState {
+  counts: Record<string, number>;
+  total: number;
+  myPick: string | null;
+  decision: Decision | null;
+}
+
+// ── Admin usage dashboard ────────────────────────────────────────────────────
+export interface GeminiUsage {
+  configured: boolean;
+  model: string;
+  calls: number;
+  promptTokens: number;
+  candidatesTokens: number;
+  totalTokens: number;
+  estCostUsd: number;
+  rates: { inputPerM: number; outputPerM: number };
+}
+
+export interface FirecrawlUsage {
+  configured: boolean;
+  callsThisMonth: number;
+  remainingCredits: number | null;
+  planCredits: number | null;
+}
+
+export interface ApifyRun {
+  startedAt: string;
+  status: string;
+  costUsd: number | null;
+  actId?: string;
+}
+
+export interface ApifyUsage {
+  configured: boolean;
+  spentUsd: number | null;
+  limitUsd: number | null;
+  recent: ApifyRun[];
+}
+
+export interface GroupPulse {
+  members: number;
+  votes: number;
+  picks: number;
+  submissions: number;
+  decisionLocked: boolean;
+  refreshedAt: string | null;
+}
+
+export interface AdminUsage {
+  month: string;
+  gemini: GeminiUsage;
+  firecrawl: FirecrawlUsage;
+  apify: ApifyUsage;
+  group: GroupPulse;
+}
+
+/** Minimal listing payload sent to POST /api/compare-listings. */
+export interface CompareListingInput {
+  id: string;
+  name: string;
+  bd?: number | null;
+  ba?: number | null;
+  sleeps?: number | null;
+  area?: string;
+  distance_mi?: number | null;
+  est_5n?: number | null;
+  displayed_5n?: number | null;
+  pool?: YesNoUnknown;
+  hot_tub?: YesNoUnknown;
+  parking?: YesNoUnknown;
+  rating?: number | null;
+  reviews?: number | null;
+  url: string;
+  amenities?: string[];
+}
