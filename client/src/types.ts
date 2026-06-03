@@ -75,6 +75,8 @@ export interface Listing {
   source: string;
   area?: string;
   distance_mi?: number | null;
+  /** Distance chips to the trip's reference points (downtown/airport/attraction). */
+  distances?: { icon: string; label: string; mi: number }[];
   bd?: number | null;
   ba?: number | null;
   sleeps?: number | null;

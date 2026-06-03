@@ -79,12 +79,22 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
           <span className="rounded bg-panel-2 px-1.5 py-0.5">{l.source}</span>
           {l.area && <span>{l.area}</span>}
-          {l.distance_mi != null && (
-            <span className="inline-flex items-center gap-0.5">
-              <MapPin className="h-3 w-3" /> {l.distance_mi} mi from DTLA
-            </span>
-          )}
         </div>
+        {l.distances?.length ? (
+          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 text-[11px] text-muted">
+            {l.distances.map((d, i) => (
+              <span key={i} className="inline-flex items-center gap-0.5" title={d.label}>
+                <span>{d.icon}</span> {d.mi} mi
+                {d.label ? <span className="opacity-70"> · {d.label.length > 16 ? d.label.slice(0, 16) + '…' : d.label}</span> : null}
+              </span>
+            ))}
+          </div>
+        ) : l.distance_mi != null ? (
+          <div className="text-[11px] text-muted">
+            <MapPin className="mr-0.5 inline h-3 w-3" />
+            {l.distance_mi} mi to downtown
+          </div>
+        ) : null}
 
         {/* Specs */}
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-text">

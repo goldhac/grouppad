@@ -699,6 +699,60 @@ async function enrichSurvivors(db) {
 // No SQLite, no Playwright: one cheap Airbnb search, fast feedback.
 const LA_TRIP_ID = 'la-birthday-2026';
 
+// General great-circle miles (×1.25 ≈ driving) between two lat/lng points.
+function haversineMi(lat1, lng1, lat2, lng2) {
+  if ([lat1, lng1, lat2, lng2].some(v => typeof v !== 'number')) return null;
+  const toRad = d => (d * Math.PI) / 180, R = 3958.8;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1.25);
+}
+
+// Ask Gemini for the 3 reference points of a destination (it knows world geography).
+async function getRefPoints(destination) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return null;
+  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const prompt =
+`For the travel destination "${destination}", give approximate coordinates for:
+1) the downtown / city center
+2) the primary airport serving it
+3) the single most famous tourist attraction
+Respond with JSON only: {"downtown":{"name":"","lat":0,"lng":0},"airport":{"name":"","lat":0,"lng":0},"attraction":{"name":"","lat":0,"lng":0}}`;
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 300, thinkingConfig: { thinkingBudget: 0 }, responseMimeType: 'application/json' },
+      }),
+    });
+    const data = await r.json();
+    if (!r.ok) { console.log('[ref-points] gemini', r.status); return null; }
+    const txt = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+    const j = JSON.parse(txt);
+    const ok = p => p && typeof p.lat === 'number' && typeof p.lng === 'number';
+    return (ok(j.downtown) || ok(j.airport) || ok(j.attraction)) ? j : null;
+  } catch (e) { console.log('[ref-points] failed:', e.message); return null; }
+}
+
+// Distance chips from a listing's coords to each reference point.
+function refDistances(lat, lng, refs) {
+  if (!refs || typeof lat !== 'number' || typeof lng !== 'number') return [];
+  const out = [];
+  const add = (icon, p) => {
+    if (p && typeof p.lat === 'number') {
+      const mi = haversineMi(lat, lng, p.lat, p.lng);
+      if (mi != null) out.push({ icon, label: p.name || '', mi });
+    }
+  };
+  add('📍', refs.downtown);
+  add('✈️', refs.airport);
+  add('🎡', refs.attraction);
+  return out;
+}
+
 async function runTripSearch(tripId) {
   const fs = require('fs');
   if (tripId === LA_TRIP_ID) {
@@ -739,8 +793,12 @@ async function runTripSearch(tripId) {
       locale:   'en-US',
     };
     if (homeType) actorInput.propertyType = homeType; // best-effort hint to the actor
-    const items = await runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput);
-    console.log(`[trip-search] returned ${items.length} items`);
+    // Search + geocode the destination's reference points (downtown/airport/attraction) in parallel.
+    const [items, refs] = await Promise.all([
+      runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput),
+      getRefPoints(trip.destination),
+    ]);
+    console.log(`[trip-search] returned ${items.length} items; ref-points ${refs ? 'ok' : 'none'}`);
 
     const mapped = items
       .filter(it => it && it.id)
@@ -749,6 +807,9 @@ async function runTripSearch(tripId) {
         const area   = areaFromAirbnbTitle(it.title) || it.name || trip.destination;
         const photos = Array.isArray(it.images) ? it.images.map(im => im.url).filter(Boolean).slice(0, 8) : [];
         const text   = `${it.name || ''} ${it.title || ''}`.toLowerCase();
+        const lat    = it.coordinates?.latitude;
+        const lng    = it.coordinates?.longitude;
+        const distances = refDistances(lat, lng, refs);
         const displayed = parsePrice(it.pricing?.price || it.pricing?.label);
         const est5n = displayed ? Math.round(displayed * (1 + taxRate)) : null;
         const tier = est5n == null ? 'unknown'
@@ -762,7 +823,8 @@ async function runTripSearch(tripId) {
           url:          `https://www.airbnb.com/rooms/${it.id}`,
           name:         it.name || area || `Airbnb ${it.id}`,
           area,
-          distance_mi:  distanceMiFromCoords(it.coordinates?.latitude, it.coordinates?.longitude),
+          distance_mi:  distances.find(d => d.icon === '📍')?.mi ?? null,
+          distances,
           bd:           bedrooms,
           ba:           parseBathroomsFromName(it.name),
           sleeps:       beds,
@@ -801,6 +863,7 @@ async function runTripSearch(tripId) {
       const t2 = JSON.parse(fs.readFileSync(TRIPS_FILE, 'utf8'));
       if (t2[tripId]) {
         t2[tripId].refreshed_at = new Date().toISOString().slice(0, 10);
+        if (refs) t2[tripId].ref_points = refs;
         fs.writeFileSync(TRIPS_FILE, JSON.stringify(t2, null, 2));
       }
     } catch {}
