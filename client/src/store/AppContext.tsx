@@ -78,6 +78,7 @@ interface AppActions {
   loadAccount: () => Promise<void>;
   refreshMyTrips: () => Promise<void>;
   enterTrip: (tripId: string) => Promise<void>;
+  refreshListings: () => Promise<void>;
   createTrip: (input: CreateTripInput) => Promise<TripView>;
   joinTrip: (tripId: string, code?: string) => Promise<void>;
   // auth
@@ -241,6 +242,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTripError(e instanceof ApiError && e.status === 404 ? 'Trip not found.' : 'Could not load this trip.');
     } finally {
       if (token === loadTokenRef.current) setTripLoading(false);
+    }
+  }, []);
+
+  const refreshListings = useCallback(async () => {
+    const id = tripIdRef.current;
+    if (!id) return;
+    try {
+      setListings((await api.listings(id)).listings);
+    } catch {
+      /* ignore */
     }
   }, []);
 
@@ -500,7 +511,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
-      loadAccount, refreshMyTrips, enterTrip, createTrip, joinTrip,
+      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
@@ -511,7 +522,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
-      loadAccount, refreshMyTrips, enterTrip, createTrip, joinTrip,
+      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,

@@ -692,8 +692,121 @@ async function enrichSurvivors(db) {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
+// ── Trip-scoped search (TRIP_ID env) ───────────────────────────────────────────
+// Parameterized by a trip the user created in the app (destination/dates/guests/
+// budget from data/trips.json). Searches that destination, caps results small for
+// cost control, and writes the trip's own listings.json — the per-trip board.
+// No SQLite, no Playwright: one cheap Airbnb search, fast feedback.
+const LA_TRIP_ID = 'la-birthday-2026';
+
+async function runTripSearch(tripId) {
+  const fs = require('fs');
+  if (tripId === LA_TRIP_ID) {
+    console.error('[trip-search] refusing to overwrite the LA trip (use the full pipeline)');
+    process.exit(1);
+  }
+  const TRIPS_FILE = path.join(DATA_DIR, 'trips.json');
+  let trips = {};
+  try { trips = JSON.parse(fs.readFileSync(TRIPS_FILE, 'utf8')); } catch {}
+  const trip = trips[tripId];
+  if (!trip) { console.error(`[trip-search] trip ${tripId} not found`); process.exit(1); }
+
+  const dir = path.join(DATA_DIR, 'trips', tripId);
+  fs.mkdirSync(dir, { recursive: true });
+  const marker = path.join(dir, '.searching');
+  const listingsFile = path.join(dir, 'listings.json');
+
+  const adults      = Number(trip.adults) || 8;
+  const minBedrooms = Math.max(1, Math.ceil(adults / 3)); // ~3 guests per bedroom
+  const maxItems    = Math.max(1, Number(process.env.TRIP_SEARCH_MAX || 10));
+  const budget      = Number(trip.budget) || 0;
+  const taxRate     = trip.tax_rate != null ? Number(trip.tax_rate) : 0.14;
+  const hotTubRe    = /\b(hot tub|hottub|jacuzzi|spa|whirlpool)\b/i;
+
+  console.log(`[trip-search] ${tripId} — "${trip.destination}", ${adults} guests, min ${minBedrooms}bd, cap ${maxItems}`);
+  try { fs.writeFileSync(marker, new Date().toISOString()); } catch {}
+
+  try {
+    const items = await runApifyAsync('tri_angle~new-fast-airbnb-scraper', {
+      locationQueries: [trip.destination],
+      adults,
+      minBedrooms,
+      maxItems,
+      currency: 'USD',
+      locale:   'en-US',
+    });
+    console.log(`[trip-search] returned ${items.length} items`);
+
+    const mapped = items
+      .filter(it => it && it.id)
+      .map(it => {
+        const { bedrooms, beds } = parseAirbnbSubtitles(it.subtitles);
+        const area   = areaFromAirbnbTitle(it.title) || it.name || trip.destination;
+        const photos = Array.isArray(it.images) ? it.images.map(im => im.url).filter(Boolean).slice(0, 8) : [];
+        const text   = `${it.name || ''} ${it.title || ''}`.toLowerCase();
+        const displayed = parsePrice(it.pricing?.price || it.pricing?.label);
+        const est5n = displayed ? Math.round(displayed * (1 + taxRate)) : null;
+        const tier = est5n == null ? 'unknown'
+          : !budget                ? 'unknown'
+          : est5n <= budget        ? 'under'
+          : est5n <= budget * 1.1  ? 'marginal'
+          : 'over';
+        return {
+          source:       'Airbnb',
+          id:           String(it.id),
+          url:          `https://www.airbnb.com/rooms/${it.id}`,
+          name:         it.name || area || `Airbnb ${it.id}`,
+          area,
+          distance_mi:  distanceMiFromCoords(it.coordinates?.latitude, it.coordinates?.longitude),
+          bd:           bedrooms,
+          ba:           parseBathroomsFromName(it.name),
+          sleeps:       beds,
+          pool:         /\bpool\b/.test(text) ? 'yes' : 'unknown',
+          hot_tub:      hotTubRe.test(text) ? 'yes' : 'unknown',
+          parking:      /\b(parking|garage|driveway)\b/.test(text) ? 'yes' : 'unknown',
+          rating:       typeof it.rating?.average === 'number' ? it.rating.average : null,
+          reviews:      typeof it.rating?.reviewsCount === 'number' ? it.rating.reviewsCount : null,
+          photos,
+          amenities:    Array.isArray(it.badges) ? it.badges : [],
+          displayed_5n: displayed,
+          est_5n:       est5n,
+          est_4n:       est5n ? Math.round(est5n * 0.8) : null,
+          budget:       tier,
+          check_manual: true, // undated representative price — members verify
+        };
+      });
+
+    // Bigger homes first, then better-rated; cap, then rank.
+    mapped.sort((a, b) => (b.bd || 0) - (a.bd || 0) || (b.rating || 0) - (a.rating || 0));
+    const final = mapped.slice(0, maxItems).map((l, i) => ({ rank: i + 1, ...l }));
+
+    const tmp = `${listingsFile}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(final, null, 2));
+    fs.renameSync(tmp, listingsFile);
+
+    // Stamp refreshed_at on the trip record.
+    try {
+      const t2 = JSON.parse(fs.readFileSync(TRIPS_FILE, 'utf8'));
+      if (t2[tripId]) {
+        t2[tripId].refreshed_at = new Date().toISOString().slice(0, 10);
+        fs.writeFileSync(TRIPS_FILE, JSON.stringify(t2, null, 2));
+      }
+    } catch {}
+
+    console.log(`[trip-search] wrote ${final.length} listings → ${listingsFile}`);
+  } finally {
+    try { fs.unlinkSync(marker); } catch {}
+  }
+}
+
 async function main() {
   if (!APIFY_TOKEN) { console.error('ERROR: APIFY_TOKEN required'); process.exit(1); }
+
+  // Trip-scoped search mode: populate one user-created trip, then exit.
+  if (process.env.TRIP_ID) {
+    await runTripSearch(process.env.TRIP_ID);
+    return;
+  }
 
   const start = Date.now();
   // SQLite datetime('now') format, captured before discovery so every row

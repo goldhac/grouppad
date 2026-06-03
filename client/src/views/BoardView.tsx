@@ -6,6 +6,7 @@ import { Card } from '@/components/Card';
 import { BoardHeader } from '@/components/chrome/BoardHeader';
 import { FilterBar, type Filters } from '@/components/board/FilterBar';
 import { SubmitBar } from '@/components/board/SubmitBar';
+import { SearchPanel } from '@/components/board/SearchPanel';
 import { ItinerarySection } from '@/components/board/ItinerarySection';
 import { DecisionSection } from '@/components/board/DecisionSection';
 import { ShortlistSection } from '@/components/board/ShortlistSection';
@@ -78,6 +79,7 @@ export function BoardView() {
           perPersonAvg={perPersonAvg}
         />
         <SubmitBar />
+        <SearchPanel />
         <ItinerarySection />
         <DecisionSection />
         <ShortlistSection compare={compare} />

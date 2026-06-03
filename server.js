@@ -1860,6 +1860,21 @@ app.get('/api/admin/usage', requireAdmin, async (req, res) => {
   });
 });
 
+// Spawn the trip-scoped rental search (pipeline.js in TRIP_ID mode) for a newly
+// created trip. Writes a .searching marker immediately so the client's status
+// poll is accurate from t=0; pipeline.js clears it when the run finishes.
+function spawnTripSearch(tripId, maxItems) {
+  if (!process.env.APIFY_TOKEN || tripId === LA_TRIP_ID) return false;
+  try { fs.writeFileSync(path.join(tripDir(tripId), '.searching'), new Date().toISOString()); } catch {}
+  const { spawn } = require('child_process');
+  const env = { ...process.env, TRIP_ID: tripId };
+  if (maxItems) env.TRIP_SEARCH_MAX = String(maxItems);
+  const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env, detached: true, stdio: 'ignore' });
+  child.unref();
+  console.log(`[trip-search] spawned for ${tripId} (cap ${maxItems || 'default'})`);
+  return true;
+}
+
 // ── Trips: create / list mine / view / join / leave ────────────────────────────
 // List the trips the signed-in user owns or has joined.
 app.get('/api/me/trips', requireAuth, (req, res) => {
@@ -1879,6 +1894,8 @@ app.post('/api/trips', requireAuth, (req, res) => {
   if (!checkin || !checkout_5n)
     return res.status(400).json({ error: 'Check-in and check-out dates are required.' });
   const trip = createTrip(req.user, { name, destination, checkin, checkout_5n, adults, budget });
+  // Kick off a capped rental search for the new trip (background; no-op without APIFY_TOKEN).
+  spawnTripSearch(trip.id, Number(process.env.TRIP_SEARCH_MAX) || 10);
   res.json(tripView(trip, req.user));
 });
 
@@ -1910,6 +1927,28 @@ app.post('/api/trips/:tripId/leave', requireAuth, (req, res) => {
   trip.members = (trip.members || []).filter(id => id !== req.user.id);
   saveTrips(trips);
   res.json({ ok: true });
+});
+
+// Organizer: (re)run the rental search for this trip (capped).
+app.post('/api/trips/:tripId/run-search', requireTripOwner, (req, res) => {
+  if (req.params.tripId === LA_TRIP_ID)
+    return res.status(400).json({ error: 'The LA trip uses the full pipeline (/api/admin/run-pipeline).' });
+  const max = Math.min(20, Math.max(1, Number(req.body && req.body.max) || 10));
+  if (!spawnTripSearch(req.params.tripId, max))
+    return res.status(400).json({ error: 'Search is not configured (APIFY_TOKEN missing on server).' });
+  res.json({ ok: true });
+});
+
+// Search progress for the board (open — anyone viewing can see "finding rentals").
+app.get('/api/trips/:tripId/search-status', loadTripOr404, (req, res) => {
+  const marker = path.join(tripDir(req.params.tripId), '.searching');
+  let searching = false;
+  try {
+    const st = fs.statSync(marker);
+    searching = (Date.now() - st.mtimeMs) < 6 * 60 * 1000; // stale >6min ⇒ treat as finished
+  } catch { searching = false; }
+  const count = (loadListings(req.params.tripId).listings || []).length;
+  res.json({ searching, count, configured: !!process.env.APIFY_TOKEN });
 });
 
 // Per-trip group pulse for the organizer (engagement only, no per-user detail).

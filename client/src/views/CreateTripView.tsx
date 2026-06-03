@@ -42,7 +42,7 @@ export function CreateTripView() {
         adults: Number(form.adults) || 1,
         budget: Number(form.budget) || 0,
       });
-      navigate(`/t/${trip.id}/manage`);
+      navigate(`/t/${trip.id}/board`);
     } catch (e2) {
       setErr(e2 instanceof Error ? e2.message : 'Could not create the trip.');
       setBusy(false);

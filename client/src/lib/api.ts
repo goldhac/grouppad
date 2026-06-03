@@ -94,6 +94,10 @@ export const api = {
   leaveTrip: (tripId: string) =>
     request<{ ok: true }>(`${t(tripId)}/leave`, { method: 'POST' }),
   tripPulse: (tripId: string) => request<TripPulse>(`${t(tripId)}/pulse`),
+  runSearch: (tripId: string, max = 10) =>
+    request<{ ok: true }>(`${t(tripId)}/run-search`, { method: 'POST', body: { max } }),
+  searchStatus: (tripId: string) =>
+    request<{ searching: boolean; count: number; configured: boolean }>(`${t(tripId)}/search-status`),
 
   // ── Trip-scoped entities ───────────────────────────────────────────────────
   listings: (tripId: string) => request<ListingsResponse>(`${t(tripId)}/listings`),
