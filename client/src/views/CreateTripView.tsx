@@ -15,6 +15,7 @@ export function CreateTripView() {
     bedrooms: '',
     budget: '5000',
     home_type: 'Any',
+    itinerary: '',
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -26,7 +27,8 @@ export function CreateTripView() {
   }
 
   const set =
-    (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    (k: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm({ ...form, [k]: e.target.value });
 
   async function submit(e: React.FormEvent) {
@@ -46,6 +48,7 @@ export function CreateTripView() {
         budget: Number(form.budget) || 0,
         bedrooms: form.bedrooms ? Number(form.bedrooms) : null,
         home_type: form.home_type,
+        itinerary: form.itinerary.trim() || undefined,
       });
       navigate(`/t/${trip.id}/board`);
     } catch (e2) {
@@ -104,6 +107,19 @@ export function CreateTripView() {
             </select>
           </Field>
         </div>
+
+        <Field label="Itinerary (optional)">
+          <textarea
+            value={form.itinerary}
+            onChange={set('itinerary')}
+            rows={3}
+            placeholder="Rough plans help tailor the search — e.g. Fri: arrive + dinner downtown. Sat: pool day. Sun: museum…"
+            className="w-full rounded-md border border-border bg-panel-2 px-3 py-2 text-sm text-text outline-none focus:ring-2 focus:ring-accent"
+          />
+          <span className="mt-1 block text-xs text-muted">
+            Optional, but it helps us pick nearby reference points and powers the AI compare.
+          </span>
+        </Field>
 
         {err && <p className="text-sm text-danger">{err}</p>}
 

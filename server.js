@@ -1911,12 +1911,17 @@ app.get('/api/me/trips', requireAuth, (req, res) => {
 
 // Create a new trip; the caller becomes the organizer.
 app.post('/api/trips', requireAuth, (req, res) => {
-  const { name, destination, checkin, checkout_5n, adults, budget, bedrooms, home_type } = req.body || {};
+  const { name, destination, checkin, checkout_5n, adults, budget, bedrooms, home_type, itinerary } =
+    req.body || {};
   if (!destination || !String(destination).trim())
     return res.status(400).json({ error: 'Destination is required.' });
   if (!checkin || !checkout_5n)
     return res.status(400).json({ error: 'Check-in and check-out dates are required.' });
   const trip = createTrip(req.user, { name, destination, checkin, checkout_5n, adults, budget, bedrooms, home_type });
+  // Optional itinerary posted at create time — saved before the search so it can
+  // inform the reference points, and so AI compare has it from the start.
+  const itinText = String(itinerary || '').slice(0, 8000).trim();
+  if (itinText) saveItinerary({ text: itinText, updated_at: new Date().toISOString() }, trip.id);
   // Kick off a capped rental search for the new trip (background; no-op without APIFY_TOKEN).
   spawnTripSearch(trip.id, Number(process.env.TRIP_SEARCH_MAX) || 10);
   res.json(tripView(trip, req.user));

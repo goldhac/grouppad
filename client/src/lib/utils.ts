@@ -181,6 +181,15 @@ export function mdToHtml(md: string): string {
   return out.join('\n');
 }
 
+/** Minutes → "14 min" / "1h 5m". */
+export function fmtMins(min: number): string {
+  if (min == null) return '';
+  if (min < 60) return `${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 export function formatDate(iso: string): string {
   try {
     return new Date(iso).toLocaleDateString();

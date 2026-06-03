@@ -709,15 +709,18 @@ function haversineMi(lat1, lng1, lat2, lng2) {
 }
 
 // Ask Gemini for the 3 reference points of a destination (it knows world geography).
-async function getRefPoints(destination) {
+// An optional itinerary nudges the "attraction" toward what the group actually plans.
+async function getRefPoints(destination, itinerary) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) return null;
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  const itin = String(itinerary || '').trim().slice(0, 1500);
   const prompt =
 `For the travel destination "${destination}", give approximate coordinates for:
 1) the downtown / city center
 2) the primary airport serving it
-3) the single most famous tourist attraction
+3) the single most famous tourist attraction${itin ? " — prefer one the group's plans below reference, if any" : ''}
+${itin ? `Group's plans / itinerary:\n${itin}\n` : ''}
 Respond with JSON only: {"downtown":{"name":"","lat":0,"lng":0},"airport":{"name":"","lat":0,"lng":0},"attraction":{"name":"","lat":0,"lng":0}}`;
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
@@ -737,19 +740,20 @@ Respond with JSON only: {"downtown":{"name":"","lat":0,"lng":0},"airport":{"name
   } catch (e) { console.log('[ref-points] failed:', e.message); return null; }
 }
 
-// Distance chips from a listing's coords to each reference point.
+// Distance + rough drive-time chips from a listing's coords to each reference
+// point. Time is estimated from distance at a per-trip-type average speed.
 function refDistances(lat, lng, refs) {
   if (!refs || typeof lat !== 'number' || typeof lng !== 'number') return [];
   const out = [];
-  const add = (icon, p) => {
+  const add = (icon, kind, p, mph) => {
     if (p && typeof p.lat === 'number') {
       const mi = haversineMi(lat, lng, p.lat, p.lng);
-      if (mi != null) out.push({ icon, label: p.name || '', mi });
+      if (mi != null) out.push({ icon, kind, label: p.name || '', mi, min: Math.max(1, Math.round((mi / mph) * 60)) });
     }
   };
-  add('📍', refs.downtown);
-  add('✈️', refs.airport);
-  add('🎡', refs.attraction);
+  add('📍', 'downtown',   refs.downtown,   28); // local roads
+  add('✈️', 'airport',    refs.airport,    45); // mostly highway
+  add('🎡', 'attraction', refs.attraction, 30);
   return out;
 }
 
@@ -798,10 +802,13 @@ async function runTripSearch(tripId) {
     // results), so home_type is kept as trip metadata and filtering is done via
     // min/max bedrooms + price ranking below. `homeType` retained for display.
     void homeType;
+    // An itinerary posted at create time gives the AI better reference points.
+    let itineraryText = '';
+    try { itineraryText = JSON.parse(fs.readFileSync(path.join(dir, 'itinerary.json'), 'utf8')).text || ''; } catch {}
     // Search + geocode the destination's reference points (downtown/airport/attraction) in parallel.
     const [items, refs] = await Promise.all([
       runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput),
-      getRefPoints(trip.destination),
+      getRefPoints(trip.destination, itineraryText),
     ]);
     console.log(`[trip-search] returned ${items.length} items; ref-points ${refs ? 'ok' : 'none'}`);
 

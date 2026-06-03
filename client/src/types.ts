@@ -50,6 +50,7 @@ export interface CreateTripInput {
   budget: number;
   bedrooms?: number | null;
   home_type?: string;
+  itinerary?: string;
 }
 
 export interface TripPulse {
@@ -75,8 +76,8 @@ export interface Listing {
   source: string;
   area?: string;
   distance_mi?: number | null;
-  /** Distance chips to the trip's reference points (downtown/airport/attraction). */
-  distances?: { icon: string; label: string; mi: number }[];
+  /** Distance + drive-time chips to the trip's reference points. */
+  distances?: { icon: string; kind?: string; label: string; mi: number; min: number }[];
   bd?: number | null;
   ba?: number | null;
   sleeps?: number | null;

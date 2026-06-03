@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/Dialog';
 import { BudgetBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
-import { amenityLabel, fmt, tallyVotes } from '@/lib/utils';
+import { amenityLabel, fmt, fmtMins, tallyVotes } from '@/lib/utils';
 
 export function DetailModal() {
   const {
@@ -48,12 +48,29 @@ export function DetailModal() {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
           <span className="rounded bg-panel-2 px-1.5 py-0.5">{l.source}</span>
           {l.area && <span>{l.area}</span>}
-          {l.distance_mi != null && (
+          {!l.distances?.length && l.distance_mi != null && (
             <span className="inline-flex items-center gap-0.5">
-              <MapPin className="h-3 w-3" /> {l.distance_mi} mi from DTLA
+              <MapPin className="h-3 w-3" /> {l.distance_mi} mi to downtown
             </span>
           )}
         </div>
+
+        {l.distances?.length ? (
+          <div className="flex flex-wrap gap-2">
+            {l.distances.map((d, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-panel-2 px-2.5 py-1.5 text-xs"
+              >
+                <span className="text-base leading-none">{d.icon}</span>
+                <span>
+                  <span className="font-medium text-text">{d.label}</span>
+                  <span className="text-muted"> · {d.mi} mi · {fmtMins(d.min)}</span>
+                </span>
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         {/* Gallery */}
         {photos.length > 0 && (

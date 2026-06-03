@@ -3,7 +3,7 @@ import { useApp } from '@/store/AppContext';
 import { Badge, BudgetBadge } from '@/components/ui/Badge';
 import { Carousel } from '@/components/Carousel';
 import { cn } from '@/lib/cn';
-import { amenityLabel, fmt, tallyVotes } from '@/lib/utils';
+import { amenityLabel, fmt, fmtMins, tallyVotes } from '@/lib/utils';
 import type { Listing } from '@/types';
 
 interface CardProps {
@@ -81,11 +81,17 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
           {l.area && <span>{l.area}</span>}
         </div>
         {l.distances?.length ? (
-          <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 text-[11px] text-muted">
+          <div className="flex flex-wrap gap-1.5">
             {l.distances.map((d, i) => (
-              <span key={i} className="inline-flex items-center gap-0.5" title={d.label}>
-                <span>{d.icon}</span> {d.mi} mi
-                {d.label ? <span className="opacity-70"> · {d.label.length > 16 ? d.label.slice(0, 16) + '…' : d.label}</span> : null}
+              <span
+                key={i}
+                title={d.label}
+                className="inline-flex items-center gap-1 rounded-full border border-border bg-panel-2 px-2 py-0.5 text-[10.5px] text-muted"
+              >
+                <span>{d.icon}</span>
+                <span className="font-medium text-text">{d.mi} mi</span>
+                <span className="opacity-50">·</span>
+                <span>{fmtMins(d.min)}</span>
               </span>
             ))}
           </div>
