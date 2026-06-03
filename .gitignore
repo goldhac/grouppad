@@ -13,3 +13,12 @@ data/pipeline.db-wal
 *.log
 data/trips.json
 data/trips/
+# Global runtime stores (accounts, sessions, tokens, meters) — never commit (PII).
+data/users.json
+data/sessions.json
+data/magic.json
+data/usage.json
+data/finalvotes.json
+data/decision.json
+# Local tooling (installed globally too) — not app code.
+.claude/skills/
