@@ -1,15 +1,31 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Copy, Check, Users, ThumbsUp, Star, Home, ArrowLeft } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Copy, Check, Users, ThumbsUp, Star, Home, ArrowLeft, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
 import type { TripPulse } from '@/types';
 
 export function ManageView() {
-  const { trip, isOwner } = useApp();
+  const { trip, isOwner, deleteTrip, toast } = useApp();
+  const navigate = useNavigate();
   const [pulse, setPulse] = useState<TripPulse | null>(null);
   const [copied, setCopied] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function onDelete() {
+    if (!trip) return;
+    if (!confirm(`Delete “${trip.name}”? This removes the board and all its data for everyone. This can't be undone.`)) return;
+    setDeleting(true);
+    try {
+      await deleteTrip(trip.id);
+      toast('Trip deleted.', 'success');
+      navigate('/trips');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not delete the trip.', 'error');
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     if (trip && isOwner) api.tripPulse(trip.id).then(setPulse).catch(() => {});
@@ -82,6 +98,20 @@ export function ManageView() {
         Organizer powers: post the itinerary, remove listings, and lock the official pick — all from
         the board. {pulse?.decisionLocked ? 'An official pick is currently locked.' : 'No official pick locked yet.'}
       </p>
+
+      {/* Danger zone */}
+      <section className="mt-8 rounded-xl border border-danger/30 bg-danger/5 p-5">
+        <h2 className="font-semibold text-danger">Danger zone</h2>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-sm text-sm text-muted">
+            Deleting this trip removes the board, its listings, votes, and everything else for every
+            member. This cannot be undone.
+          </p>
+          <Button variant="danger" disabled={deleting} onClick={() => void onDelete()}>
+            <Trash2 className="h-4 w-4" /> {deleting ? 'Deleting…' : 'Delete trip'}
+          </Button>
+        </div>
+      </section>
     </div>
   );
 }

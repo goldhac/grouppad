@@ -81,6 +81,7 @@ interface AppActions {
   refreshListings: () => Promise<void>;
   createTrip: (input: CreateTripInput) => Promise<TripView>;
   joinTrip: (tripId: string, code?: string) => Promise<void>;
+  deleteTrip: (tripId: string) => Promise<void>;
   // auth
   signOut: () => Promise<void>;
   rename: (name: string) => Promise<void>;
@@ -323,6 +324,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [refreshMyTrips, toast],
   );
 
+  const deleteTrip = useCallback(async (id: string) => {
+    await api.deleteTrip(id);
+    setMyTrips((t) => t.filter((x) => x.id !== id));
+    if (tripIdRef.current === id) {
+      setTrip(null);
+      setTripId(null);
+      tripIdRef.current = null;
+    }
+  }, []);
+
   // ── Onboarding ───────────────────────────────────────────────────────────────
   const startOnboarding = useCallback((force: boolean) => {
     if (!force && localStorage.getItem(ONBOARDED_LS)) return;
@@ -511,7 +522,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
-      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip,
+      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
@@ -522,7 +533,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
-      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip,
+      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,

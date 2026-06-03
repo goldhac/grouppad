@@ -144,6 +144,8 @@ function createTrip(owner, f) {
     checkout_4n: f.checkout_4n || null,
     adults: Number(f.adults) || 1,
     budget: Number(f.budget) || 0,
+    bedrooms: f.bedrooms != null && f.bedrooms !== '' ? Math.max(1, Number(f.bedrooms)) : null,
+    home_type: (f.home_type && String(f.home_type).trim()) || 'Any',
     tax_rate: f.tax_rate != null ? Number(f.tax_rate) : 0.14,
     cleaning_placeholder: f.cleaning_placeholder != null ? Number(f.cleaning_placeholder) : 0,
     owner_id: owner.id,
@@ -213,6 +215,27 @@ function migrateLegacyTripIfNeeded() {
   };
   saveTrips(trips);
   console.log(`[migrate] registered legacy trip "${LA_TRIP_ID}" (owner ${owner.email})`);
+}
+
+// Idempotent repair: ensure the LA trip is owned by (and includes as a member)
+// the account named in OWNER_EMAIL. The original migration guessed an owner email
+// that didn't match the real Google login, orphaning the trip; this re-links it.
+// Runs every boot, no-op once correct.
+function ensureLaOwner() {
+  const email = process.env.OWNER_EMAIL;
+  if (!email) return;
+  const trips = loadTrips();
+  const la = trips[LA_TRIP_ID];
+  if (!la) return;
+  const owner = findOrCreateUser(email, 'Organizer');
+  let changed = false;
+  if (la.owner_id !== owner.id) { la.owner_id = owner.id; changed = true; }
+  if (!Array.isArray(la.members)) la.members = [];
+  if (!la.members.includes(owner.id)) { la.members.push(owner.id); changed = true; }
+  if (changed) {
+    saveTrips(trips);
+    console.log(`[repair] LA trip owner re-linked to ${email}`);
+  }
 }
 
 // Resolve :tripId → req.trip (404 if unknown). Read routes use this so anyone
@@ -1951,6 +1974,17 @@ app.get('/api/trips/:tripId/search-status', loadTripOr404, (req, res) => {
   res.json({ searching, count, configured: !!process.env.APIFY_TOKEN });
 });
 
+// Delete a trip (organizer only). Removes the registry entry + all per-trip data.
+app.delete('/api/trips/:tripId', requireTripOwner, (req, res) => {
+  const id = req.params.tripId;
+  if (id === LA_TRIP_ID) return res.status(400).json({ error: 'The default trip cannot be deleted.' });
+  const trips = loadTrips();
+  delete trips[id];
+  saveTrips(trips);
+  try { fs.rmSync(path.join(DATA_DIR, 'trips', id), { recursive: true, force: true }); } catch {}
+  res.json({ ok: true });
+});
+
 // Per-trip group pulse for the organizer (engagement only, no per-user detail).
 app.get('/api/trips/:tripId/pulse', requireTripOwner, (req, res) => {
   const tripId = req.params.tripId;
@@ -2004,5 +2038,6 @@ function schedulePipeline() {
 app.listen(PORT, () => {
   console.log(`GroupPad listening on :${PORT}`);
   try { migrateLegacyTripIfNeeded(); } catch (e) { console.error('[migrate] failed:', e.message); }
+  try { ensureLaOwner(); } catch (e) { console.error('[repair] failed:', e.message); }
   schedulePipeline();
 });

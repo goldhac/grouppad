@@ -20,6 +20,8 @@ export interface Trip {
   checkout_4n?: string;
   adults: number;
   budget: number;
+  bedrooms?: number | null;
+  home_type?: string;
   tax_rate?: number;
   cleaning_placeholder?: number;
   refreshed_at?: string | null;
@@ -46,6 +48,8 @@ export interface CreateTripInput {
   checkout_5n: string;
   adults: number;
   budget: number;
+  bedrooms?: number | null;
+  home_type?: string;
 }
 
 export interface TripPulse {

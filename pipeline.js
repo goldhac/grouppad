@@ -717,24 +717,29 @@ async function runTripSearch(tripId) {
   const listingsFile = path.join(dir, 'listings.json');
 
   const adults      = Number(trip.adults) || 8;
-  const minBedrooms = Math.max(1, Math.ceil(adults / 3)); // ~3 guests per bedroom
-  const maxItems    = Math.max(1, Number(process.env.TRIP_SEARCH_MAX || 10));
+  const minBedrooms = trip.bedrooms ? Math.max(1, Number(trip.bedrooms)) : Math.max(1, Math.ceil(adults / 3));
+  const maxBedrooms = minBedrooms + 4;            // keep results near the group's size (no 27BR mega-compounds)
+  const finalCap    = Math.max(1, Number(process.env.TRIP_SEARCH_MAX || 10));
+  const poolSize    = Math.max(30, finalCap * 4); // fetch a pool, then filter + rank + cap
+  const homeType    = trip.home_type && trip.home_type !== 'Any' ? String(trip.home_type) : null;
   const budget      = Number(trip.budget) || 0;
   const taxRate     = trip.tax_rate != null ? Number(trip.tax_rate) : 0.14;
   const hotTubRe    = /\b(hot tub|hottub|jacuzzi|spa|whirlpool)\b/i;
 
-  console.log(`[trip-search] ${tripId} — "${trip.destination}", ${adults} guests, min ${minBedrooms}bd, cap ${maxItems}`);
+  console.log(`[trip-search] ${tripId} — "${trip.destination}", ${adults} guests, ${minBedrooms}-${maxBedrooms}bd, type ${homeType || 'Any'}, cap ${finalCap}`);
   try { fs.writeFileSync(marker, new Date().toISOString()); } catch {}
 
   try {
-    const items = await runApifyAsync('tri_angle~new-fast-airbnb-scraper', {
+    const actorInput = {
       locationQueries: [trip.destination],
       adults,
       minBedrooms,
-      maxItems,
+      maxItems: poolSize,
       currency: 'USD',
       locale:   'en-US',
-    });
+    };
+    if (homeType) actorInput.propertyType = homeType; // best-effort hint to the actor
+    const items = await runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput);
     console.log(`[trip-search] returned ${items.length} items`);
 
     const mapped = items
@@ -776,9 +781,16 @@ async function runTripSearch(tripId) {
         };
       });
 
-    // Bigger homes first, then better-rated; cap, then rank.
-    mapped.sort((a, b) => (b.bd || 0) - (a.bd || 0) || (b.rating || 0) - (a.rating || 0));
-    const final = mapped.slice(0, maxItems).map((l, i) => ({ rank: i + 1, ...l }));
+    // Keep homes near the group's size, then surface under-budget + cheapest first.
+    const within = mapped.filter(l => l.bd == null || (l.bd >= minBedrooms && l.bd <= maxBedrooms));
+    const pool = within.length >= Math.min(3, finalCap) ? within : mapped; // fall back if filter is too strict
+    const tierRank = { under: 0, marginal: 1, unknown: 2, over: 3 };
+    pool.sort((a, b) =>
+      (tierRank[a.budget] - tierRank[b.budget]) ||              // under-budget first
+      ((a.est_5n ?? Infinity) - (b.est_5n ?? Infinity)) ||      // then cheapest
+      ((b.rating || 0) - (a.rating || 0))                      // then best-rated
+    );
+    const final = pool.slice(0, finalCap).map((l, i) => ({ rank: i + 1, ...l }));
 
     const tmp = `${listingsFile}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(final, null, 2));

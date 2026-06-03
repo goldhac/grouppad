@@ -93,6 +93,8 @@ export const api = {
     request<TripView>(`${t(tripId)}/join`, { method: 'POST', body: { join_code } }),
   leaveTrip: (tripId: string) =>
     request<{ ok: true }>(`${t(tripId)}/leave`, { method: 'POST' }),
+  deleteTrip: (tripId: string) =>
+    request<{ ok: true }>(t(tripId), { method: 'DELETE' }),
   tripPulse: (tripId: string) => request<TripPulse>(`${t(tripId)}/pulse`),
   runSearch: (tripId: string, max = 10) =>
     request<{ ok: true }>(`${t(tripId)}/run-search`, { method: 'POST', body: { max } }),

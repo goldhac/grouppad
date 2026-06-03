@@ -12,7 +12,9 @@ export function CreateTripView() {
     checkin: '',
     checkout_5n: '',
     adults: '8',
+    bedrooms: '',
     budget: '5000',
+    home_type: 'Any',
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -23,8 +25,9 @@ export function CreateTripView() {
     return <Navigate to="/" replace />;
   }
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm({ ...form, [k]: e.target.value });
+  const set =
+    (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm({ ...form, [k]: e.target.value });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +44,8 @@ export function CreateTripView() {
         checkout_5n: form.checkout_5n,
         adults: Number(form.adults) || 1,
         budget: Number(form.budget) || 0,
+        bedrooms: form.bedrooms ? Number(form.bedrooms) : null,
+        home_type: form.home_type,
       });
       navigate(`/t/${trip.id}/board`);
     } catch (e2) {
@@ -75,8 +80,28 @@ export function CreateTripView() {
           <Field label="Guests">
             <input type="number" min={1} max={50} value={form.adults} onChange={set('adults')} className={inputCls} />
           </Field>
+          <Field label="Bedrooms (optional)">
+            <input
+              type="number"
+              min={1}
+              max={30}
+              placeholder="auto from guests"
+              value={form.bedrooms}
+              onChange={set('bedrooms')}
+              className={inputCls}
+            />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
           <Field label="Budget (all-in, $)">
             <input type="number" min={0} step={100} value={form.budget} onChange={set('budget')} className={inputCls} />
+          </Field>
+          <Field label="Home type">
+            <select value={form.home_type} onChange={set('home_type')} className={inputCls}>
+              {['Any', 'House', 'Villa', 'Condo', 'Apartment', 'Cabin', 'Townhouse'].map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
           </Field>
         </div>
 
