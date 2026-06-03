@@ -138,6 +138,54 @@ per-person split · note · compare checkbox · "View on <source>" · 👍/👎 
 
 ---
 
+## 5.5 Component → file index (every component, mapped)
+
+Every component is described above by its UI label; this maps each to its source
+file so design work can jump straight to code.
+
+| Component (file) | What it is | Where documented |
+|---|---|---|
+| `App.tsx` | Router shell + global overlay mounts | §1 |
+| `routing/TripGate.tsx` | Loads a trip from the URL, join-by-link | §3.4, §6A |
+| `store/AppContext.tsx` | The single state store + all actions | §1 |
+| `hooks/useCompare.ts` | AI-compare controller (panel + 1v1/selected) | §3.4 #8, §4.4 |
+| **Pages (`views/`)** | | |
+| `LandingView.tsx` | Signed-out marketing page | §3.1 |
+| `TripsView.tsx` | "Your trips" dashboard | §3.2 |
+| `CreateTripView.tsx` | Create-trip form | §3.3 |
+| `BoardView.tsx` | The core board (composes all board sections) | §3.4 |
+| `ManageView.tsx` | Organizer: invite link, pulse, delete | §3.5 |
+| `HelpView.tsx` | How-it-works cards | §3.6 |
+| `AdminView.tsx` | Platform usage meter | §3.7 |
+| **Chrome (`components/chrome/`)** | | |
+| `Navbar.tsx` | Top bar: logo, trip switcher, account menu | §3 (all pages) |
+| `BoardHeader.tsx` | Per-trip header (name/dates/budget) | §3.4 #1 |
+| `Footer.tsx` | Product footer | §3 (all pages) |
+| **Board sections (`components/board/`)** | | |
+| `FilterBar.tsx` | Filters + split slider | §3.4 #3 |
+| `SubmitBar.tsx` | "Add a listing" | §3.4 #4 |
+| `SearchPanel.tsx` | Search progress / trigger (organizer) | §3.4 #5, §6D |
+| `ItinerarySection.tsx` | Itinerary view + organizer editor | §3.4 #6 |
+| `DecisionSection.tsx` | Official-pick banner / top-choice leaderboard | §3.4 #7 |
+| `ShortlistSection.tsx` | Shortlist + AI compare panel + insights | §3.4 #8 |
+| `SubmittedSection.tsx` | Community submissions grid | §3.4 #9 |
+| `CaveatsSection.tsx` | Group caveats chat | §3.4 #10 |
+| `PipelineSection.tsx` | "Live Listings" (LA auto-scraped) | §3.4 #12 |
+| `CompareDock.tsx` | Floating compare dock | §4.6 |
+| **Modals (`components/modals/`)** | | |
+| `AuthModal.tsx` | Sign-in (Google + magic-link) | §4.1 |
+| `OnboardingModal.tsx` | 5-slide tour | §4.2 |
+| `DetailModal.tsx` | Listing detail (gallery, distances, map) | §4.3 |
+| `ComparisonModal.tsx` | VS / multi compare result | §4.4 |
+| **Shared (`components/`)** | | |
+| `Card.tsx` | Listing card (4 grids) | §5 |
+| `Carousel.tsx` | Card photo carousel | §5 |
+| `Markdown.tsx` | Renders AI markdown output | §3.4 #8 |
+| **UI primitives (`components/ui/`)** | shadcn-style on Radix | |
+| `Button.tsx` · `Dialog.tsx` · `Checkbox.tsx` · `Slider.tsx` · `Badge.tsx` · `ToastStack.tsx` | Buttons, modal shell, checkbox, split slider, badges (incl. BudgetBadge), toasts | §1, §4.5 |
+
+---
+
 ## 6. Detailed flows
 
 **A. Visitor (no account) opens a shared link**
