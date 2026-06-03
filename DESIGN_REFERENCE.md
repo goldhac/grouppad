@@ -82,11 +82,13 @@ Loaded via `TripGate` (loading / 404 / `?join=code` auto-join). Top → bottom:
 6. **Itinerary** — collapsible; organizer editor (textarea, upload .txt/.md, save, clear). Feeds AI compare.
 7. **Decision** — pinned ✅ official-pick banner **or** the ⭐ top-choice leaderboard (bars); organizer "Make official"/Unlock.
 8. **Shortlist** (net-likes ≥ 1) — **Compare with AI** panel (criteria, whole-shortlist analyze, 1v1 / compare-selected) + group insights (staleness banner) + the shortlisted cards.
-9. **Community Submissions** — member-added homes not yet liked.
-10. **Group caveats** — must-haves/dealbreakers chat (feeds AI ranking).
+9. **Community Submissions** — member-added homes not yet liked. *(collapsible, default collapsed)*
+10. **Group caveats** — must-haves/dealbreakers chat (feeds AI ranking). *(collapsible, default collapsed)*
 11. **Main grid** — the curated/searched homes (filtered).
-12. **Live Listings** (LA only) — auto-scraped, "refreshed every 3 days".
+12. **Live Listings** (LA only) — auto-scraped, "refreshed every 3 days". *(collapsible, default collapsed)*
 Floating: **CompareDock** (when cards ticked) + **ComparisonModal**.
+Sections #9/#10/#12 (and the itinerary editor) collapse via `useCollapsed`, persisted per
+trip in localStorage — an interim density pass ahead of the full board redesign.
 
 ### 3.5 Manage — `/#/t/:tripId/manage` organizer only · ![manage](docs/screenshots/10-manage.jpg)
 Invite link (+ copy), group pulse stats (members/homes/votes/top-picks), **Danger zone → Delete trip**.
@@ -114,7 +116,11 @@ replayable via "30-second tour".
 ### 4.3 DetailModal · ![detail](docs/screenshots/08-detail-modal.jpg)
 Opens on any card tap. Photo gallery + thumbnails, specs, **the 3 distance+time rows**
 (downtown / airport / attraction with full place names), price breakdown, per-person
-split, amenities, an **embedded map**, and the vote / ⭐ top-choice / 📌 official actions.
+split, amenities, an **embedded map**, and the vote / top-choice / official actions.
+**Deep-linkable:** state lives in the URL — `/#/t/:tripId/board?listing=<id>`. Opening
+a card pushes the param (browser Back closes the modal, board scroll preserved under the
+overlay); a pasted link opens it (works for read-only visitors); a **Copy link** button
+shares it.
 
 ### 4.4 ComparisonModal · ![comparison](docs/screenshots/09-comparison-vs.jpg)
 Triggered by the CompareDock or the shortlist panel. **1v1** shows the two picked homes
@@ -131,10 +137,11 @@ Floating bottom-center pill on the board when ≥1 card is ticked "compare": cou
 
 ## 5. The Card component (reused in 4 grids)
 `Card.tsx`: photo carousel · rank/community/live + budget badges · name · source + area ·
-**distance+time pills** (`📍 9mi·19m  ✈️ 5mi·7m  🎡 19mi·38m`; falls back to "X mi to
-downtown") · specs (bd/ba/sleeps) · amenity chips · reviews · price "est all-in" +
-per-person split · note · compare checkbox · "View on <source>" · 👍/👎 vote bar ·
-⭐ top-choice · organizer "Make official" + Delete.
+**distance+time pills** (lucide MapPin / Plane / FerrisWheel by `distance.kind` + "mi · min";
+falls back to "X mi to downtown") · specs (bd/ba/sleeps) · amenity chips · reviews · price
+"est all-in" + per-person split · note · compare checkbox · "View on <source>" · ThumbsUp/
+ThumbsDown vote bar · Star top-choice · organizer "Make official" (Pin) + Delete.
+**Icons are lucide-react** across the core interactive surfaces (no structural emoji).
 
 ---
 
@@ -149,6 +156,7 @@ file so design work can jump straight to code.
 | `routing/TripGate.tsx` | Loads a trip from the URL, join-by-link | §3.4, §6A |
 | `store/AppContext.tsx` | The single state store + all actions | §1 |
 | `hooks/useCompare.ts` | AI-compare controller (panel + 1v1/selected) | §3.4 #8, §4.4 |
+| `hooks/useCollapsed.ts` | Per-trip persisted collapse state for board sections | §3.4 #9/#10/#12 |
 | **Pages (`views/`)** | | |
 | `LandingView.tsx` | Signed-out marketing page | §3.1 |
 | `TripsView.tsx` | "Your trips" dashboard | §3.2 |
@@ -265,8 +273,8 @@ submitted_by?/submitted_at?(submissions), last_seen?/enriched?(pipeline)`.
 
 ## 10. Redesign priorities (carry into the next phase)
 
-1. **Board density** — 12 stacked sections; the biggest win is clearer hierarchy / progressive disclosure (collapse advanced sections, tabs, or a sidebar).
-2. **Emoji as structural icons** (📍✈️🎡, badges) — swap chrome icons to an SVG set; keep emoji only where intentionally playful (the ui-ux-pro-max skill flags this).
+1. **Board density** — 12 stacked sections. Interim collapse on #9/#10/#12 done; the full win is a real hierarchy (tabs / sidebar / progressive disclosure).
+2. **Emoji → icons** — DONE on the core interactive surfaces (lucide-react across Card, modals, decision, shortlist, dock, toasts, nav). Still to convert in the redesign: the 🏡 **brand logo** (needs a real mark, not a generic icon), and the onboarding / help / landing **explanatory copy** + the super-admin AdminView meter.
 3. **Landing + Trips dashboard** are functional but plain — prime for a real brand, type scale, and color system.
 4. **Formalize the component system** — distance pills, budget/rank badges, cards, the VS layout → design tokens + a documented kit.
 5. **Mobile** — verify the sticky filter bar + dense cards on small screens.
