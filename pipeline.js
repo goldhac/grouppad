@@ -784,12 +784,10 @@ async function runTripSearch(tripId) {
   try { fs.writeFileSync(marker, new Date().toISOString()); } catch {}
 
   try {
-    // The Airbnb scraper geocodes best on a plain city name — a ", State/Country"
-    // suffix can break it (returns 0). Search on the city; Gemini still gets the
-    // full destination for accurate reference points.
-    const searchCity = String(trip.destination).split(',')[0].trim() || trip.destination;
+    // Use the destination as the user typed it — this actor geocodes "City, State"
+    // strings fine and bare city names can return 0. Gemini gets the same string.
     const actorInput = {
-      locationQueries: [searchCity],
+      locationQueries: [trip.destination],
       adults,
       minBedrooms,
       maxItems: poolSize,
