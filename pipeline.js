@@ -55,8 +55,10 @@ const AIRBNB_MAX_ITEMS = Number(process.env.AIRBNB_MAX_ITEMS || 200);
 // Airbnb is the cheap, high-value source — cast a wider net here. Each location
 // adds ~$0.20–0.35/run. "Los Angeles" is county-wide; the rest add Valley,
 // beach, and east-county mansion coverage. Override via AIRBNB_LOCATIONS env.
-const AIRBNB_LOCATIONS = (process.env.AIRBNB_LOCATIONS ||
-  'Los Angeles,Woodland Hills,Pasadena,Long Beach,Malibu,Calabasas')
+// COST: each Airbnb location ≈ 170 results ≈ $0.34/run, and this runs every few
+// days — six locations was ~$2/run and blew the $5 free tier in a week. Default
+// to the single county-wide query; widen via AIRBNB_LOCATIONS env on a paid plan.
+const AIRBNB_LOCATIONS = (process.env.AIRBNB_LOCATIONS || 'Los Angeles')
   .split(',').map(s => s.trim()).filter(Boolean);
 const TAX_RATE             = 0.14;
 const CLEANING_PLACEHOLDER = 400;
@@ -101,6 +103,13 @@ function distanceFromDTLA(location) {
 // DTLA City Hall coordinates
 const DTLA = { lat: 34.0537, lng: -118.2427 };
 
+// LA reference points for the 3-distance chips (downtown / airport / attraction).
+const LA_REFS = {
+  downtown:   { name: 'Downtown LA',       lat: 34.0522, lng: -118.2437 },
+  airport:    { name: 'LAX',               lat: 33.9416, lng: -118.4085 },
+  attraction: { name: 'Universal Studios', lat: 34.1381, lng: -118.3534 },
+};
+
 // Straight-line miles, rounded — used when a listing has lat/lng (Airbnb).
 // ~1.25x factor approximates driving distance over straight-line.
 function distanceMiFromCoords(lat, lng) {
@@ -136,6 +145,7 @@ function openDb() {
       rating        REAL,
       reviews       INTEGER,
       distance_mi   REAL,
+      distances     TEXT    DEFAULT '[]',
       passed_filter INTEGER DEFAULT 0,
       enriched      INTEGER DEFAULT 0,
       first_seen    TEXT    DEFAULT (datetime('now')),
@@ -154,6 +164,7 @@ function openDb() {
   `);
   // Migration for DBs created before distance_mi existed
   try { db.exec('ALTER TABLE listings ADD COLUMN distance_mi REAL'); } catch { /* already present */ }
+  try { db.exec("ALTER TABLE listings ADD COLUMN distances TEXT DEFAULT '[]'"); } catch { /* already present */ }
   return db;
 }
 
@@ -368,6 +379,7 @@ async function discoverAirbnb() {
         rating:      typeof item.rating?.average      === 'number' ? item.rating.average      : null,
         reviews:     typeof item.rating?.reviewsCount === 'number' ? item.rating.reviewsCount : null,
         price_total: parsePrice(item.pricing?.price || item.pricing?.label),
+        distances:   refDistances(lat, lng, LA_REFS), // 3 distance+time chips
       };
     });
 
@@ -388,10 +400,10 @@ function upsertAll(db, rows) {
   const upsertListing = db.prepare(`
     INSERT INTO listings
       (source, listing_id, name, url, location, bedrooms, bathrooms, sleeps,
-       amenities, photos, has_pool, has_parking, rating, reviews, distance_mi)
+       amenities, photos, has_pool, has_parking, rating, reviews, distance_mi, distances)
     VALUES
       (@source, @listing_id, @name, @url, @location, @bedrooms, @bathrooms, @sleeps,
-       @amenities, @photos, @has_pool, @has_parking, @rating, @reviews, @distance_mi)
+       @amenities, @photos, @has_pool, @has_parking, @rating, @reviews, @distance_mi, @distances)
     ON CONFLICT(source, listing_id) DO UPDATE SET
       name        = EXCLUDED.name,
       url         = EXCLUDED.url,
@@ -406,6 +418,7 @@ function upsertAll(db, rows) {
       rating      = COALESCE(EXCLUDED.rating,  listings.rating),
       reviews     = COALESCE(EXCLUDED.reviews, listings.reviews),
       distance_mi = COALESCE(EXCLUDED.distance_mi, listings.distance_mi),
+      distances   = EXCLUDED.distances,
       last_seen   = datetime('now')
   `);
 
@@ -425,6 +438,7 @@ function upsertAll(db, rows) {
         ...row,
         amenities: JSON.stringify(row.amenities),
         photos:    JSON.stringify((row.photos).slice(0, 8)),
+        distances: JSON.stringify(row.distances || []),
       });
       if (exists) updatedRows++; else newRows++;
       if (row.price_total) {
@@ -778,7 +792,7 @@ async function runTripSearch(tripId) {
   const minBedrooms = trip.bedrooms ? Math.max(1, Number(trip.bedrooms)) : Math.max(1, Math.ceil(adults / 3));
   const maxBedrooms = minBedrooms + 4;            // keep results near the group's size (no 27BR mega-compounds)
   const finalCap    = Math.max(1, Number(process.env.TRIP_SEARCH_MAX || 10));
-  const poolSize    = Math.max(30, finalCap * 4); // fetch a pool, then filter + rank + cap
+  const poolSize    = Math.max(15, finalCap + 6); // small over-fetch to filter+rank, then cap (cost)
   const homeType    = trip.home_type && trip.home_type !== 'Any' ? String(trip.home_type) : null;
   const budget      = Number(trip.budget) || 0;
   const taxRate     = trip.tax_rate != null ? Number(trip.tax_rate) : 0.14;

@@ -19,10 +19,17 @@
       "name": "L. Huge 7BR Pad: Downtown 15m, 3700sqft",
       "area": "East LA (15 min to DTLA)",
       "distance_mi": 8,
-      "bd": 7, "ba": 5, "sleeps": 24,
-      "pool": "yes", "parking": "yes",
-      "rating": 4.88, "reviews": 8, "superhost": true,
-      "displayed_5n": 4405, "est_5n": 5022, "est_4n": 4181,
+      "bd": 7,
+      "ba": 5,
+      "sleeps": 24,
+      "pool": "yes",
+      "parking": "yes",
+      "rating": 4.88,
+      "reviews": 8,
+      "superhost": true,
+      "displayed_5n": 4405,
+      "est_5n": 5022,
+      "est_4n": 4181,
       "budget": "under",
       "note": "Top pick. Pool + parking, Superhost, sleeps 24. ~$2,000 headroom under budget.",
       "photos": [
@@ -32,6 +39,29 @@
         "https://a0.muscache.com/im/pictures/hosting/Hosting-1632886531011031555/original/c1852a8e-53ee-4ee9-9525-254a9f15706e.jpeg",
         "https://a0.muscache.com/im/pictures/hosting/Hosting-1632886531011031555/original/bd389655-456a-4e46-971a-206878c6e7de.jpeg",
         "https://a0.muscache.com/im/pictures/hosting/Hosting-1632886531011031555/original/dacd7eb3-5e29-4c79-ab92-d04924948697.jpeg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 6,
+          "min": 13
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 18,
+          "min": 24
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 16,
+          "min": 32
+        }
       ]
     },
     {
@@ -42,10 +72,17 @@
       "name": "Spectacular mansion with amazing views",
       "area": "Covina (SGV)",
       "distance_mi": 26,
-      "bd": 7, "ba": 5, "sleeps": 16,
-      "pool": "yes", "parking": "yes",
-      "rating": null, "reviews": null, "superhost": false,
-      "displayed_5n": 4658, "est_5n": 5766, "est_4n": 4706,
+      "bd": 7,
+      "ba": 5,
+      "sleeps": 16,
+      "pool": "yes",
+      "parking": "yes",
+      "rating": null,
+      "reviews": null,
+      "superhost": false,
+      "displayed_5n": 4658,
+      "est_5n": 5766,
+      "est_4n": 4706,
       "budget": "under",
       "note": "Cross-listed on Airbnb at ~$9,549 — book through VRBO. Confirm the $50/person/night undisclosed-guest fee won't apply when 14 are declared upfront.",
       "photos": [
@@ -54,6 +91,29 @@
         "https://media.vrbo.com/lodging/104000000/103530000/103525400/103525354/w903h683x60y0-429eb9e4.jpg",
         "https://media.vrbo.com/lodging/104000000/103530000/103525400/103525354/w904h683x60y0-277e858e.jpg",
         "https://media.vrbo.com/lodging/104000000/103530000/103525400/103525354/w905h683x60y0-79a78265.jpg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 25,
+          "min": 54
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 39,
+          "min": 52
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 33,
+          "min": 66
+        }
       ]
     },
     {
@@ -64,10 +124,17 @@
       "name": "Starbase Azusa Group Getaway",
       "area": "Azusa (SGV)",
       "distance_mi": 25,
-      "bd": 8, "ba": 6, "sleeps": 16,
-      "pool": "no", "parking": "yes",
-      "rating": 5.0, "reviews": 5, "superhost": false,
-      "displayed_5n": 5320, "est_5n": 6065, "est_4n": 4852,
+      "bd": 8,
+      "ba": 6,
+      "sleeps": 16,
+      "pool": "no",
+      "parking": "yes",
+      "rating": 5,
+      "reviews": 5,
+      "superhost": false,
+      "displayed_5n": 5320,
+      "est_5n": 6065,
+      "est_4n": 4852,
       "budget": "under",
       "note": "Most bedrooms under budget (8). 5 reviews — newer listing. No pool is the trade-off.",
       "photos": [
@@ -76,6 +143,29 @@
         "https://a0.muscache.com/im/pictures/hosting/Hosting-1630286814548143295/original/050fd2dc-08ef-48b3-a1a5-cb18fb67c08d.jpeg",
         "https://a0.muscache.com/im/pictures/hosting/Hosting-1630286814548143295/original/3db432c1-e339-42e6-b045-0fa5c7cc9a28.jpeg",
         "https://a0.muscache.com/im/pictures/hosting/Hosting-1630286814548143295/original/29a90c2c-efd7-483a-b5c7-3c5bb240f84b.jpeg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 25,
+          "min": 54
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 39,
+          "min": 52
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 32,
+          "min": 64
+        }
       ]
     },
     {
@@ -86,10 +176,17 @@
       "name": "Modern LA 9 Bedroom Family or Big Group Getaway",
       "area": "Los Angeles",
       "distance_mi": 9,
-      "bd": 9, "ba": 6, "sleeps": 18,
-      "pool": "unknown", "parking": "unknown",
-      "rating": 4.92, "reviews": 63, "superhost": false,
-      "displayed_5n": 8825, "est_5n": 10060, "est_4n": 8048,
+      "bd": 9,
+      "ba": 6,
+      "sleeps": 18,
+      "pool": "unknown",
+      "parking": "unknown",
+      "rating": 4.92,
+      "reviews": 63,
+      "superhost": false,
+      "displayed_5n": 8825,
+      "est_5n": 10060,
+      "est_4n": 8048,
       "budget": "over",
       "note": "9 bedrooms, strong 4.92 across 63 reviews. Closest just-over-budget option.",
       "photos": [
@@ -98,6 +195,29 @@
         "https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTIwMjQxNDEzNTI0ODM2MDkyNA%3D%3D/original/39215b2a-e000-426d-8b91-662a07de2f9a.jpeg",
         "https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTIwMjQxNDEzNTI0ODM2MDkyNA%3D%3D/original/33d8558d-bc4c-4801-b724-4a5bc4cd2848.jpeg",
         "https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTIwMjQxNDEzNTI0ODM2MDkyNA%3D%3D/original/d0d98080-5b3a-420d-ada5-5220f261e464.jpeg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 0,
+          "min": 1
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 15,
+          "min": 20
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 11,
+          "min": 22
+        }
       ]
     },
     {
@@ -108,10 +228,17 @@
       "name": "Casa Bellagio · Bel-Air Hills Retreat · Game Room",
       "area": "Bel-Air Hills",
       "distance_mi": 12,
-      "bd": 8, "ba": 7, "sleeps": 9,
-      "pool": "unknown", "parking": "unknown",
-      "rating": null, "reviews": null, "superhost": true,
-      "displayed_5n": 10117, "est_5n": 11533, "est_4n": 9226,
+      "bd": 8,
+      "ba": 7,
+      "sleeps": 9,
+      "pool": "unknown",
+      "parking": "unknown",
+      "rating": null,
+      "reviews": null,
+      "superhost": true,
+      "displayed_5n": 10117,
+      "est_5n": 11533,
+      "est_4n": 9226,
       "budget": "over",
       "note": "Bel-Air Hills with game room. Sleeps spec is 9 — verify capacity for 14 before considering.",
       "photos": [
@@ -121,6 +248,29 @@
         "https://a0.muscache.com/im/pictures/prohost-api/Hosting-1634436045385384516/original/b788f6c0-e0e1-4919-8008-e645856f5f22.jpeg",
         "https://a0.muscache.com/im/pictures/prohost-api/Hosting-1634436045385384516/original/cf1f22c8-c47e-4f02-83b2-4cbc0f7a7420.jpeg",
         "https://a0.muscache.com/im/pictures/prohost-api/Hosting-1634436045385384516/original/6d2a5f72-3013-4593-9530-a7f3b781a111.jpeg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 16,
+          "min": 34
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 14,
+          "min": 19
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 8,
+          "min": 16
+        }
       ]
     },
     {
@@ -131,10 +281,17 @@
       "name": "Private 7BR Hollywood Retreat Pool Jacuzzi Views",
       "area": "Hollywood",
       "distance_mi": 7,
-      "bd": 7, "ba": 7, "sleeps": null,
-      "pool": "yes", "parking": "unknown",
-      "rating": 5.0, "reviews": 39, "superhost": false,
-      "displayed_5n": 11368, "est_5n": 12959, "est_4n": 10367,
+      "bd": 7,
+      "ba": 7,
+      "sleeps": null,
+      "pool": "yes",
+      "parking": "unknown",
+      "rating": 5,
+      "reviews": 39,
+      "superhost": false,
+      "displayed_5n": 11368,
+      "est_5n": 12959,
+      "est_4n": 10367,
       "budget": "over",
       "note": "5.0 across 39 reviews. Pool + Jacuzzi + views. Over budget by ~$6k for 5 nights.",
       "photos": [
@@ -143,6 +300,29 @@
         "https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTIyNzY5NjYwMDM0NDQ3MjU5Mg%3D%3D/original/27aae736-d078-491f-a695-15b8f2693346.jpeg",
         "https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTIyNzY5NjYwMDM0NDQ3MjU5Mg%3D%3D/original/14973b84-e15e-4c96-b210-9aec1daf3104.jpeg",
         "https://a0.muscache.com/im/pictures/hosting/Hosting-U3RheVN1cHBseUxpc3Rpbmc6MTIyNzY5NjYwMDM0NDQ3MjU5Mg%3D%3D/original/cfcfe621-2694-4e1d-bb8c-9e7965b5152a.jpeg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 7,
+          "min": 15
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 14,
+          "min": 19
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 4,
+          "min": 8
+        }
       ]
     },
     {
@@ -153,10 +333,17 @@
       "name": "Resort-Style Hancock Park Home",
       "area": "Hancock Park",
       "distance_mi": 5,
-      "bd": 7, "ba": 8, "sleeps": 9,
-      "pool": "unknown", "parking": "unknown",
-      "rating": null, "reviews": null, "superhost": true,
-      "displayed_5n": 14518, "est_5n": 16550, "est_4n": 13240,
+      "bd": 7,
+      "ba": 8,
+      "sleeps": 9,
+      "pool": "unknown",
+      "parking": "unknown",
+      "rating": null,
+      "reviews": null,
+      "superhost": true,
+      "displayed_5n": 14518,
+      "est_5n": 16550,
+      "est_4n": 13240,
       "budget": "over",
       "note": "Superhost central-LA option. Significantly over budget.",
       "photos": [
@@ -165,6 +352,29 @@
         "https://a0.muscache.com/im/pictures/prohost-api/Hosting-1625002294982715256/original/1ba16b43-3eb1-411f-b063-f8996c15648d.jpeg",
         "https://a0.muscache.com/im/pictures/prohost-api/Hosting-1625002294982715256/original/134ca585-bc42-40b7-ace7-907f1b135f03.jpeg",
         "https://a0.muscache.com/im/pictures/prohost-api/Hosting-1625002294982715256/original/0d6ef560-69a1-4696-b9c6-12975983712a.jpeg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 7,
+          "min": 15
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 13,
+          "min": 17
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 6,
+          "min": 12
+        }
       ]
     },
     {
@@ -175,10 +385,17 @@
       "name": "Celebrity Hideaway in Bel Air Paradise",
       "area": "Bel-Air",
       "distance_mi": 13,
-      "bd": 8, "ba": 8, "sleeps": 8,
-      "pool": "unknown", "parking": "unknown",
-      "rating": 4.75, "reviews": 12, "superhost": false,
-      "displayed_5n": 18886, "est_5n": 21530, "est_4n": 17224,
+      "bd": 8,
+      "ba": 8,
+      "sleeps": 8,
+      "pool": "unknown",
+      "parking": "unknown",
+      "rating": 4.75,
+      "reviews": 12,
+      "superhost": false,
+      "displayed_5n": 18886,
+      "est_5n": 21530,
+      "est_4n": 17224,
       "budget": "over",
       "note": "Bel-Air luxury. ~3x budget.",
       "photos": [
@@ -188,6 +405,29 @@
         "https://a0.muscache.com/im/pictures/prohost-api/Hosting-899099244009918926/original/aae7446c-7ecb-409d-87a1-efcd84dbaeb7.jpeg",
         "https://a0.muscache.com/im/pictures/prohost-api/Hosting-899099244009918926/original/c5037e37-36c4-4ac2-89b3-1ab3201f607d.jpeg",
         "https://a0.muscache.com/im/pictures/prohost-api/Hosting-899099244009918926/original/a6c56b3b-281a-41e5-b547-02fffc08bd89.jpeg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 15,
+          "min": 32
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 13,
+          "min": 17
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 8,
+          "min": 16
+        }
       ]
     },
     {
@@ -198,13 +438,42 @@
       "name": "The Ultimate Luxury Villa with Pool, Spa and Courts",
       "area": "Los Angeles",
       "distance_mi": 10,
-      "bd": 8, "ba": 9, "sleeps": null,
-      "pool": "yes", "parking": "unknown",
-      "rating": null, "reviews": null,
-      "displayed_5n": 21900, "est_5n": 24966, "est_4n": 19973,
+      "bd": 8,
+      "ba": 9,
+      "sleeps": null,
+      "pool": "yes",
+      "parking": "unknown",
+      "rating": null,
+      "reviews": null,
+      "displayed_5n": 21900,
+      "est_5n": 24966,
+      "est_4n": 19973,
       "budget": "over",
       "note": "Booking.com inventory. Pool + spa + courts. Far over budget.",
-      "photos": []
+      "photos": [],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 0,
+          "min": 1
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 15,
+          "min": 20
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 11,
+          "min": 22
+        }
+      ]
     },
     {
       "rank": 10,
@@ -214,13 +483,42 @@
       "name": "Anzio Estate",
       "area": "Los Angeles",
       "distance_mi": 10,
-      "bd": 8, "ba": 12, "sleeps": null,
-      "pool": "unknown", "parking": "unknown",
-      "rating": null, "reviews": null,
-      "displayed_5n": 22262, "est_5n": 25379, "est_4n": 20303,
+      "bd": 8,
+      "ba": 12,
+      "sleeps": null,
+      "pool": "unknown",
+      "parking": "unknown",
+      "rating": null,
+      "reviews": null,
+      "displayed_5n": 22262,
+      "est_5n": 25379,
+      "est_4n": 20303,
       "budget": "over",
       "note": "Booking.com inventory. Premium estate.",
-      "photos": []
+      "photos": [],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 0,
+          "min": 1
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 15,
+          "min": 20
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 11,
+          "min": 22
+        }
+      ]
     },
     {
       "rank": 11,
@@ -230,13 +528,42 @@
       "name": "Swallow Sanctuary",
       "area": "Los Angeles",
       "distance_mi": 10,
-      "bd": 7, "ba": 12, "sleeps": null,
-      "pool": "unknown", "parking": "unknown",
-      "rating": null, "reviews": null,
-      "displayed_5n": 34754, "est_5n": 39620, "est_4n": 31696,
+      "bd": 7,
+      "ba": 12,
+      "sleeps": null,
+      "pool": "unknown",
+      "parking": "unknown",
+      "rating": null,
+      "reviews": null,
+      "displayed_5n": 34754,
+      "est_5n": 39620,
+      "est_4n": 31696,
       "budget": "over",
       "note": "Booking.com top-end. 12 bathrooms = sprawling estate. ~5x budget.",
-      "photos": []
+      "photos": [],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 0,
+          "min": 1
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 15,
+          "min": 20
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 11,
+          "min": 22
+        }
+      ]
     },
     {
       "rank": 12,
@@ -246,10 +573,16 @@
       "name": "MELROSE MANSION!! 7 BEDROOM",
       "area": "Hollywood (Melrose)",
       "distance_mi": 6,
-      "bd": 7, "ba": 3, "sleeps": 25,
-      "pool": "no", "parking": "no",
-      "rating": null, "reviews": null,
-      "displayed_5n": null, "est_5n": null, "est_4n": null,
+      "bd": 7,
+      "ba": 3,
+      "sleeps": 25,
+      "pool": "no",
+      "parking": "no",
+      "rating": null,
+      "reviews": null,
+      "displayed_5n": null,
+      "est_5n": null,
+      "est_4n": null,
       "budget": "unknown",
       "check_manual": true,
       "note": "VRBO refused Aug 18-23 quote — minimum stay > 5 nights. Has arcade/game room. Contact host with flexible dates.",
@@ -259,6 +592,29 @@
         "https://media.vrbo.com/lodging/70000000/69750000/69744800/69744786/0b623f31.jpg",
         "https://media.vrbo.com/lodging/70000000/69750000/69744800/69744786/f6ed3898.jpg",
         "https://media.vrbo.com/lodging/70000000/69750000/69744800/69744786/0db984ac.jpg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 7,
+          "min": 15
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 14,
+          "min": 19
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 4,
+          "min": 8
+        }
       ]
     },
     {
@@ -269,10 +625,16 @@
       "name": "StaysPro · Hollywood Homes",
       "area": "Hollywood",
       "distance_mi": 7,
-      "bd": null, "ba": null, "sleeps": null,
-      "pool": "no", "parking": "yes",
-      "rating": null, "reviews": 185,
-      "displayed_5n": null, "est_5n": null, "est_4n": null,
+      "bd": null,
+      "ba": null,
+      "sleeps": null,
+      "pool": "no",
+      "parking": "yes",
+      "rating": null,
+      "reviews": 185,
+      "displayed_5n": null,
+      "est_5n": null,
+      "est_4n": null,
       "budget": "unknown",
       "check_manual": true,
       "note": "Multi-unit aparthotel collection (not a single house). Would require booking multiple units. 185 reviews on the collection.",
@@ -282,6 +644,29 @@
         "https://media.vrbo.com/lodging/88000000/87660000/87658100/87658047/2fda0589.jpg",
         "https://media.vrbo.com/lodging/88000000/87660000/87658100/87658047/a74d5f52.jpg",
         "https://media.vrbo.com/lodging/88000000/87660000/87658100/87658047/34c22050.jpg"
+      ],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 7,
+          "min": 15
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 14,
+          "min": 19
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 4,
+          "min": 8
+        }
       ]
     },
     {
@@ -292,14 +677,43 @@
       "name": "(delisted)",
       "area": "Beverly Hills",
       "distance_mi": 10,
-      "bd": null, "ba": null, "sleeps": null,
-      "pool": "unknown", "parking": "unknown",
-      "rating": null, "reviews": null,
-      "displayed_5n": null, "est_5n": null, "est_4n": null,
+      "bd": null,
+      "ba": null,
+      "sleeps": null,
+      "pool": "unknown",
+      "parking": "unknown",
+      "rating": null,
+      "reviews": null,
+      "displayed_5n": null,
+      "est_5n": null,
+      "est_4n": null,
       "budget": "unknown",
       "check_manual": true,
       "note": "Original Beverly Hills seed (1213366) — listing removed and URL redirects to a category page. Skip.",
-      "photos": []
+      "photos": [],
+      "distances": [
+        {
+          "icon": "📍",
+          "kind": "downtown",
+          "label": "Downtown LA",
+          "mi": 11,
+          "min": 24
+        },
+        {
+          "icon": "✈️",
+          "kind": "airport",
+          "label": "LAX",
+          "mi": 11,
+          "min": 15
+        },
+        {
+          "icon": "🎡",
+          "kind": "attraction",
+          "label": "Universal Studios",
+          "mi": 7,
+          "min": 14
+        }
+      ]
     }
   ]
 }

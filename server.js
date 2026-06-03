@@ -1450,7 +1450,7 @@ const hPipeline = (req, res) => {
         l.bedrooms, l.bathrooms, l.sleeps,
         l.amenities, l.photos,
         l.has_pool, l.has_parking,
-        l.rating, l.reviews, l.distance_mi,
+        l.rating, l.reviews, l.distance_mi, l.distances,
         l.enriched, l.last_seen,
         ps.price_total, ps.run_date
       FROM listings l
@@ -1509,6 +1509,7 @@ const hPipeline = (req, res) => {
         check_manual: false,
         last_seen:    r.last_seen,
         enriched:     !!r.enriched,
+        distances:    (() => { try { return JSON.parse(r.distances || '[]'); } catch { return []; } })(),
       };
     });
 
