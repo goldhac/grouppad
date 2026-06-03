@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
-import { ThumbsUp, ThumbsDown, Star, ExternalLink, MapPin, Pin } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, ExternalLink, MapPin, Plane, FerrisWheel, Pin, BadgeCheck, Link2 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/Dialog';
 import { BudgetBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { amenityLabel, fmt, fmtMins, tallyVotes } from '@/lib/utils';
+
+function DistIcon({ kind }: { kind?: string }) {
+  const Icon = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
+  return <Icon className="h-4 w-4 text-muted" aria-hidden />;
+}
 
 export function DetailModal() {
   const {
@@ -15,7 +20,20 @@ export function DetailModal() {
 
   const l = detailId ? findListing(detailId) : undefined;
   const [photoIdx, setPhotoIdx] = useState(0);
+  const [copied, setCopied] = useState(false);
   useEffect(() => setPhotoIdx(0), [detailId]);
+
+  const copyLink = async () => {
+    if (!trip || !l) return;
+    const url = `${window.location.origin}/#/t/${trip.id}/board?listing=${encodeURIComponent(l.id)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* clipboard blocked — ignore */
+    }
+  };
 
   if (!l) {
     return (
@@ -39,8 +57,8 @@ export function DetailModal() {
         <div className="flex items-start gap-2 pr-8">
           <DialogTitle className="text-lg font-bold leading-snug">{l.name}</DialogTitle>
           {isDecision && (
-            <span className="shrink-0 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent">
-              ✅ Official pick
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent">
+              <BadgeCheck className="h-3.5 w-3.5" aria-hidden /> Official pick
             </span>
           )}
         </div>
@@ -62,7 +80,7 @@ export function DetailModal() {
                 key={i}
                 className="inline-flex items-center gap-2 rounded-lg border border-border bg-panel-2 px-2.5 py-1.5 text-xs"
               >
-                <span className="text-base leading-none">{d.icon}</span>
+                <DistIcon kind={d.kind} />
                 <span>
                   <span className="font-medium text-text">{d.label}</span>
                   <span className="text-muted"> · {d.mi} mi · {fmtMins(d.min)}</span>
@@ -158,6 +176,7 @@ export function DetailModal() {
 
         {/* Actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+          <div className="flex items-center gap-3">
           <a
             href={l.url}
             target="_blank"
@@ -166,6 +185,14 @@ export function DetailModal() {
           >
             {l.check_manual ? 'Check manually' : `View on ${l.source}`} <ExternalLink className="h-3.5 w-3.5" />
           </a>
+          <button
+            onClick={() => void copyLink()}
+            className="inline-flex items-center gap-1 text-sm text-muted hover:text-text"
+            title="Copy a shareable link to this home"
+          >
+            <Link2 className="h-3.5 w-3.5" /> {copied ? 'Copied' : 'Copy link'}
+          </button>
+          </div>
 
           <div className="flex items-center gap-2">
             <button

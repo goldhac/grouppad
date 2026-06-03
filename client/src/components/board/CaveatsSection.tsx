@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { MessageSquare, X } from 'lucide-react';
+import { MessageSquare, X, ChevronDown } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
+import { useCollapsed } from '@/hooks/useCollapsed';
+import { cn } from '@/lib/cn';
 
 export function CaveatsSection() {
-  const { caveats, isOwner, postCaveat, deleteCaveat } = useApp();
+  const { caveats, isOwner, postCaveat, deleteCaveat, trip } = useApp();
+  const [open, toggle] = useCollapsed(trip?.id, 'caveats', false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -23,15 +26,18 @@ export function CaveatsSection() {
   return (
     <section className="px-4 py-3 sm:px-8">
       <div className="rounded-lg border border-border bg-panel p-4">
-        <div className="flex items-center gap-2">
+        <button onClick={toggle} className="flex w-full items-center gap-2 text-left" aria-expanded={open}>
+          <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', !open && '-rotate-90')} />
           <span className="inline-flex items-center gap-1.5 font-semibold">
             <MessageSquare className="h-4 w-4" /> Group caveats
           </span>
-          <span className="text-xs text-muted">
+          <span className="rounded-full bg-panel-2 px-1.5 text-[11px] text-muted">{caveats.length}</span>
+          <span className="hidden text-xs text-muted sm:inline">
             Drop your must-haves & dealbreakers — they feed the AI ranking
           </span>
-        </div>
+        </button>
 
+        {open && (<>
         <div className="mt-3 space-y-2">
           {caveats.length === 0 && <p className="text-sm text-muted">No caveats yet — be the first.</p>}
           {[...caveats].reverse().map((c) => (
@@ -66,6 +72,7 @@ export function CaveatsSection() {
             Post
           </Button>
         </div>
+        </>)}
       </div>
     </section>
   );

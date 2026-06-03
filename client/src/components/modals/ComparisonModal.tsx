@@ -1,4 +1,4 @@
-import { MapPin } from 'lucide-react';
+import { MapPin, Swords } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/Dialog';
 import { Markdown } from '@/components/Markdown';
@@ -20,8 +20,8 @@ export function ComparisonModal({ compare }: { compare: CompareController }) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && compare.dismissResult()}>
       <DialogContent width="max-w-3xl">
-        <DialogTitle className="text-base font-bold">
-          {is1v1 ? '⚔️ Head-to-head' : `Comparing ${items?.length ?? 0} homes`}
+        <DialogTitle className="flex items-center gap-1.5 text-base font-bold">
+          {is1v1 ? <><Swords className="h-4 w-4" aria-hidden /> Head-to-head</> : `Comparing ${items?.length ?? 0} homes`}
         </DialogTitle>
 
         {/* Columns with VS */}

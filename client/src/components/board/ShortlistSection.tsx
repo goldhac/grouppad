@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Sparkles, Swords } from 'lucide-react';
+import { Sparkles, Swords, Star, Bot } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/Card';
@@ -34,7 +34,7 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
     <section className="px-4 py-3 sm:px-8">
       <div className="rounded-lg border border-border bg-panel p-4">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold">⭐ Shortlist</span>
+          <span className="inline-flex items-center gap-1.5 font-semibold"><Star className="h-4 w-4 text-warn" aria-hidden /> Shortlist</span>
           <span className="text-xs text-muted">
             Liked by members & member-added homes — your group's top picks
           </span>
@@ -81,7 +81,7 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
                   disabled={selCount !== 2 || compare.running}
                   onClick={() => void compare.runSelected('1v1')}
                 >
-                  ⚔️ 1v1 (pick exactly 2)
+                  <Swords className="h-3.5 w-3.5" /> 1v1 (pick exactly 2)
                 </Button>
                 <Button
                   variant="default"
@@ -105,7 +105,7 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
         {insights?.analysis && (
           <div className="mt-3 rounded-md border border-border bg-panel-2 p-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
-              🤖 Group AI insights
+              <Bot className="h-4 w-4" aria-hidden /> Group AI insights
               {insights.created_at && (
                 <span className="font-normal text-xs text-muted">
                   updated {formatDateTime(insights.created_at)}

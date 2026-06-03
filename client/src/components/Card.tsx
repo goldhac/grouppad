@@ -1,4 +1,4 @@
-import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Pin } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Plane, FerrisWheel, Pin, BadgeCheck } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Badge, BudgetBadge } from '@/components/ui/Badge';
 import { Carousel } from '@/components/Carousel';
@@ -13,6 +13,12 @@ interface CardProps {
 }
 
 const INTERACTIVE = 'a, button, input, label, [role="checkbox"]';
+
+/** Distance-chip icon chosen by reference-point kind (not the stored emoji). */
+function DistIcon({ kind }: { kind?: string }) {
+  const Icon = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
+  return <Icon className="h-3 w-3" aria-hidden />;
+}
 
 export function Card({ listing: l, isSubmitted = false, isPipeline = false }: CardProps) {
   const {
@@ -50,8 +56,8 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
       )}
     >
       {isDecision && (
-        <div className="absolute left-0 top-0 z-10 rounded-br-lg bg-accent px-2 py-1 text-[11px] font-bold text-[#06210f]">
-          ✅ Official pick
+        <div className="absolute left-0 top-0 z-10 inline-flex items-center gap-1 rounded-br-lg bg-accent px-2 py-1 text-[11px] font-bold text-[#06210f]">
+          <BadgeCheck className="h-3.5 w-3.5" aria-hidden /> Official pick
         </div>
       )}
 
@@ -88,7 +94,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
                 title={d.label}
                 className="inline-flex items-center gap-1 rounded-full border border-border bg-panel-2 px-2 py-0.5 text-[10.5px] text-muted"
               >
-                <span>{d.icon}</span>
+                <DistIcon kind={d.kind} />
                 <span className="font-medium text-text">{d.mi} mi</span>
                 <span className="opacity-50">·</span>
                 <span>{fmtMins(d.min)}</span>

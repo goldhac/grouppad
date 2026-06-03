@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
@@ -18,8 +19,42 @@ import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { Button } from '@/components/ui/Button';
 
 export function BoardView() {
-  const { listings, shortlistIds, split, trip, user, requireSignIn, joinTrip } = useApp();
+  const { listings, shortlistIds, split, trip, user, requireSignIn, joinTrip, detailId, openDetail, closeDetail, findListing } = useApp();
   const compare = useCompare();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link the listing detail: ?listing=<id> ⇄ the DetailModal. Opening a card
+  // pushes the param (so Back closes the modal); closing removes it. Works for
+  // read-only visitors and direct-pasted links. The board stays mounted under the
+  // overlay, so scroll position is preserved across open/close.
+  const linkParam = searchParams.get('listing');
+  const prevDetail = useRef<string | null>(null);
+  // URL → modal. Re-runs when the trip data loads (findListing identity changes),
+  // so a directly-pasted ?listing= link opens once its listing is available.
+  // When the param disappears (Back button) while the modal is open, close it.
+  useEffect(() => {
+    if (linkParam && linkParam !== detailId && findListing(linkParam)) openDetail(linkParam);
+    else if (!linkParam && detailId) closeDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkParam, findListing]);
+  // modal → URL. Push the param when opening (so Back closes the modal); remove it
+  // only when the user actually closes (detailId went set→null), never on mount.
+  useEffect(() => {
+    const cur = searchParams.get('listing');
+    if (detailId) {
+      if (detailId !== cur) {
+        const next = new URLSearchParams(searchParams);
+        next.set('listing', detailId);
+        setSearchParams(next);
+      }
+    } else if (prevDetail.current && cur) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('listing');
+      setSearchParams(next, { replace: true });
+    }
+    prevDetail.current = detailId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailId]);
   const [filters, setFilters] = useState<Filters>({
     under: false,
     pool: false,

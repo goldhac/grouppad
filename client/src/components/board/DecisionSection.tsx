@@ -1,4 +1,4 @@
-import { Trophy, Unlock, ExternalLink } from 'lucide-react';
+import { Trophy, Unlock, ExternalLink, BadgeCheck, Star } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
 import { fmt, formatDate } from '@/lib/utils';
@@ -14,7 +14,7 @@ export function DecisionSection() {
       <section className="px-4 py-3 sm:px-8">
         <div className="rounded-lg border border-accent bg-accent/10 p-5">
           <div className="flex items-center gap-2 text-sm font-semibold text-accent">
-            ✅ It's official — we're booking this one
+            <BadgeCheck className="h-4 w-4" aria-hidden /> It's official — we're booking this one
             <span className="font-normal text-muted">· locked {formatDate(decision.locked_at)}</span>
           </div>
           {l && (
@@ -89,7 +89,7 @@ export function DecisionSection() {
           })}
         </div>
         <p className="mt-3 text-xs text-muted">
-          Cast your single ⭐ Top choice on any card.
+          Cast your single <Star className="inline h-3 w-3 align-text-bottom text-warn" aria-hidden /> Top choice on any card.
           {isOwner && ' As the organizer, use “Make official” to lock the group decision.'}
         </p>
       </div>
