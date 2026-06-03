@@ -398,6 +398,50 @@ async function sendMagicLink(email, link) {
   return { sent: true };
 }
 
+// Alert the site manager (OWNER_EMAIL) — used for the Apify near-limit warning.
+async function sendManagerEmail(subject, html) {
+  const key = process.env.RESEND_API_KEY;
+  const to  = process.env.OWNER_EMAIL;
+  if (!key || !to) { console.log(`[alert] (email not configured) ${subject}`); return; }
+  const from = process.env.MAIL_FROM || 'GroupPad <onboarding@resend.dev>';
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], subject, html }),
+    });
+    if (!res.ok) console.error('[alert] Resend send failed:', res.status);
+  } catch (e) { console.error('[alert] send error:', e.message); }
+}
+
+// Apify spend guard: returns true if it's OK to spend, false if we're near the
+// monthly cap — in which case the site manager is emailed (throttled to 12h) so
+// they can rotate APIFY_TOKEN. Unknown limit / errors → allow (never hard-block).
+let _lastApifyAlertAt = 0;
+const APIFY_ALERT_PCT = Number(process.env.APIFY_ALERT_PCT || 0.85);
+async function apifyGuard(context) {
+  try {
+    const s = await fetchApifySummary();
+    if (!s || s.usageUsd == null || s.limitUsd == null || s.limitUsd <= 0) return true;
+    const pct = s.usageUsd / s.limitUsd;
+    if (pct < APIFY_ALERT_PCT) return true;
+    const now = Date.now();
+    if (now - _lastApifyAlertAt > 12 * 60 * 60 * 1000) {
+      _lastApifyAlertAt = now;
+      await sendManagerEmail(
+        `⚠️ GroupPad: Apify usage at ${Math.round(pct * 100)}%`,
+        `<p>The Apify account is at <b>${Math.round(pct * 100)}%</b> of its monthly limit ($${s.usageUsd.toFixed(2)} of $${s.limitUsd.toFixed(2)}).</p>
+         <p>GroupPad <b>paused ${context}</b> to avoid overage. Rotate <code>APIFY_TOKEN</code> on Railway (or upgrade the plan) to resume rental searches.</p>`
+      );
+      console.warn(`[apify-guard] near limit (${Math.round(pct * 100)}%) — paused ${context}, manager alerted`);
+    }
+    return false;
+  } catch (e) {
+    console.error('[apify-guard]', e.message);
+    return true;
+  }
+}
+
 // ── Rate limiting (in-memory, per-IP) ──────────────────────────────────────────
 // Protects the endpoints that cost real money (scraping on /submit, Gemini on
 // /compare-listings) from being hammered. Good enough for a small group app.
@@ -522,6 +566,40 @@ function distanceMiFromCoords(lat, lng) {
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(DTLA.lat)) * Math.cos(toRad(lat)) * Math.sin(dLng / 2) ** 2;
   return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1.25);
 }
+// ── 3-distance reference points (downtown / airport / attraction) ──────────────
+// LA's are fixed; other trips carry their own ref_points (set by the search).
+const LA_REFS = {
+  downtown:   { name: 'Downtown LA',       lat: 34.0522, lng: -118.2437 },
+  airport:    { name: 'LAX',               lat: 33.9416, lng: -118.4085 },
+  attraction: { name: 'Universal Studios', lat: 34.1381, lng: -118.3534 },
+};
+function tripRefPoints(tripId) {
+  if (!tripId || tripId === LA_TRIP_ID) return LA_REFS;
+  const t = getTrip(tripId);
+  return (t && t.ref_points) || null;
+}
+function haversineMi(lat1, lng1, lat2, lng2) {
+  if ([lat1, lng1, lat2, lng2].some(v => typeof v !== 'number' || isNaN(v))) return null;
+  const toRad = d => (d * Math.PI) / 180, R = 3958.8;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1.25);
+}
+function refDistances(lat, lng, refs) {
+  if (!refs || typeof lat !== 'number' || typeof lng !== 'number') return [];
+  const out = [];
+  const add = (icon, kind, p, mph) => {
+    if (p && typeof p.lat === 'number') {
+      const mi = haversineMi(lat, lng, p.lat, p.lng);
+      if (mi != null) out.push({ icon, kind, label: p.name || '', mi, min: Math.max(1, Math.round((mi / mph) * 60)) });
+    }
+  };
+  add('📍', 'downtown', refs.downtown, 28);
+  add('✈️', 'airport', refs.airport, 45);
+  add('🎡', 'attraction', refs.attraction, 30);
+  return out;
+}
+
 // Pull lat/lng out of raw HTML when JSON-LD doesn't carry geo coordinates.
 function extractLatLng(html) {
   const m = html.match(/"lat(?:itude)?"\s*:\s*(-?\d{1,2}\.\d{3,})\s*,\s*"l(?:ng|on|ongitude)"\s*:\s*(-?\d{2,3}\.\d{3,})/i);
@@ -1369,6 +1447,7 @@ const hSubmit = async (req, res) => {
     name:          scraped.name,
     area:          scraped.area,
     distance_mi:   distance_mi,
+    distances:     refDistances(scraped.lat, scraped.lng, tripRefPoints(tripId)),
     bd:            scraped.bd,
     ba:            scraped.ba,
     sleeps:        scraped.sleeps,
@@ -1654,13 +1733,13 @@ app.post('/api/compare-listings', rateLimit({ windowMs: 60000, max: 10 }), hComp
 app.post('/api/trips/:tripId/compare-listings', loadTripOr404, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
 
 // Admin: trigger a pipeline run (runs pipeline.js as a child process)
-app.post('/api/admin/run-pipeline', requireAdmin, (req, res) => {
+app.post('/api/admin/run-pipeline', requireAdmin, async (req, res) => {
+  if (!process.env.APIFY_TOKEN) return res.status(400).json({ error: 'APIFY_TOKEN not set on server' });
+  if (!(await apifyGuard('the manual pipeline run')))
+    return res.status(429).json({ error: 'Apify usage is near its monthly limit — paused. Rotate APIFY_TOKEN to resume.' });
   const { spawn } = require('child_process');
-  const env = { ...process.env };
-  if (!env.APIFY_TOKEN) return res.status(400).json({ error: 'APIFY_TOKEN not set on server' });
-
   console.log('[Admin] Starting pipeline run…');
-  const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env, detached: true, stdio: 'ignore' });
+  const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env: { ...process.env }, detached: true, stdio: 'ignore' });
   child.unref();
   res.json({ ok: true, message: 'Pipeline started in background — check server logs' });
 });
@@ -1926,8 +2005,11 @@ app.post('/api/trips', requireAuth, (req, res) => {
   // inform the reference points, and so AI compare has it from the start.
   const itinText = String(itinerary || '').slice(0, 8000).trim();
   if (itinText) saveItinerary({ text: itinText, updated_at: new Date().toISOString() }, trip.id);
-  // Kick off a capped rental search for the new trip (background; no-op without APIFY_TOKEN).
-  spawnTripSearch(trip.id, Number(process.env.TRIP_SEARCH_MAX) || 10);
+  // Kick off a capped rental search for the new trip — but only if Apify isn't
+  // near its limit (background; never blocks trip creation).
+  apifyGuard('a new trip search')
+    .then(ok => { if (ok) spawnTripSearch(trip.id, Number(process.env.TRIP_SEARCH_MAX) || 10); })
+    .catch(() => {});
   res.json(tripView(trip, req.user));
 });
 
@@ -1962,9 +2044,11 @@ app.post('/api/trips/:tripId/leave', requireAuth, (req, res) => {
 });
 
 // Organizer: (re)run the rental search for this trip (capped).
-app.post('/api/trips/:tripId/run-search', requireTripOwner, (req, res) => {
+app.post('/api/trips/:tripId/run-search', requireTripOwner, async (req, res) => {
   if (req.params.tripId === LA_TRIP_ID)
     return res.status(400).json({ error: 'The LA trip uses the full pipeline (/api/admin/run-pipeline).' });
+  if (!(await apifyGuard('a trip search')))
+    return res.status(429).json({ error: 'Rental search is paused — Apify usage is near its monthly limit. The site manager has been alerted to rotate the key.' });
   const max = Math.min(20, Math.max(1, Number(req.body && req.body.max) || 10));
   if (!spawnTripSearch(req.params.tripId, max))
     return res.status(400).json({ error: 'Search is not configured (APIFY_TOKEN missing on server).' });
@@ -2018,11 +2102,12 @@ app.get('/api/trips/:tripId/pulse', requireTripOwner, (req, res) => {
 const PIPELINE_HOUR_UTC     = Number(process.env.PIPELINE_HOUR_UTC ?? 15);
 const PIPELINE_INTERVAL_DAYS = Math.max(1, Number(process.env.PIPELINE_INTERVAL_DAYS ?? 3));
 
-function runPipelineJob() {
+async function runPipelineJob() {
   if (!process.env.APIFY_TOKEN) {
     console.log('[Cron] Skipping pipeline run — APIFY_TOKEN not set');
     return;
   }
+  if (!(await apifyGuard('the scheduled LA refresh'))) return;
   const { spawn } = require('child_process');
   console.log('[Cron] Starting scheduled pipeline run…');
   const child = spawn('node', ['pipeline.js'], {
