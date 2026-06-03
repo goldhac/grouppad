@@ -1444,13 +1444,16 @@ const hPipeline = (req, res) => {
     return res.json({ listings: seed, count: seed.length, note: 'Showing saved snapshot — pipeline DB unavailable' });
   }
   try {
+    // The `distances` column is added by the pipeline on its next run; older DBs
+    // don't have it yet, so select it conditionally to avoid "no such column".
+    const hasDistances = db.prepare('PRAGMA table_info(listings)').all().some(c => c.name === 'distances');
     const rows = db.prepare(`
       SELECT
         l.source, l.listing_id, l.name, l.url, l.location,
         l.bedrooms, l.bathrooms, l.sleeps,
         l.amenities, l.photos,
         l.has_pool, l.has_parking,
-        l.rating, l.reviews, l.distance_mi, l.distances,
+        l.rating, l.reviews, l.distance_mi, ${hasDistances ? 'l.distances' : "'[]' AS distances"},
         l.enriched, l.last_seen,
         ps.price_total, ps.run_date
       FROM listings l
