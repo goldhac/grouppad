@@ -11,3 +11,5 @@ data/pipeline.db-wal
 .env
 .DS_Store
 *.log
+data/trips.json
+data/trips/

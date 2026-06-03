@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 
 export function ItinerarySection() {
-  const { itinerary, adminKey, saveItinerary } = useApp();
+  const { itinerary, isOwner, saveItinerary } = useApp();
   const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState(itinerary.text);
   const [busy, setBusy] = useState(false);
@@ -63,7 +63,7 @@ export function ItinerarySection() {
           </div>
         )}
 
-        {adminKey && (
+        {isOwner && (
           <div className="mt-3 border-t border-border pt-3">
             <textarea
               value={draft}

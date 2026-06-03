@@ -13,11 +13,12 @@ import { netVotes } from '@/lib/utils';
 import type {
   Caveat,
   CompareListingInput,
+  CreateTripInput,
   FinalState,
   Insights,
   Itinerary,
   Listing,
-  Trip,
+  TripView,
   User,
   VoteDir,
   VotesMap,
@@ -38,9 +39,19 @@ interface AuthModalState {
 }
 
 interface AppState {
-  // data
+  // global account
   user: User | null;
-  trip: Trip | null;
+  myTrips: TripView[];
+  accountLoading: boolean;
+
+  // active trip
+  trip: TripView | null;
+  tripId: string | null;
+  isOwner: boolean;
+  tripLoading: boolean;
+  tripError: string | null;
+
+  // active-trip data
   listings: Listing[];
   votes: VotesMap;
   submitted: Listing[];
@@ -54,11 +65,7 @@ interface AppState {
   adminKey: string | null;
   split: number;
   selected: ReadonlySet<string>;
-  loading: boolean;
-  loadError: string | null;
   toasts: Toast[];
-
-  // overlays
   authModal: AuthModalState;
   onboardingOpen: boolean;
   detailId: string | null;
@@ -68,7 +75,11 @@ interface AppState {
 }
 
 interface AppActions {
-  reload: () => Promise<void>;
+  loadAccount: () => Promise<void>;
+  refreshMyTrips: () => Promise<void>;
+  enterTrip: (tripId: string) => Promise<void>;
+  createTrip: (input: CreateTripInput) => Promise<TripView>;
+  joinTrip: (tripId: string, code?: string) => Promise<void>;
   // auth
   signOut: () => Promise<void>;
   rename: (name: string) => Promise<void>;
@@ -81,7 +92,6 @@ interface AppActions {
   // detail modal
   openDetail: (id: string) => void;
   closeDetail: () => void;
-  // listing resolution
   findListing: (id: string) => Listing | undefined;
   // votes / picks
   castVote: (listingId: string, dir: VoteDir) => Promise<void>;
@@ -92,23 +102,17 @@ interface AppActions {
   postCaveat: (text: string) => Promise<void>;
   deleteCaveat: (id: string) => Promise<void>;
   deleteListing: (id: string, isSubmitted: boolean) => Promise<void>;
-  // compare
-  runCompare: (
-    items: CompareListingInput[],
-    criteria: string,
-    mode?: '1v1',
-  ) => Promise<string>;
-  // itinerary
+  // compare / itinerary
+  runCompare: (items: CompareListingInput[], criteria: string, mode?: '1v1') => Promise<string>;
   saveItinerary: (text: string) => Promise<void>;
-  // admin key
+  // platform admin key
   setAdminKey: (key: string) => Promise<boolean>;
   clearAdminKey: () => void;
   runPipeline: () => Promise<void>;
-  // selection
+  // selection / misc
   toggleSelect: (id: string) => void;
   clearSelection: () => void;
   setSplit: (n: number) => void;
-  // toasts
   toast: (message: string, type?: Toast['type']) => void;
   dismissToast: (id: number) => void;
 }
@@ -116,14 +120,22 @@ interface AppActions {
 type AppContextValue = AppState & AppActions;
 
 const AppContext = createContext<AppContextValue | null>(null);
-
 const EMPTY_FINAL: FinalState = { counts: {}, total: 0, myPick: null, decision: null };
-
 let toastSeq = 0;
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  // global account
   const [user, setUser] = useState<User | null>(null);
-  const [trip, setTrip] = useState<Trip | null>(null);
+  const [myTrips, setMyTrips] = useState<TripView[]>([]);
+  const [accountLoading, setAccountLoading] = useState(true);
+
+  // active trip
+  const [trip, setTrip] = useState<TripView | null>(null);
+  const [tripId, setTripId] = useState<string | null>(null);
+  const [tripLoading, setTripLoading] = useState(false);
+  const [tripError, setTripError] = useState<string | null>(null);
+
+  // active-trip data
   const [listings, setListings] = useState<Listing[]>([]);
   const [votes, setVotes] = useState<VotesMap>({});
   const [submitted, setSubmitted] = useState<Listing[]>([]);
@@ -133,27 +145,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [insights, setInsights] = useState<Insights | null>(null);
   const [final, setFinal] = useState<FinalState>(EMPTY_FINAL);
 
-  const [adminKey, setAdminKeyState] = useState<string | null>(
-    () => localStorage.getItem(ADMIN_KEY_LS),
-  );
+  // ui
+  const [adminKey, setAdminKeyState] = useState<string | null>(() => localStorage.getItem(ADMIN_KEY_LS));
   const [split, setSplit] = useState(14);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-
   const [authModal, setAuthModal] = useState<AuthModalState>({ open: false });
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  // Keep latest values available to stable callbacks / the poll without
-  // re-subscribing the interval on every change.
-  const adminKeyRef = useRef(adminKey);
-  adminKeyRef.current = adminKey;
   const userRef = useRef(user);
   userRef.current = user;
+  const tripIdRef = useRef(tripId);
+  tripIdRef.current = tripId;
+  const loadTokenRef = useRef(0);
 
-  // ── Toasts ─────────────────────────────────────────────────────────────────
+  // ── Toasts ───────────────────────────────────────────────────────────────────
   const dismissToast = useCallback((id: number) => {
     setToasts((t) => t.filter((x) => x.id !== id));
   }, []);
@@ -166,25 +173,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [dismissToast],
   );
 
-  // ── Initial load ─────────────────────────────────────────────────────────────
-  const reload = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
+  // ── Account (global) ─────────────────────────────────────────────────────────
+  const refreshMyTrips = useCallback(async () => {
+    if (!userRef.current) {
+      setMyTrips([]);
+      return;
+    }
     try {
-      const [meRes, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes] =
+      setMyTrips((await api.myTrips()).trips);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const loadAccount = useCallback(async () => {
+    setAccountLoading(true);
+    try {
+      const me = (await api.me()).user;
+      setUser(me);
+      userRef.current = me;
+      if (me) setMyTrips((await api.myTrips()).trips);
+    } catch {
+      /* leave signed out */
+    } finally {
+      setAccountLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAccount();
+  }, [loadAccount]);
+
+  // ── Enter a trip: load its meta + all entity data ────────────────────────────
+  const enterTrip = useCallback(async (id: string) => {
+    if (tripIdRef.current === id) return; // already active
+    const token = ++loadTokenRef.current;
+    setTripId(id);
+    tripIdRef.current = id;
+    setTripLoading(true);
+    setTripError(null);
+    setSelected(new Set());
+    try {
+      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes] =
         await Promise.all([
-          api.me(),
-          api.listings(),
-          api.votes(),
-          api.submitted(),
-          api.pipeline(),
-          api.itinerary(),
-          api.caveats(),
-          api.insights(),
-          api.final(),
+          api.getTrip(id),
+          api.listings(id),
+          api.votes(id),
+          api.submitted(id),
+          api.pipeline(id),
+          api.itinerary(id),
+          api.caveats(id),
+          api.insights(id),
+          api.final(id),
         ]);
-      setUser(meRes.user);
-      setTrip(listRes.trip);
+      if (token !== loadTokenRef.current) return; // a newer enterTrip superseded us
+      setTrip(tripView);
       setListings(listRes.listings);
       setVotes(votesRes);
       setSubmitted(subRes);
@@ -194,32 +237,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setInsights(insRes.analysis ? insRes : null);
       setFinal(finalRes);
     } catch (e) {
-      setLoadError(e instanceof Error ? e.message : 'Could not load GroupPad.');
+      if (token !== loadTokenRef.current) return;
+      setTripError(e instanceof ApiError && e.status === 404 ? 'Trip not found.' : 'Could not load this trip.');
     } finally {
-      setLoading(false);
+      if (token === loadTokenRef.current) setTripLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  // ── 8s poll: refresh votes + final, re-render only on change ─────────────────
+  // ── 8s poll: refresh active trip's votes + final ─────────────────────────────
   const votesRef = useRef(votes);
   votesRef.current = votes;
   const finalRef = useRef(final);
   finalRef.current = final;
   useEffect(() => {
-    const t = window.setInterval(async () => {
+    const h = window.setInterval(async () => {
+      const id = tripIdRef.current;
+      if (!id) return;
       try {
-        const [v, f] = await Promise.all([api.votes(), api.final()]);
+        const [v, f] = await Promise.all([api.votes(id), api.final(id)]);
+        if (tripIdRef.current !== id) return;
         if (JSON.stringify(v) !== JSON.stringify(votesRef.current)) setVotes(v);
         if (JSON.stringify(f) !== JSON.stringify(finalRef.current)) setFinal(f);
       } catch {
-        /* transient — ignore, next tick retries */
+        /* transient */
       }
     }, 8000);
-    return () => window.clearInterval(t);
+    return () => window.clearInterval(h);
   }, []);
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -234,12 +277,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [openAuth],
   );
   const signOut = useCallback(async () => {
-    try {
-      await api.logout();
-    } catch {
-      /* ignore */
-    }
+    try { await api.logout(); } catch { /* ignore */ }
     setUser(null);
+    userRef.current = null;
+    setMyTrips([]);
     toast('Signed out.', 'info');
   }, [toast]);
   const rename = useCallback(
@@ -251,6 +292,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [toast],
   );
 
+  // ── Trips ────────────────────────────────────────────────────────────────────
+  const createTrip = useCallback(async (input: CreateTripInput) => {
+    const created = await api.createTrip(input);
+    setMyTrips((t) => [created, ...t.filter((x) => x.id !== created.id)]);
+    return created;
+  }, []);
+  const joinTrip = useCallback(
+    async (id: string, code?: string) => {
+      try {
+        const updated = await api.joinTrip(id, code);
+        setTrip((cur) => (cur && cur.id === id ? updated : cur));
+        await refreshMyTrips();
+        toast('You joined the trip.', 'success');
+      } catch (e) {
+        toast(e instanceof Error ? e.message : 'Could not join.', 'error');
+      }
+    },
+    [refreshMyTrips, toast],
+  );
+
   // ── Onboarding ───────────────────────────────────────────────────────────────
   const startOnboarding = useCallback((force: boolean) => {
     if (!force && localStorage.getItem(ONBOARDED_LS)) return;
@@ -260,19 +321,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOnboardingOpen(false);
     localStorage.setItem(ONBOARDED_LS, '1');
   }, []);
-  // Auto-show once for signed-out first-time visitors after load settles.
-  const autoOnboardDone = useRef(false);
-  useEffect(() => {
-    if (loading || autoOnboardDone.current) return;
-    autoOnboardDone.current = true;
-    if (!userRef.current) startOnboarding(false);
-  }, [loading, startOnboarding]);
 
   // ── Detail modal ─────────────────────────────────────────────────────────────
   const openDetail = useCallback((id: string) => setDetailId(id), []);
   const closeDetail = useCallback(() => setDetailId(null), []);
 
-  // ── Listing resolution (submitted/pipeline take precedence on dup ids) ───────
   const findListing = useCallback(
     (id: string): Listing | undefined =>
       submitted.find((l) => l.id === id) ??
@@ -284,19 +337,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Votes / picks ────────────────────────────────────────────────────────────
   const castVote = useCallback(
     async (listingId: string, dir: VoteDir) => {
-      if (!requireSignIn('vote on homes')) return;
+      const id = tripIdRef.current;
+      if (!id || !requireSignIn('vote on homes')) return;
       const current = userRef.current ? votesRef.current[listingId]?.[userRef.current.id] : null;
-      const next = current === dir ? null : dir; // toggle off if same
+      const next = current === dir ? null : dir;
       try {
-        const updated = await api.vote(listingId, next);
-        setVotes(updated);
+        setVotes(await api.vote(id, listingId, next));
       } catch (e) {
-        if (e instanceof ApiError && e.status === 401) {
-          setUser(null);
-          openAuth('vote on homes');
-        } else {
-          toast(e instanceof Error ? e.message : 'Could not save your vote.', 'error');
-        }
+        if (e instanceof ApiError && e.status === 401) { setUser(null); openAuth('vote on homes'); }
+        else toast(e instanceof Error ? e.message : 'Could not save your vote.', 'error');
       }
     },
     [requireSignIn, openAuth, toast],
@@ -304,17 +353,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const toggleFinalPick = useCallback(
     async (listingId: string) => {
-      if (!requireSignIn('cast your top choice')) return;
+      const id = tripIdRef.current;
+      if (!id || !requireSignIn('cast your top choice')) return;
       const next = finalRef.current.myPick === listingId ? null : listingId;
       try {
-        setFinal(await api.finalVote(next));
+        setFinal(await api.finalVote(id, next));
       } catch (e) {
-        if (e instanceof ApiError && e.status === 401) {
-          setUser(null);
-          openAuth('cast your top choice');
-        } else {
-          toast(e instanceof Error ? e.message : 'Could not save your pick.', 'error');
-        }
+        if (e instanceof ApiError && e.status === 401) { setUser(null); openAuth('cast your top choice'); }
+        else toast(e instanceof Error ? e.message : 'Could not save your pick.', 'error');
       }
     },
     [requireSignIn, openAuth, toast],
@@ -322,10 +368,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const setDecision = useCallback(
     async (listingId: string | null) => {
-      const key = adminKeyRef.current;
-      if (!key) return;
+      const id = tripIdRef.current;
+      if (!id) return;
       try {
-        const res = await api.adminDecision(listingId, key);
+        const res = await api.decision(id, listingId);
         setFinal((f) => ({ ...f, decision: res.decision }));
         toast(listingId ? 'Official pick locked.' : 'Official pick unlocked.', 'success');
       } catch (e) {
@@ -337,93 +383,80 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Submissions / caveats ────────────────────────────────────────────────────
   const submitListing = useCallback(async (url: string, price?: string) => {
-    const created = await api.submit(url, price);
+    const id = tripIdRef.current;
+    if (!id) throw new ApiError(0, 'No active trip.');
+    const created = await api.submit(id, url, price);
     setSubmitted((s) => [...s, created]);
     return created;
   }, []);
 
   const postCaveat = useCallback(
     async (text: string) => {
-      if (!requireSignIn('post a caveat')) return;
+      const id = tripIdRef.current;
+      if (!id || !requireSignIn('post a caveat')) return;
       try {
-        setCaveats(await api.postCaveat(text));
+        setCaveats(await api.postCaveat(id, text));
       } catch (e) {
-        if (e instanceof ApiError && e.status === 401) {
-          setUser(null);
-          openAuth('post a caveat');
-        } else {
-          toast(e instanceof Error ? e.message : 'Could not post.', 'error');
-        }
+        if (e instanceof ApiError && e.status === 401) { setUser(null); openAuth('post a caveat'); }
+        else toast(e instanceof Error ? e.message : 'Could not post.', 'error');
       }
     },
     [requireSignIn, openAuth, toast],
   );
 
   const deleteCaveat = useCallback(
-    async (id: string) => {
-      const key = adminKeyRef.current;
-      if (!key) return;
-      try {
-        setCaveats(await api.adminDeleteCaveat(id, key));
-      } catch (e) {
-        toast(e instanceof Error ? e.message : 'Could not delete.', 'error');
-      }
+    async (cid: string) => {
+      const id = tripIdRef.current;
+      if (!id) return;
+      try { setCaveats(await api.deleteCaveat(id, cid)); }
+      catch (e) { toast(e instanceof Error ? e.message : 'Could not delete.', 'error'); }
     },
     [toast],
   );
 
   const deleteListing = useCallback(
-    async (id: string, isSubmitted: boolean) => {
-      const key = adminKeyRef.current;
-      if (!key) return;
+    async (lid: string, isSubmitted: boolean) => {
+      const id = tripIdRef.current;
+      if (!id) return;
       try {
-        if (isSubmitted) {
-          await api.adminDeleteSubmitted(id, key);
-          setSubmitted((s) => s.filter((l) => l.id !== id));
-        } else {
-          await api.adminDeleteListing(id, key);
-          setListings((s) => s.filter((l) => l.id !== id));
-        }
+        if (isSubmitted) { await api.deleteSubmitted(id, lid); setSubmitted((s) => s.filter((l) => l.id !== lid)); }
+        else { await api.deleteListing(id, lid); setListings((s) => s.filter((l) => l.id !== lid)); }
         toast('Listing removed.', 'success');
-      } catch (e) {
-        toast(e instanceof Error ? e.message : 'Could not remove.', 'error');
-      }
+      } catch (e) { toast(e instanceof Error ? e.message : 'Could not remove.', 'error'); }
     },
     [toast],
   );
 
-  // ── Compare ──────────────────────────────────────────────────────────────────
+  // ── Compare / itinerary ──────────────────────────────────────────────────────
   const runCompare = useCallback(
     async (items: CompareListingInput[], criteria: string, mode?: '1v1') => {
-      const res = await api.compare(items, criteria, mode);
-      if (mode !== '1v1') {
-        setInsights({ analysis: res.analysis, created_at: new Date().toISOString() });
-      }
+      const id = tripIdRef.current;
+      if (!id) throw new ApiError(0, 'No active trip.');
+      const res = await api.compare(id, items, criteria, mode);
+      if (mode !== '1v1') setInsights({ analysis: res.analysis, created_at: new Date().toISOString() });
       return res.analysis;
     },
     [],
   );
 
-  // ── Itinerary ────────────────────────────────────────────────────────────────
   const saveItinerary = useCallback(
     async (text: string) => {
-      const key = adminKeyRef.current;
-      if (!key) return;
-      const res = await api.adminSetItinerary(text, key);
-      setItinerary(res);
+      const id = tripIdRef.current;
+      if (!id) return;
+      setItinerary(await api.setItinerary(id, text));
       toast(text ? 'Itinerary saved.' : 'Itinerary cleared.', 'success');
     },
     [toast],
   );
 
-  // ── Admin key ────────────────────────────────────────────────────────────────
+  // ── Platform admin key ───────────────────────────────────────────────────────
   const setAdminKey = useCallback(
     async (key: string): Promise<boolean> => {
       try {
         await api.adminVerify(key);
         localStorage.setItem(ADMIN_KEY_LS, key);
         setAdminKeyState(key);
-        toast('Admin mode on.', 'success');
+        toast('Platform admin on.', 'success');
         return true;
       } catch {
         toast('Wrong admin key.', 'error');
@@ -435,100 +468,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const clearAdminKey = useCallback(() => {
     localStorage.removeItem(ADMIN_KEY_LS);
     setAdminKeyState(null);
-    toast('Admin mode off.', 'info');
-  }, [toast]);
+  }, []);
   const runPipeline = useCallback(async () => {
-    const key = adminKeyRef.current;
+    const key = adminKey;
     if (!key) return;
-    try {
-      const res = await api.adminRunPipeline(key);
-      toast(res.message || 'Pipeline started.', 'success');
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not start pipeline.', 'error');
-    }
-  }, [toast]);
+    try { toast((await api.adminRunPipeline(key)).message || 'Pipeline started.', 'success'); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Could not start pipeline.', 'error'); }
+  }, [adminKey, toast]);
 
   // ── Selection ────────────────────────────────────────────────────────────────
   const toggleSelect = useCallback((id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   }, []);
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
-  // ── Derived: shortlist ids (net votes >= 1, across all pools) ────────────────
   const shortlistIds = useMemo(() => {
     const ids = new Set<string>();
-    const pools = [submitted, pipeline, listings];
-    for (const pool of pools) {
-      for (const l of pool) {
-        if (!ids.has(l.id) && netVotes(votes, l.id) >= 1) ids.add(l.id);
-      }
+    for (const pool of [submitted, pipeline, listings]) {
+      for (const l of pool) if (!ids.has(l.id) && netVotes(votes, l.id) >= 1) ids.add(l.id);
     }
     return ids;
   }, [submitted, pipeline, listings, votes]);
 
   const value: AppContextValue = useMemo(
     () => ({
-      user,
-      trip,
-      listings,
-      votes,
-      submitted,
-      pipeline,
-      itinerary,
-      caveats,
-      insights,
-      final,
-      adminKey,
-      split,
-      selected,
-      loading,
-      loadError,
-      toasts,
-      authModal,
-      onboardingOpen,
-      detailId,
-      shortlistIds,
-      reload,
-      signOut,
-      rename,
-      requireSignIn,
-      openAuth,
-      closeAuth,
-      startOnboarding,
-      endOnboarding,
-      openDetail,
-      closeDetail,
-      findListing,
-      castVote,
-      toggleFinalPick,
-      setDecision,
-      submitListing,
-      postCaveat,
-      deleteCaveat,
-      deleteListing,
-      runCompare,
-      saveItinerary,
-      setAdminKey,
-      clearAdminKey,
-      runPipeline,
-      toggleSelect,
-      clearSelection,
-      setSplit,
-      toast,
-      dismissToast,
+      user, myTrips, accountLoading,
+      trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
+      listings, votes, submitted, pipeline, itinerary, caveats, insights, final,
+      adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
+      loadAccount, refreshMyTrips, enterTrip, createTrip, joinTrip,
+      signOut, rename, requireSignIn, openAuth, closeAuth,
+      startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
+      castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
+      runCompare, saveItinerary, setAdminKey, clearAdminKey, runPipeline,
+      toggleSelect, clearSelection, setSplit, toast, dismissToast,
     }),
     [
-      user, trip, listings, votes, submitted, pipeline, itinerary, caveats, insights, final,
-      adminKey, split, selected, loading, loadError, toasts, authModal, onboardingOpen, detailId,
-      shortlistIds, reload, signOut, rename, requireSignIn, openAuth, closeAuth, startOnboarding,
-      endOnboarding, openDetail, closeDetail, findListing, castVote, toggleFinalPick, setDecision,
-      submitListing, postCaveat, deleteCaveat, deleteListing, runCompare, saveItinerary,
-      setAdminKey, clearAdminKey, runPipeline, toggleSelect, clearSelection, toast, dismissToast,
+      user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
+      listings, votes, submitted, pipeline, itinerary, caveats, insights, final,
+      adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
+      loadAccount, refreshMyTrips, enterTrip, createTrip, joinTrip,
+      signOut, rename, requireSignIn, openAuth, closeAuth,
+      startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
+      castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
+      runCompare, saveItinerary, setAdminKey, clearAdminKey, runPipeline,
+      toggleSelect, clearSelection, toast, dismissToast,
     ],
   );
 
@@ -540,8 +528,4 @@ export function useApp(): AppContextValue {
   const ctx = useContext(AppContext);
   if (!ctx) throw new Error('useApp must be used within <AppProvider>');
   return ctx;
-}
-
-export function isAdmin(adminKey: string | null): boolean {
-  return !!adminKey;
 }

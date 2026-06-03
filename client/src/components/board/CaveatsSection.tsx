@@ -4,7 +4,7 @@ import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
 
 export function CaveatsSection() {
-  const { caveats, adminKey, postCaveat, deleteCaveat } = useApp();
+  const { caveats, isOwner, postCaveat, deleteCaveat } = useApp();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -39,7 +39,7 @@ export function CaveatsSection() {
               <div className="flex-1">
                 <span className="font-semibold">{c.name}</span> <span className="text-text">{c.text}</span>
               </div>
-              {adminKey && (
+              {isOwner && (
                 <button
                   className="text-muted hover:text-danger"
                   onClick={() => void deleteCaveat(c.id)}

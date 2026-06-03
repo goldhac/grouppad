@@ -5,7 +5,7 @@ import { fmt, formatDate } from '@/lib/utils';
 import { cn } from '@/lib/cn';
 
 export function DecisionSection() {
-  const { final, adminKey, findListing, openDetail, setDecision, split } = useApp();
+  const { final, isOwner, findListing, openDetail, setDecision, split } = useApp();
   const decision = final.decision;
 
   if (decision) {
@@ -39,7 +39,7 @@ export function DecisionSection() {
                 >
                   View on {l.source} <ExternalLink className="h-3.5 w-3.5" />
                 </a>
-                {adminKey && (
+                {isOwner && (
                   <Button variant="danger" size="sm" onClick={() => void setDecision(null)}>
                     <Unlock className="h-3.5 w-3.5" /> Unlock
                   </Button>
@@ -90,7 +90,7 @@ export function DecisionSection() {
         </div>
         <p className="mt-3 text-xs text-muted">
           Cast your single ⭐ Top choice on any card.
-          {adminKey && ' As admin, use “Make official” to lock the group decision.'}
+          {isOwner && ' As the organizer, use “Make official” to lock the group decision.'}
         </p>
       </div>
     </section>

@@ -57,50 +57,181 @@ function writeJsonAtomic(file, data) {
   fs.renameSync(tmp, file);
 }
 
-function loadListings() {
-  try { return JSON.parse(fs.readFileSync(LISTINGS_FILE, 'utf8')); }
-  catch { return JSON.parse(fs.readFileSync(BASE_LISTINGS, 'utf8')); }
-}
-function saveListings(d) { writeJsonAtomic(LISTINGS_FILE, d); }
+// ── Multi-trip storage ────────────────────────────────────────────────────────
+// Each trip owns its own copy of every trip-scoped store. To keep the original
+// single-trip ("LA") data exactly where it is — and migrate non-destructively —
+// the LA trip reads/writes the legacy flat files in DATA_DIR, while every other
+// trip lives under DATA_DIR/trips/<tripId>/. Every trip-scoped helper takes an
+// optional tripId; omitting it (the old call sites) resolves to the LA trip, so
+// all existing flat routes keep working unchanged.
+const LA_TRIP_ID = 'la-birthday-2026';
+const TRIPS_FILE = path.join(DATA_DIR, 'trips.json');
 
-function loadVotes() {
-  try { return JSON.parse(fs.readFileSync(VOTES_FILE, 'utf8')); } catch { return {}; }
+function tripDir(tripId) {
+  if (!tripId || tripId === LA_TRIP_ID) return DATA_DIR; // legacy flat files = LA trip
+  const d = path.join(DATA_DIR, 'trips', tripId);
+  try { fs.mkdirSync(d, { recursive: true }); } catch {}
+  return d;
 }
-function saveVotes(v) { writeJsonAtomic(VOTES_FILE, v); }
+function tripFile(tripId, name) { return path.join(tripDir(tripId), name); }
+function readJson(file, fallback) {
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
+}
 
-function loadSubmitted() {
-  try { return JSON.parse(fs.readFileSync(SUBMITTED_FILE, 'utf8')); } catch { return []; }
+function loadListings(tripId) {
+  if (!tripId || tripId === LA_TRIP_ID) {
+    try { return JSON.parse(fs.readFileSync(LISTINGS_FILE, 'utf8')); }
+    catch { return JSON.parse(fs.readFileSync(BASE_LISTINGS, 'utf8')); }
+  }
+  // New trips carry no curated list — just their own (initially empty) array,
+  // with trip metadata sourced from the registry.
+  const listings = readJson(tripFile(tripId, 'listings.json'), []);
+  const trip = getTrip(tripId) || {};
+  return { trip, listings: Array.isArray(listings) ? listings : (listings.listings || []) };
 }
-function saveSubmitted(l) { writeJsonAtomic(SUBMITTED_FILE, l); }
+function saveListings(d, tripId) {
+  if (!tripId || tripId === LA_TRIP_ID) return writeJsonAtomic(LISTINGS_FILE, d);
+  // Persist only the listings array for non-LA trips (meta lives in the registry).
+  writeJsonAtomic(tripFile(tripId, 'listings.json'), d.listings || []);
+}
 
-// Single canonical trip itinerary, posted by the admin. { text, updated_at }
-function loadItinerary() {
-  try { return JSON.parse(fs.readFileSync(ITINERARY_FILE, 'utf8')); } catch { return { text: '', updated_at: null }; }
-}
-function saveItinerary(it) { writeJsonAtomic(ITINERARY_FILE, it); }
+function loadVotes(tripId)     { return readJson(tripFile(tripId, 'votes.json'), {}); }
+function saveVotes(v, tripId)  { writeJsonAtomic(tripFile(tripId, 'votes.json'), v); }
 
-// Member caveats: [{ id, name, text, created_at }]
-function loadCaveats() {
-  try { return JSON.parse(fs.readFileSync(CAVEATS_FILE, 'utf8')); } catch { return []; }
-}
-function saveCaveats(c) { writeJsonAtomic(CAVEATS_FILE, c); }
+function loadSubmitted(tripId)    { return readJson(tripFile(tripId, 'submitted.json'), []); }
+function saveSubmitted(l, tripId) { writeJsonAtomic(tripFile(tripId, 'submitted.json'), l); }
+
+// Single canonical trip itinerary, posted by the organizer. { text, updated_at }
+function loadItinerary(tripId)     { return readJson(tripFile(tripId, 'itinerary.json'), { text: '', updated_at: null }); }
+function saveItinerary(it, tripId) { writeJsonAtomic(tripFile(tripId, 'itinerary.json'), it); }
+
+// Member caveats: [{ id, user_id, name, text, created_at }]
+function loadCaveats(tripId)    { return readJson(tripFile(tripId, 'caveats.json'), []); }
+function saveCaveats(c, tripId) { writeJsonAtomic(tripFile(tripId, 'caveats.json'), c); }
 
 // Cached AI shortlist analysis, shared with everyone (one Gemini call per run).
-function loadInsights() {
-  try { return JSON.parse(fs.readFileSync(INSIGHTS_FILE, 'utf8')); } catch { return null; }
-}
-function saveInsights(i) { writeJsonAtomic(INSIGHTS_FILE, i); }
+function loadInsights(tripId)    { return readJson(tripFile(tripId, 'insights.json'), null); }
+function saveInsights(i, tripId) { writeJsonAtomic(tripFile(tripId, 'insights.json'), i); }
 
-// Final pick: each member's single top choice (a poll separate from up/down
-// likes), plus the admin-locked official decision.
-function loadFinalVotes() {
-  try { return JSON.parse(fs.readFileSync(FINALVOTES_FILE, 'utf8')); } catch { return {}; }
+// Final pick: each member's single top choice, plus the organizer-locked decision.
+function loadFinalVotes(tripId)    { return readJson(tripFile(tripId, 'finalvotes.json'), {}); }
+function saveFinalVotes(v, tripId) { writeJsonAtomic(tripFile(tripId, 'finalvotes.json'), v); }
+function loadDecision(tripId)    { return readJson(tripFile(tripId, 'decision.json'), null); }
+function saveDecision(d, tripId) { writeJsonAtomic(tripFile(tripId, 'decision.json'), d); }
+
+// ── Trips registry (global) ───────────────────────────────────────────────────
+// trips.json: { [tripId]: { id, name, destination, checkin, checkout_5n,
+//   checkout_4n, adults, budget, tax_rate, cleaning_placeholder, owner_id,
+//   members:[userId], join_code, created_at, refreshed_at } }
+function loadTrips()  { return readJson(TRIPS_FILE, {}); }
+function saveTrips(t) { writeJsonAtomic(TRIPS_FILE, t); }
+function getTrip(id)  { return loadTrips()[id] || null; }
+
+function slugify(s) {
+  return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'trip';
 }
-function saveFinalVotes(v) { writeJsonAtomic(FINALVOTES_FILE, v); }
-function loadDecision() {
-  try { return JSON.parse(fs.readFileSync(DECISION_FILE, 'utf8')); } catch { return null; }
+function createTrip(owner, f) {
+  const trips = loadTrips();
+  // Always append random entropy so the id is unguessable — the id itself is the
+  // "view-by-link" secret (unlisted trips), while join_code gates participation.
+  const id = `${slugify(f.name || f.destination)}-${crypto.randomBytes(4).toString('hex')}`;
+  const trip = {
+    id,
+    name: String(f.name || `${f.destination} trip`).slice(0, 80),
+    destination: String(f.destination || '').slice(0, 80),
+    checkin: f.checkin || null,
+    checkout_5n: f.checkout_5n || f.checkout || null,
+    checkout_4n: f.checkout_4n || null,
+    adults: Number(f.adults) || 1,
+    budget: Number(f.budget) || 0,
+    tax_rate: f.tax_rate != null ? Number(f.tax_rate) : 0.14,
+    cleaning_placeholder: f.cleaning_placeholder != null ? Number(f.cleaning_placeholder) : 0,
+    owner_id: owner.id,
+    members: [owner.id],
+    join_code: crypto.randomBytes(9).toString('base64url'),
+    created_at: new Date().toISOString(),
+    refreshed_at: null,
+  };
+  trips[id] = trip;
+  saveTrips(trips);
+  return trip;
 }
-function saveDecision(d) { writeJsonAtomic(DECISION_FILE, d); }
+function addMember(tripId, userId) {
+  const trips = loadTrips();
+  const t = trips[tripId];
+  if (!t) return null;
+  if (!t.members.includes(userId)) { t.members.push(userId); saveTrips(trips); }
+  return t;
+}
+function isOwner(trip, user)  { return !!user && !!trip && trip.owner_id === user.id; }
+function isMember(trip, user) { return !!user && !!trip && Array.isArray(trip.members) && trip.members.includes(user.id); }
+// A member-safe public view of a trip for a given caller (never leaks join_code
+// unless the caller is the owner).
+function tripView(trip, user) {
+  if (!trip) return null;
+  const { join_code, members, owner_id, ...rest } = trip;
+  const owner = isOwner(trip, user);
+  return {
+    ...rest,
+    isOwner: owner,
+    isMember: isMember(trip, user),
+    memberCount: Array.isArray(members) ? members.length : 0,
+    // Only the organizer sees the invite code, the member list, and owner id.
+    ...(owner ? { join_code, members, owner_id } : {}),
+  };
+}
+
+// One-time, non-destructive migration: if the trips registry is empty, register
+// the original single-trip data as the LA trip. Its data files stay exactly where
+// they are (DATA_DIR flat) because tripDir(LA_TRIP_ID) === DATA_DIR — nothing is
+// moved or deleted. Runs at boot; no-op once the registry exists.
+function migrateLegacyTripIfNeeded() {
+  const trips = loadTrips();
+  if (Object.keys(trips).length > 0) return;
+  let base = {};
+  try { base = JSON.parse(fs.readFileSync(LISTINGS_FILE, 'utf8')); }
+  catch { try { base = JSON.parse(fs.readFileSync(BASE_LISTINGS, 'utf8')); } catch {} }
+  const t = base.trip || {};
+  const ownerEmail = process.env.OWNER_EMAIL || 'akporkofi11@gmail.com';
+  const owner = findOrCreateUser(ownerEmail, 'Organizer');
+  trips[LA_TRIP_ID] = {
+    id: LA_TRIP_ID,
+    name: t.destination ? `${t.destination} Group Trip` : 'LA Group Trip',
+    destination: t.destination || 'Los Angeles',
+    checkin: t.checkin || null,
+    checkout_5n: t.checkout_5n || null,
+    checkout_4n: t.checkout_4n || null,
+    adults: t.adults || 14,
+    budget: t.budget || 7000,
+    tax_rate: t.tax_rate != null ? t.tax_rate : 0.14,
+    cleaning_placeholder: t.cleaning_placeholder != null ? t.cleaning_placeholder : 0,
+    owner_id: owner.id,
+    members: [owner.id],
+    join_code: crypto.randomBytes(9).toString('base64url'),
+    created_at: new Date().toISOString(),
+    refreshed_at: t.refreshed_at || null,
+  };
+  saveTrips(trips);
+  console.log(`[migrate] registered legacy trip "${LA_TRIP_ID}" (owner ${owner.email})`);
+}
+
+// Resolve :tripId → req.trip (404 if unknown). Read routes use this so anyone
+// with the link can view; write routes add requireAuth + auto-join.
+function loadTripOr404(req, res, next) {
+  const trip = getTrip(req.params.tripId);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  req.trip = trip;
+  next();
+}
+// Only the trip's creator may perform organizer actions on it.
+function requireTripOwner(req, res, next) {
+  const trip = getTrip(req.params.tripId);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  if (!req.user) return res.status(401).json({ error: 'Sign in to do that.' });
+  if (trip.owner_id !== req.user.id) return res.status(403).json({ error: 'Only the trip organizer can do that.' });
+  req.trip = trip;
+  next();
+}
 
 // App-side API meter. Google gives no per-key billing endpoint for Gemini, so we
 // count calls + tokens ourselves; Firecrawl/Apify calls are counted too as a
@@ -1088,57 +1219,78 @@ app.get('/api/auth/google/callback', async (req, res) => {
   }
 });
 
-app.get('/api/listings', (req, res) => res.json(loadListings()));
+// Each trip-scoped handler is defined once and mounted at BOTH the legacy flat
+// path (req.params.tripId === undefined → resolves to the LA trip) and the
+// nested /api/trips/:tripId path. Read routes are open (view-by-link); write
+// routes require auth and auto-join the caller to the trip.
 
-app.get('/api/votes', (req, res) => res.json(loadVotes()));
+const hGetListings = (req, res) => res.json(loadListings(req.params.tripId));
+app.get('/api/listings', hGetListings);
+app.get('/api/trips/:tripId/listings', loadTripOr404, hGetListings);
+
+const hGetVotes = (req, res) => res.json(loadVotes(req.params.tripId));
+app.get('/api/votes', hGetVotes);
+app.get('/api/trips/:tripId/votes', loadTripOr404, hGetVotes);
 
 // Vote on a listing. Identity comes from the session, not the request body, so
 // votes map to a real account and can't be spoofed by typing someone's name.
-app.post('/api/votes', requireAuth, (req, res) => {
+const hPostVotes = (req, res) => {
+  const tripId = req.params.tripId;
   const { listing_id, vote } = req.body || {};
   if (!listing_id || !['up', 'down', null].includes(vote))
     return res.status(400).json({ error: 'expected { listing_id, vote: "up"|"down"|null }' });
   const voter = req.user.id;
-  const votes = loadVotes();
+  const votes = loadVotes(tripId);
   if (!votes[listing_id]) votes[listing_id] = {};
   if (vote === null) delete votes[listing_id][voter];
   else votes[listing_id][voter] = vote;
-  saveVotes(votes);
+  saveVotes(votes, tripId);
+  if (tripId) addMember(tripId, voter); // auto-join on first participation
   res.json(votes);
-});
+};
+app.post('/api/votes', requireAuth, hPostVotes);
+app.post('/api/trips/:tripId/votes', requireAuth, loadTripOr404, hPostVotes);
 
-// Admin: verify key
+// Admin: verify key (global super-admin)
 app.get('/api/admin/verify', requireAdmin, (req, res) => res.json({ ok: true }));
 
-// Admin: delete a main listing
-app.delete('/api/listings/:id', requireAdmin, (req, res) => {
-  const data = loadListings();
+// Delete a main listing (organizer-only on nested; super-admin on flat)
+const hDeleteListing = (req, res) => {
+  const tripId = req.params.tripId;
+  const data = loadListings(tripId);
   const before = data.listings.length;
   data.listings = data.listings.filter(l => String(l.id) !== String(req.params.id));
   if (data.listings.length === before)
     return res.status(404).json({ error: 'Listing not found' });
-  // Re-rank
-  data.listings.forEach((l, i) => { l.rank = i + 1; });
-  saveListings(data);
+  data.listings.forEach((l, i) => { l.rank = i + 1; }); // re-rank
+  saveListings(data, tripId);
   res.json({ ok: true });
-});
+};
+app.delete('/api/listings/:id', requireAdmin, hDeleteListing);
+app.delete('/api/trips/:tripId/listings/:id', requireTripOwner, hDeleteListing);
 
-// Admin: delete a submitted listing
-app.delete('/api/submitted/:id', requireAdmin, (req, res) => {
-  const list = loadSubmitted();
+// Delete a submitted listing
+const hDeleteSubmitted = (req, res) => {
+  const tripId = req.params.tripId;
+  const list = loadSubmitted(tripId);
   const before = list.length;
   const updated = list.filter(l => String(l.id) !== String(req.params.id));
   if (updated.length === before)
     return res.status(404).json({ error: 'Submission not found' });
-  saveSubmitted(updated);
+  saveSubmitted(updated, tripId);
   res.json({ ok: true });
-});
+};
+app.delete('/api/submitted/:id', requireAdmin, hDeleteSubmitted);
+app.delete('/api/trips/:tripId/submitted/:id', requireTripOwner, hDeleteSubmitted);
 
 // Get community submissions
-app.get('/api/submitted', (req, res) => res.json(loadSubmitted()));
+const hGetSubmitted = (req, res) => res.json(loadSubmitted(req.params.tripId));
+app.get('/api/submitted', hGetSubmitted);
+app.get('/api/trips/:tripId/submitted', loadTripOr404, hGetSubmitted);
 
 // Submit a new listing
-app.post('/api/submit', requireAuth, rateLimit({ windowMs: 60000, max: 5 }), async (req, res) => {
+const hSubmit = async (req, res) => {
+  const tripId = req.params.tripId;
   const { url, manual_price } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url required' });
 
@@ -1151,12 +1303,11 @@ app.post('/api/submit', requireAuth, rateLimit({ windowMs: 60000, max: 5 }), asy
   catch (e) { return res.status(400).json({ error: e.message || 'URL not allowed' }); }
 
   // Dedup check against submitted
-  const submitted = loadSubmitted();
-  if (submitted.find(s => s.id === parsed.id && s.source === parsed.source))
+  if (loadSubmitted(tripId).find(s => s.id === parsed.id && s.source === parsed.source))
     return res.status(409).json({ error: 'Already submitted' });
 
   // Dedup check against main listings
-  const main = loadListings();
+  const main = loadListings(tripId);
   if (main.listings.find(l => String(l.id) === String(parsed.id) && l.source === parsed.source))
     return res.status(409).json({ error: 'Already in the main list' });
 
@@ -1217,10 +1368,16 @@ app.post('/api/submit', requireAuth, rateLimit({ windowMs: 60000, max: 5 }), asy
       : `Community submission by ${by}. Price not auto-detected — check listing for pricing.`,
   };
 
-  submitted.push(entry);
-  saveSubmitted(submitted);
+  // Re-read after the async scrape so two concurrent submits can't clobber
+  // each other (the scrape is the only await between read and write).
+  const fresh = loadSubmitted(tripId);
+  fresh.push(entry);
+  saveSubmitted(fresh, tripId);
+  if (tripId) addMember(tripId, req.user.id); // auto-join on first contribution
   res.json(entry);
-});
+};
+app.post('/api/submit', requireAuth, rateLimit({ windowMs: 60000, max: 5 }), hSubmit);
+app.post('/api/trips/:tripId/submit', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 5 }), hSubmit);
 
 // ── Pipeline listings (from SQLite) ──────────────────────────────────────────
 
@@ -1252,7 +1409,12 @@ function loadSeedListings() {
   } catch { return []; }
 }
 
-app.get('/api/pipeline-listings', (req, res) => {
+const hPipeline = (req, res) => {
+  // Only the original LA trip has a scraped pipeline (the Apify scraper is
+  // LA-specific). Any other trip is powered by member submissions only.
+  if (req.params.tripId && req.params.tripId !== LA_TRIP_ID) {
+    return res.json({ listings: [], count: 0, note: "No auto-scraped listings for this trip — add the homes you're considering above." });
+  }
   const db = getPipelineDb();
   if (!db) {
     const seed = loadSeedListings();
@@ -1342,14 +1504,17 @@ app.get('/api/pipeline-listings', (req, res) => {
     const seed = loadSeedListings();
     res.json({ listings: seed, count: seed.length, note: 'Showing saved snapshot (read error)' });
   }
-});
+};
+app.get('/api/pipeline-listings', hPipeline);
+app.get('/api/trips/:tripId/pipeline-listings', loadTripOr404, hPipeline);
 
 // ── AI compare (Gemini) ───────────────────────────────────────────────────────
 // Body: { listings: [{name,bd,ba,sleeps,area,distance_mi,est_5n,pool,hot_tub,
 //          parking,rating,reviews,url,amenities}], itinerary: "free text",
 //          criteria?: "free text" }
 // Returns: { analysis: "markdown text" }
-app.post('/api/compare-listings', rateLimit({ windowMs: 60000, max: 10 }), async (req, res) => {
+const hCompare = async (req, res) => {
+  const tripId = req.params.tripId;
   if (!GEMINI_API_KEY) {
     return res.status(503).json({ error: 'AI compare is not configured (GEMINI_API_KEY missing).' });
   }
@@ -1358,10 +1523,13 @@ app.post('/api/compare-listings', rateLimit({ windowMs: 60000, max: 10 }), async
     return res.status(400).json({ error: 'Pick at least 2 listings to compare.' });
   }
   const headToHead = mode === '1v1' && listings.length === 2;
-  // Itinerary now comes from the single admin-posted source, not per-user uploads.
-  const itinerary = loadItinerary().text || '';
+  const trip = getTrip(tripId) || loadListings(tripId).trip || {};
+  const adults = trip.adults || 14;
+  const dest = trip.destination || 'their destination';
+  // Itinerary comes from the single organizer-posted source, not per-user uploads.
+  const itinerary = loadItinerary(tripId).text || '';
   // Fold in member caveats so the AI weighs what the group actually cares about.
-  const caveats = loadCaveats().slice(-30).map(c => `- ${c.name}: ${c.text}`).join('\n');
+  const caveats = loadCaveats(tripId).slice(-30).map(c => `- ${c.name}: ${c.text}`).join('\n');
 
   // Compact each listing to the fields that matter, capped to keep the prompt small.
   const compact = listings.slice(0, 12).map((l, i) => ({
@@ -1376,8 +1544,10 @@ app.post('/api/compare-listings', rateLimit({ windowMs: 60000, max: 10 }), async
     url: l.url,
   }));
 
+  const dateStr = trip.checkin && trip.checkout_5n ? ` (${trip.checkin}–${trip.checkout_5n})` : '';
+  const budStr = trip.budget ? `, budget ~$${Number(trip.budget).toLocaleString()} all-in` : '';
   const context =
-`You are helping a group of 14 friends choose a large rental home for a 5-night LA birthday trip (Aug 18–23, 2026), budget ~$7,000 all-in. They prefer mansions / large homes and will accept locations up to ~1 hour from Downtown LA.
+`You are helping a group of ${adults} friends choose a large rental home for a group trip to ${dest}${dateStr}${budStr}. They prefer large homes that comfortably fit the whole group.
 
 ${itinerary ? `Their trip itinerary / plans (posted by the trip organizer):\n${String(itinerary).slice(0, 4000)}\n` : 'No itinerary was provided.'}
 ${caveats ? `Individual member caveats / must-haves:\n${caveats.slice(0, 1500)}\n` : ''}
@@ -1409,7 +1579,7 @@ ${itineraryRule}
 Write a concise, friendly comparison in markdown:
 1. A short ranked recommendation (best fit first) with one-line reasons explicitly tied to their itinerary and group size.
 2. A compact comparison table (Listing # | beds/sleeps | ~all-in | distance | pool/hot tub | standout).
-3. Call out any red flags (too far for their planned activities, tight sleeping capacity for 16, over budget, low/no reviews).
+3. Call out any red flags (too far for their planned activities, tight sleeping capacity for ${adults}, over budget, low/no reviews).
 Keep it under ~400 words. Refer to homes by their number and name.`;
 
   try {
@@ -1445,14 +1615,16 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
       // Record which listings were analyzed so the client can flag the insights
       // as stale once the shortlist changes.
       const ids = listings.map(l => String(l.id)).sort();
-      saveInsights({ analysis, count: compact.length, ids, created_at: new Date().toISOString() });
+      saveInsights({ analysis, count: compact.length, ids, created_at: new Date().toISOString() }, tripId);
     }
     res.json({ analysis });
   } catch (e) {
     console.error('[compare]', e.message);
     res.status(500).json({ error: e.message });
   }
-});
+};
+app.post('/api/compare-listings', rateLimit({ windowMs: 60000, max: 10 }), hCompare);
+app.post('/api/trips/:tripId/compare-listings', loadTripOr404, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
 
 // Admin: trigger a pipeline run (runs pipeline.js as a child process)
 app.post('/api/admin/run-pipeline', requireAdmin, (req, res) => {
@@ -1467,43 +1639,56 @@ app.post('/api/admin/run-pipeline', requireAdmin, (req, res) => {
 });
 
 // Latest cached AI shortlist analysis, shown to everyone.
-app.get('/api/insights', (req, res) => res.json(loadInsights() || { analysis: '', created_at: null }));
+const hGetInsights = (req, res) => res.json(loadInsights(req.params.tripId) || { analysis: '', created_at: null });
+app.get('/api/insights', hGetInsights);
+app.get('/api/trips/:tripId/insights', loadTripOr404, hGetInsights);
 
-// ── Trip itinerary (admin posts one canonical itinerary; everyone reads it) ─────
-app.get('/api/itinerary', (req, res) => res.json(loadItinerary()));
+// ── Trip itinerary (organizer posts one canonical itinerary; everyone reads it) ─
+const hGetItinerary = (req, res) => res.json(loadItinerary(req.params.tripId));
+app.get('/api/itinerary', hGetItinerary);
+app.get('/api/trips/:tripId/itinerary', loadTripOr404, hGetItinerary);
 
-app.post('/api/admin/itinerary', requireAdmin, (req, res) => {
+const hSetItinerary = (req, res) => {
   const text = String((req.body && req.body.text) || '').slice(0, 8000);
   const it = { text, updated_at: new Date().toISOString() };
-  saveItinerary(it);
+  saveItinerary(it, req.params.tripId);
   res.json(it);
-});
+};
+app.post('/api/admin/itinerary', requireAdmin, hSetItinerary);
+app.post('/api/trips/:tripId/itinerary', requireTripOwner, hSetItinerary);
 
 // ── Member caveats (small chat: each member adds their own must-haves) ──────────
-app.get('/api/caveats', (req, res) => res.json(loadCaveats()));
+const hGetCaveats = (req, res) => res.json(loadCaveats(req.params.tripId));
+app.get('/api/caveats', hGetCaveats);
+app.get('/api/trips/:tripId/caveats', loadTripOr404, hGetCaveats);
 
-app.post('/api/caveats', requireAuth, (req, res) => {
+const hPostCaveat = (req, res) => {
+  const tripId = req.params.tripId;
   const name = req.user.name || 'Member';
   const text = String((req.body && req.body.text) || '').slice(0, 500).trim();
   if (!text) return res.status(400).json({ error: 'Say something first.' });
-  const list = loadCaveats();
+  const list = loadCaveats(tripId);
   list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), user_id: req.user.id, name, text, created_at: new Date().toISOString() });
   const trimmed = list.slice(-200); // keep the log bounded
-  saveCaveats(trimmed);
+  saveCaveats(trimmed, tripId);
+  if (tripId) addMember(tripId, req.user.id);
   res.json(trimmed);
-});
+};
+app.post('/api/caveats', requireAuth, hPostCaveat);
+app.post('/api/trips/:tripId/caveats', requireAuth, loadTripOr404, hPostCaveat);
 
-app.delete('/api/caveats/:id', requireAdmin, (req, res) => {
-  const list = loadCaveats();
-  const updated = list.filter(c => c.id !== req.params.id);
-  saveCaveats(updated);
+const hDeleteCaveat = (req, res) => {
+  const tripId = req.params.tripId;
+  const updated = loadCaveats(tripId).filter(c => c.id !== req.params.id);
+  saveCaveats(updated, tripId);
   res.json(updated);
-});
+};
+app.delete('/api/caveats/:id', requireAdmin, hDeleteCaveat);
+app.delete('/api/trips/:tripId/caveats/:id', requireTripOwner, hDeleteCaveat);
 
-// ── Final pick: member "top choice" poll + admin-locked official decision ───────
+// ── Final pick: member "top choice" poll + organizer-locked decision ────────────
 // Aggregate counts only — never expose who voted for which listing.
-app.get('/api/final', (req, res) => {
-  const votes = loadFinalVotes();
+function tallyFinal(votes) {
   const counts = {};
   let total = 0;
   for (const lid of Object.values(votes)) {
@@ -1511,42 +1696,48 @@ app.get('/api/final', (req, res) => {
     counts[lid] = (counts[lid] || 0) + 1;
     total++;
   }
+  return { counts, total };
+}
+const hGetFinal = (req, res) => {
+  const tripId = req.params.tripId;
+  const votes = loadFinalVotes(tripId);
+  const { counts, total } = tallyFinal(votes);
   const myPick = req.user ? (votes[req.user.id] || null) : null;
-  res.json({ counts, total, myPick, decision: loadDecision() });
-});
+  res.json({ counts, total, myPick, decision: loadDecision(tripId) });
+};
+app.get('/api/final', hGetFinal);
+app.get('/api/trips/:tripId/final', loadTripOr404, hGetFinal);
 
-app.post('/api/final-vote', requireAuth, (req, res) => {
+const hFinalVote = (req, res) => {
+  const tripId = req.params.tripId;
   const raw = req.body && req.body.listing_id;
-  const votes = loadFinalVotes();
+  const votes = loadFinalVotes(tripId);
   if (raw === null || raw === undefined || raw === '') {
     delete votes[req.user.id]; // allow clearing your top choice
   } else {
     votes[req.user.id] = String(raw).slice(0, 80);
   }
-  saveFinalVotes(votes);
-  const counts = {};
-  let total = 0;
-  for (const lid of Object.values(votes)) {
-    if (!lid) continue;
-    counts[lid] = (counts[lid] || 0) + 1;
-    total++;
-  }
-  res.json({ counts, total, myPick: votes[req.user.id] || null, decision: loadDecision() });
-});
+  saveFinalVotes(votes, tripId);
+  if (tripId) addMember(tripId, req.user.id);
+  const { counts, total } = tallyFinal(votes);
+  res.json({ counts, total, myPick: votes[req.user.id] || null, decision: loadDecision(tripId) });
+};
+app.post('/api/final-vote', requireAuth, hFinalVote);
+app.post('/api/trips/:tripId/final-vote', requireAuth, loadTripOr404, hFinalVote);
 
-app.post('/api/admin/decision', requireAdmin, (req, res) => {
+const hDecision = (req, res) => {
+  const tripId = req.params.tripId;
   const raw = req.body && req.body.listing_id;
   if (raw === null || raw === undefined || raw === '') {
-    saveDecision(null); // unlock
+    saveDecision(null, tripId); // unlock
     return res.json({ decision: null });
   }
-  const decision = {
-    listing_id: String(raw).slice(0, 80),
-    locked_at: new Date().toISOString(),
-  };
-  saveDecision(decision);
+  const decision = { listing_id: String(raw).slice(0, 80), locked_at: new Date().toISOString() };
+  saveDecision(decision, tripId);
   res.json({ decision });
-});
+};
+app.post('/api/admin/decision', requireAdmin, hDecision);
+app.post('/api/trips/:tripId/decision', requireTripOwner, hDecision);
 
 // ── Admin: Apify token usage (current month spend vs the $5 free cap) ───────────
 app.get('/api/admin/apify-usage', requireAdmin, async (req, res) => {
@@ -1669,6 +1860,73 @@ app.get('/api/admin/usage', requireAdmin, async (req, res) => {
   });
 });
 
+// ── Trips: create / list mine / view / join / leave ────────────────────────────
+// List the trips the signed-in user owns or has joined.
+app.get('/api/me/trips', requireAuth, (req, res) => {
+  const trips = loadTrips();
+  const mine = Object.values(trips)
+    .filter(t => t.owner_id === req.user.id || (Array.isArray(t.members) && t.members.includes(req.user.id)))
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    .map(t => tripView(t, req.user));
+  res.json({ trips: mine });
+});
+
+// Create a new trip; the caller becomes the organizer.
+app.post('/api/trips', requireAuth, (req, res) => {
+  const { name, destination, checkin, checkout_5n, adults, budget } = req.body || {};
+  if (!destination || !String(destination).trim())
+    return res.status(400).json({ error: 'Destination is required.' });
+  if (!checkin || !checkout_5n)
+    return res.status(400).json({ error: 'Check-in and check-out dates are required.' });
+  const trip = createTrip(req.user, { name, destination, checkin, checkout_5n, adults, budget });
+  res.json(tripView(trip, req.user));
+});
+
+// View a trip (open — the unguessable id is the view-by-link secret).
+app.get('/api/trips/:tripId', (req, res) => {
+  const trip = getTrip(req.params.tripId);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  res.json(tripView(trip, req.user));
+});
+
+// Join a trip via its invite code (from the share link).
+app.post('/api/trips/:tripId/join', requireAuth, (req, res) => {
+  const trip = getTrip(req.params.tripId);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const code = (req.body && req.body.join_code) || '';
+  if (trip.join_code && code && code !== trip.join_code)
+    return res.status(403).json({ error: 'Invalid invite link.' });
+  const updated = addMember(trip.id, req.user.id);
+  res.json(tripView(updated, req.user));
+});
+
+// Leave a trip (the organizer cannot leave their own).
+app.post('/api/trips/:tripId/leave', requireAuth, (req, res) => {
+  const trips = loadTrips();
+  const trip = trips[req.params.tripId];
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  if (trip.owner_id === req.user.id)
+    return res.status(400).json({ error: 'The organizer cannot leave their own trip.' });
+  trip.members = (trip.members || []).filter(id => id !== req.user.id);
+  saveTrips(trips);
+  res.json({ ok: true });
+});
+
+// Per-trip group pulse for the organizer (engagement only, no per-user detail).
+app.get('/api/trips/:tripId/pulse', requireTripOwner, (req, res) => {
+  const tripId = req.params.tripId;
+  const votesObj = loadVotes(tripId);
+  const votes = Object.values(votesObj).reduce((n, m) => n + Object.keys(m || {}).length, 0);
+  res.json({
+    members: (req.trip.members || []).length,
+    votes,
+    picks: Object.keys(loadFinalVotes(tripId)).length,
+    submissions: loadSubmitted(tripId).length,
+    decisionLocked: !!loadDecision(tripId),
+    listings: (loadListings(tripId).listings || []).length,
+  });
+});
+
 // ── Pipeline scheduler ────────────────────────────────────────────────────────
 // Runs pipeline.js every PIPELINE_INTERVAL_DAYS days at PIPELINE_HOUR_UTC.
 // Default is WEEKLY (not daily): each run bills Apify, and the free tier is only
@@ -1706,5 +1964,6 @@ function schedulePipeline() {
 
 app.listen(PORT, () => {
   console.log(`GroupPad listening on :${PORT}`);
+  try { migrateLegacyTripIfNeeded(); } catch (e) { console.error('[migrate] failed:', e.message); }
   schedulePipeline();
 });

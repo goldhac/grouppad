@@ -16,7 +16,7 @@ const INTERACTIVE = 'a, button, input, label, [role="checkbox"]';
 
 export function Card({ listing: l, isSubmitted = false, isPipeline = false }: CardProps) {
   const {
-    user, votes, final, adminKey, split, trip, selected,
+    user, votes, final, isOwner, split, trip, selected,
     castVote, toggleFinalPick, setDecision, deleteListing, toggleSelect, openDetail, requireSignIn,
   } = useApp();
 
@@ -200,7 +200,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
             )}
           </button>
 
-          {adminKey && (
+          {isOwner && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -218,7 +218,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
         </div>
 
         {/* Admin delete */}
-        {adminKey && !isPipeline && (
+        {isOwner && !isPipeline && (
           <button
             onClick={(e) => {
               e.stopPropagation();

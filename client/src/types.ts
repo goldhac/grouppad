@@ -12,6 +12,8 @@ export interface User {
 }
 
 export interface Trip {
+  id?: string;
+  name?: string;
   destination: string;
   checkin: string; // YYYY-MM-DD
   checkout_5n: string;
@@ -20,7 +22,39 @@ export interface Trip {
   budget: number;
   tax_rate?: number;
   cleaning_placeholder?: number;
-  refreshed_at?: string;
+  refreshed_at?: string | null;
+}
+
+/** A trip plus the calling user's membership flags (from GET /api/trips/:id). */
+export interface TripView extends Trip {
+  id: string;
+  name: string;
+  isOwner: boolean;
+  isMember: boolean;
+  memberCount: number;
+  created_at?: string;
+  // organizer-only fields
+  join_code?: string;
+  members?: string[];
+  owner_id?: string;
+}
+
+export interface CreateTripInput {
+  name?: string;
+  destination: string;
+  checkin: string;
+  checkout_5n: string;
+  adults: number;
+  budget: number;
+}
+
+export interface TripPulse {
+  members: number;
+  votes: number;
+  picks: number;
+  submissions: number;
+  decisionLocked: boolean;
+  listings: number;
 }
 
 /**

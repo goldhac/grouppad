@@ -95,11 +95,8 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
                   Clear
                 </Button>
               </div>
-              {compare.error && <p className="mt-2 text-sm text-danger">{compare.error}</p>}
-              {compare.result && (
-                <div className="mt-3 rounded-md border border-border bg-panel p-3">
-                  <Markdown text={compare.result} />
-                </div>
+              {compare.error && !compare.comparedListings && (
+                <p className="mt-2 text-sm text-danger">{compare.error}</p>
               )}
             </div>
           </div>

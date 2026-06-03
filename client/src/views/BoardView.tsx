@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { UserPlus } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { Card } from '@/components/Card';
+import { BoardHeader } from '@/components/chrome/BoardHeader';
 import { FilterBar, type Filters } from '@/components/board/FilterBar';
 import { SubmitBar } from '@/components/board/SubmitBar';
 import { ItinerarySection } from '@/components/board/ItinerarySection';
@@ -12,15 +13,17 @@ import { SubmittedSection } from '@/components/board/SubmittedSection';
 import { CaveatsSection } from '@/components/board/CaveatsSection';
 import { PipelineSection } from '@/components/board/PipelineSection';
 import { CompareDock } from '@/components/board/CompareDock';
+import { ComparisonModal } from '@/components/modals/ComparisonModal';
+import { Button } from '@/components/ui/Button';
 
 export function BoardView() {
-  const { listings, shortlistIds, split, adminKey } = useApp();
+  const { listings, shortlistIds, split, trip, user, requireSignIn, joinTrip } = useApp();
   const compare = useCompare();
   const [filters, setFilters] = useState<Filters>({
-    under: true,
+    under: false,
     pool: false,
     parking: false,
-    manual: false,
+    manual: true,
   });
 
   const mainGrid = useMemo(
@@ -41,45 +44,67 @@ export function BoardView() {
     return first?.est_5n ? Math.ceil(first.est_5n / split) : null;
   }, [listings, split]);
 
+  const showJoin = trip && !trip.isMember && !trip.isOwner;
+
   return (
     <div className="pb-20">
-      <FilterBar
-        filters={filters}
-        setFilters={setFilters}
-        shown={mainGrid.length}
-        total={listings.length}
-        perPersonAvg={perPersonAvg}
-      />
-      <SubmitBar />
-      <ItinerarySection />
-      <DecisionSection />
-      <ShortlistSection compare={compare} />
-      <SubmittedSection />
-      <CaveatsSection />
+      <BoardHeader />
 
-      <section className="px-4 py-3 sm:px-8">
-        {mainGrid.length === 0 ? (
-          <p className="py-8 text-center text-muted">No listings match these filters.</p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {mainGrid.map((l) => (
-              <Card key={l.id} listing={l} />
-            ))}
+      {showJoin && (
+        <div className="border-b border-border bg-accent/5 px-4 py-2.5 sm:px-8">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 text-sm">
+            <UserPlus className="h-4 w-4 text-accent" />
+            <span className="text-muted">You're viewing as a guest. Join to vote, add homes, and comment.</span>
+            <Button
+              variant="primary"
+              size="sm"
+              className="ml-auto"
+              onClick={() => {
+                if (requireSignIn('join this trip') && trip) void joinTrip(trip.id);
+              }}
+            >
+              {user ? 'Join this trip' : 'Sign in to join'}
+            </Button>
           </div>
-        )}
-      </section>
-
-      <PipelineSection filters={filters} />
-
-      {!adminKey && (
-        <div className="px-4 py-6 text-center sm:px-8">
-          <Link to="/admin" className="text-xs text-muted hover:text-text">
-            🔑 Organizer? Enter admin
-          </Link>
         </div>
       )}
 
+      <div className="mx-auto max-w-7xl">
+        <FilterBar
+          filters={filters}
+          setFilters={setFilters}
+          shown={mainGrid.length}
+          total={listings.length}
+          perPersonAvg={perPersonAvg}
+        />
+        <SubmitBar />
+        <ItinerarySection />
+        <DecisionSection />
+        <ShortlistSection compare={compare} />
+        <SubmittedSection />
+        <CaveatsSection />
+
+        <section className="px-4 py-3 sm:px-8">
+          {mainGrid.length === 0 ? (
+            <p className="py-8 text-center text-muted">
+              {listings.length === 0
+                ? 'No homes yet — add the rentals your group is considering with “Add a listing.”'
+                : 'No listings match these filters.'}
+            </p>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {mainGrid.map((l) => (
+                <Card key={l.id} listing={l} />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <PipelineSection filters={filters} />
+      </div>
+
       <CompareDock compare={compare} />
+      <ComparisonModal compare={compare} />
     </div>
   );
 }

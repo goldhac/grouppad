@@ -28,19 +28,28 @@ export interface CompareController {
   setPanelOpen: (v: boolean) => void;
   criteria: string;
   setCriteria: (v: string) => void;
+  /** AI analysis text for the active selection-based comparison (modal). */
   result: string | null;
+  /** The listings the active result compares — drives the VS columns. */
+  comparedListings: Listing[] | null;
+  /** '1v1' shows the head-to-head VS layout; 'multi' shows a column grid. */
+  resultMode: '1v1' | 'multi' | null;
   running: boolean;
   error: string | null;
   runWhole: (items: Listing[]) => Promise<void>;
   runSelected: (mode: 'multi' | '1v1') => Promise<void>;
+  /** Dismiss the comparison result + clear the selection ("when done it disappears"). */
+  dismissResult: () => void;
 }
 
 /** Single source of truth for the AI compare panel + selection-based compares. */
 export function useCompare(): CompareController {
-  const { selected, findListing, runCompare, toast } = useApp();
+  const { selected, findListing, runCompare, clearSelection, toast } = useApp();
   const [panelOpen, setPanelOpen] = useState(false);
   const [criteria, setCriteria] = useState('');
   const [result, setResult] = useState<string | null>(null);
+  const [comparedListings, setComparedListings] = useState<Listing[] | null>(null);
+  const [resultMode, setResultMode] = useState<'1v1' | 'multi' | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,9 +61,8 @@ export function useCompare(): CompareController {
       }
       setRunning(true);
       setError(null);
-      setResult(null);
       try {
-        // Whole-shortlist compare populates the shared Insights block (no local result).
+        // Whole-shortlist compare populates the shared Insights block (no modal).
         await runCompare(items.map(toInput), criteria);
         setPanelOpen(false);
       } catch (e) {
@@ -71,18 +79,17 @@ export function useCompare(): CompareController {
       const items = [...selected].map((id) => findListing(id)).filter(Boolean) as Listing[];
       if (mode === '1v1' && items.length !== 2) {
         setError('Pick exactly 2 homes for a 1v1.');
-        setPanelOpen(true);
         return;
       }
       if (items.length < 2) {
         setError('Pick at least 2 homes to compare.');
-        setPanelOpen(true);
         return;
       }
-      setPanelOpen(true);
       setRunning(true);
       setError(null);
       setResult(null);
+      setComparedListings(items);
+      setResultMode(mode === '1v1' ? '1v1' : 'multi');
       try {
         const analysis = await runCompare(
           items.map(toInput),
@@ -92,6 +99,8 @@ export function useCompare(): CompareController {
         setResult(analysis);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Compare failed.');
+        setComparedListings(null);
+        setResultMode(null);
         toast('Compare failed.', 'error');
       } finally {
         setRunning(false);
@@ -100,15 +109,26 @@ export function useCompare(): CompareController {
     [selected, findListing, runCompare, criteria, toast],
   );
 
+  const dismissResult = useCallback(() => {
+    setResult(null);
+    setComparedListings(null);
+    setResultMode(null);
+    setError(null);
+    clearSelection();
+  }, [clearSelection]);
+
   return {
     panelOpen,
     setPanelOpen,
     criteria,
     setCriteria,
     result,
+    comparedListings,
+    resultMode,
     running,
     error,
     runWhole,
     runSelected,
+    dismissResult,
   };
 }

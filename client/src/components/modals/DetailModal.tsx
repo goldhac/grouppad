@@ -10,7 +10,7 @@ import { amenityLabel, fmt, tallyVotes } from '@/lib/utils';
 export function DetailModal() {
   const {
     detailId, closeDetail, findListing, trip, split,
-    user, votes, final, adminKey, castVote, toggleFinalPick, setDecision, requireSignIn,
+    user, votes, final, isOwner, castVote, toggleFinalPick, setDecision, requireSignIn,
   } = useApp();
 
   const l = detailId ? findListing(detailId) : undefined;
@@ -180,7 +180,7 @@ export function DetailModal() {
             >
               <Star className={cn('h-4 w-4', isMyPick && 'fill-warn')} /> {isMyPick ? 'My pick' : 'Top choice'}
             </button>
-            {adminKey && (
+            {isOwner && (
               <Button
                 variant={isDecision ? 'primary' : 'default'}
                 size="sm"
