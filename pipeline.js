@@ -796,7 +796,10 @@ async function runTripSearch(tripId) {
       currency: 'USD',
       locale:   'en-US',
     };
-    if (homeType) actorInput.propertyType = homeType; // best-effort hint to the actor
+    // NOTE: this actor doesn't accept a propertyType filter (passing one returns 0
+    // results), so home_type is kept as trip metadata and filtering is done via
+    // min/max bedrooms + price ranking below. `homeType` retained for display.
+    void homeType;
     // Search + geocode the destination's reference points (downtown/airport/attraction) in parallel.
     const [items, refs] = await Promise.all([
       runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput),
