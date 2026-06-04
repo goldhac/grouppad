@@ -4,6 +4,7 @@ const path = require('path');
 const crypto = require('crypto');
 const dns = require('dns').promises;
 const net = require('net');
+const Emails = require('./emails');
 
 const app = express();
 app.set('trust proxy', true);
@@ -401,9 +402,7 @@ async function sendMagicLink(email, link) {
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       from, to: [email], subject: 'Your GroupPad sign-in link',
-      html: `<p>Tap to sign in to GroupPad:</p>
-             <p><a href="${link}">Sign in</a></p>
-             <p style="color:#888;font-size:12px">This link expires in 15 minutes. If you didn't request it, ignore this email.</p>`,
+      html: Emails.magicLink({ appBase: APP_BASE_URL, link }),
     }),
   });
   if (!res.ok) {
@@ -489,17 +488,7 @@ function findListingByIdInTrip(tripId, id) {
   return main || (loadSubmitted(tripId).find(l => String(l.id) === sid) || null);
 }
 
-// Shared, restrained email chrome (clean + CAN-SPAM compliant unsubscribe).
-function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
-function btn(href, label) {
-  return `<a href="${href}" style="display:inline-block;background:#2f6df6;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600;font-size:14px">${esc(label)}</a>`;
-}
-function emailShell(bodyHtml, { unsub } = {}) {
-  const foot = unsub
-    ? `<p style="margin:24px 0 0;color:#9aa0aa;font-size:12px;line-height:1.6">You're getting this because you're in this GroupPad trip. <a href="${APP_BASE_URL}/api/notify/unsubscribe?u=${unsub}" style="color:#9aa0aa">Unsubscribe from trip emails</a>.</p>`
-    : '';
-  return `<div style="max-width:560px;margin:0 auto;padding:8px 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1d23">${bodyHtml}${foot}<p style="margin:20px 0 0;color:#b6bbc4;font-size:12px">GroupPad — pick one place, together.</p></div>`;
-}
+// Premium email templates live in ./emails (also used by the preview script).
 
 // Instant alert: a participant just joined → tell the organizer.
 function noteJoin(tripId, user) {
@@ -511,12 +500,10 @@ function noteJoin(tripId, user) {
   if (wasMember || trip.owner_id === user.id) return; // not a new join
   const owner = loadUsers()[trip.owner_id];
   if (!owner || !isEmail(owner.email) || !notifPrefs(owner).instant) return;
-  const html = emailShell(
-    `<h2 style="margin:0 0 8px;font-size:19px">${esc(user.name || 'Someone')} joined ${esc(trip.name)}</h2>
-     <p style="margin:0 0 16px;color:#444;font-size:14px;line-height:1.6">Your group's coming together — they can now browse, vote, and add homes.</p>
-     ${btn(boardUrl(tripId), 'Open the board')}`,
-    { unsub: unsubToken(owner.id) }
-  );
+  const html = Emails.joined({
+    appBase: APP_BASE_URL, tripName: trip.name, who: user.name || 'Someone',
+    boardUrl: boardUrl(tripId), unsub: unsubToken(owner.id),
+  });
   sendEmail(owner.email, `${user.name || 'Someone'} joined ${trip.name}`, html).catch(() => {});
 }
 
@@ -528,13 +515,10 @@ async function emailDecisionLocked(tripId, listingId, actorId) {
   const name = (listing && listing.name) || 'the final pick';
   const recips = tripRecipients(trip).filter((r) => r.prefs.instant && r.id !== actorId);
   for (const r of recips) {
-    const html = emailShell(
-      `<p style="margin:0 0 6px;color:#2f6df6;font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase">It's official</p>
-       <h2 style="margin:0 0 8px;font-size:20px">${esc(trip.name)} has a winner</h2>
-       <p style="margin:0 0 16px;color:#444;font-size:15px;line-height:1.6">The organizer locked in <strong>${esc(name)}</strong> as the group's pick. Time to book your spot.</p>
-       ${btn(boardUrl(tripId), 'See the pick')}`,
-      { unsub: r.unsub }
-    );
+    const html = Emails.decisionLocked({
+      appBase: APP_BASE_URL, tripName: trip.name, listingName: name,
+      boardUrl: boardUrl(tripId), unsub: r.unsub,
+    });
     await sendEmail(r.email, `It's official: ${name} — ${trip.name}`, html);
   }
   if (recips.length) console.log(`[notify] decision-locked → ${recips.length} member(s) on ${tripId}`);
@@ -1759,6 +1743,19 @@ const hSubmit = async (req, res) => {
   saveSubmitted(fresh, tripId);
   logEvent(tripId, 'submit', `${by} added "${scraped.name || 'a home'}"`);
   noteJoin(tripId, req.user); // auto-join on first contribution (+ alerts organizer)
+
+  // Pull this submission's guest reviews in the background so it lands with the
+  // same 4 👍 / 4 👎 as everything else (cached; guarded; never blocks the submit).
+  (async () => {
+    try {
+      const key = `${parsed.source}:${parsed.id}`;
+      if (loadReviews(tripId)[key]) return;
+      if (!(await apifyGuard('a submission reviews fetch'))) return;
+      const shaped = await fetchListingReviews(parsed.source, cleanUrl, 20);
+      if (shaped) { const m = loadReviews(tripId); m[key] = shaped; saveReviews(m, tripId); }
+    } catch (e) { console.error('[reviews] submit fetch failed:', e.message); }
+  })();
+
   res.json(entry);
 };
 app.post('/api/submit', requireAuth, rateLimit({ windowMs: 60000, max: 5 }), hSubmit);
@@ -2390,12 +2387,9 @@ app.post('/api/trips/:tripId/invite', requireTripOwner, async (req, res) => {
   const inviter = req.user.name || 'The organizer';
   let sent = 0;
   for (const e of emails) {
-    const html = emailShell(
-      `<h2 style="margin:0 0 8px;font-size:20px">You're invited to ${esc(trip.name)}</h2>
-       <p style="margin:0 0 16px;color:#444;font-size:15px;line-height:1.6">${esc(inviter)} invited you to help pick the place${trip.destination ? ` in ${esc(trip.destination)}` : ''} on GroupPad. Browse homes, vote, and weigh in.</p>
-       ${btn(link, 'Join the trip')}
-       <p style="margin:16px 0 0;color:#9aa0aa;font-size:12px">If you weren't expecting this, you can safely ignore it.</p>`
-    );
+    const html = Emails.invite({
+      appBase: APP_BASE_URL, tripName: trip.name, destination: trip.destination, inviter, link,
+    });
     if (await sendEmail(e, `You're invited: ${trip.name}`, html)) sent++;
   }
   res.json({ sent, attempted: emails.length });
@@ -2532,24 +2526,17 @@ function buildDigest(tripId, sinceTs) {
   return { total: events.length, groups };
 }
 function digestHtml(trip, digest, recip) {
-  const rows = [];
+  let rows = '';
   for (const type of ['submit', 'caveat', 'pick', 'vote', 'decision']) {
     const list = digest.groups[type];
     if (!list || !list.length) continue;
     const head = `${list.length} ${DIGEST_LABELS[type]}${list.length === 1 ? '' : 's'}`;
-    const samples = (type === 'submit' || type === 'caveat')
-      ? `<ul style="margin:6px 0 0;padding-left:18px">${list.slice(-4).map(e => `<li style="margin:2px 0;color:#555;font-size:13px">${esc(e.text)}</li>`).join('')}</ul>`
-      : '';
-    rows.push(`<li style="margin:0 0 10px;font-size:15px"><strong>${esc(head)}</strong>${samples}</li>`);
+    const samples = (type === 'submit' || type === 'caveat') ? list.slice(-4).map((e) => e.text) : [];
+    rows += Emails.digestRow(head, samples);
   }
-  return emailShell(
-    `<p style="margin:0 0 6px;color:#2f6df6;font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase">Daily recap</p>
-     <h2 style="margin:0 0 4px;font-size:20px">${esc(trip.name)}</h2>
-     <p style="margin:0 0 16px;color:#666;font-size:14px">Here's what your group got up to in the last day.</p>
-     <ul style="margin:0 0 18px;padding-left:18px;list-style:disc">${rows.join('')}</ul>
-     ${btn(boardUrl(trip.id), 'Open the board')}`,
-    { unsub: recip.unsub }
-  );
+  return Emails.digest({
+    appBase: APP_BASE_URL, tripName: trip.name, boardUrl: boardUrl(trip.id), rowsHtml: rows, unsub: recip.unsub,
+  });
 }
 async function runDigestJob() {
   const trips = loadTrips();
