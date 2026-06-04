@@ -437,7 +437,7 @@ function upsertAll(db, rows) {
       upsertListing.run({
         ...row,
         amenities: JSON.stringify(row.amenities),
-        photos:    JSON.stringify((row.photos).slice(0, 8)),
+        photos:    JSON.stringify((row.photos).slice(0, 16)),
         distances: JSON.stringify(row.distances || []),
       });
       if (exists) updatedRows++; else newRows++;
@@ -831,7 +831,7 @@ async function runTripSearch(tripId) {
       .map(it => {
         const { bedrooms, beds } = parseAirbnbSubtitles(it.subtitles);
         const area   = areaFromAirbnbTitle(it.title) || it.name || trip.destination;
-        const photos = Array.isArray(it.images) ? it.images.map(im => im.url).filter(Boolean).slice(0, 8) : [];
+        const photos = Array.isArray(it.images) ? it.images.map(im => im.url).filter(Boolean).slice(0, 16) : [];
         const text   = `${it.name || ''} ${it.title || ''}`.toLowerCase();
         const lat    = it.coordinates?.latitude;
         const lng    = it.coordinates?.longitude;

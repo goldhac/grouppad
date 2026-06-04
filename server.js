@@ -1566,7 +1566,7 @@ async function scrapeListingDetails(cleanUrl, parsed) {
     }
   }
 
-  result.photos = result.photos.slice(0, 8);
+  result.photos = result.photos.slice(0, 16);
   if (!result.name) result.name = `${parsed.source} listing ${parsed.id}`;
 
   return result;
