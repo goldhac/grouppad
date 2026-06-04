@@ -569,21 +569,33 @@ async function fetchListingReviews(source, url, max = 20) {
   if (!url) return null;
   const s = String(source || '').toLowerCase();
   if (s.includes('airbnb')) {
-    const items = await runApifyActor('tri_angle~airbnb-reviews-scraper', {
-      startUrls: [{ url }], maxReviewsPerListing: max, sortBy: 'most-recent',
-    });
-    if (items == null) return null;
-    return shapeReviews(items.map(it => ({
-      text: it.text ?? it.localizedText, rating: it.rating, date: it.createdAt,
-      author: it.reviewer?.firstName ?? it.reviewerName,
-    })));
+    // Pull most-recent (fills the "loved it" column) AND lowest-rated (so real
+    // "concerns" surface even on a 4.9★ home) — then merge + dedupe.
+    const [recent, worst] = await Promise.all([
+      runApifyActor('tri_angle~airbnb-reviews-scraper', { startUrls: [{ url }], maxReviewsPerListing: max, sortBy: 'most-recent' }),
+      runApifyActor('tri_angle~airbnb-reviews-scraper', { startUrls: [{ url }], maxReviewsPerListing: 8, sortBy: 'lowest-rated' }),
+    ]);
+    if (recent == null && worst == null) return null;
+    const seen = new Set();
+    const merged = [...(recent || []), ...(worst || [])]
+      .map(it => ({ text: it.text ?? it.localizedText, rating: it.rating, date: it.createdAt, author: it.reviewer?.firstName ?? it.reviewerName, _k: it.id }))
+      .filter(it => { const k = it._k || it.text; if (!it.text || seen.has(k)) return false; seen.add(k); return true; });
+    return shapeReviews(merged);
   }
   if (s.includes('vrbo')) {
-    const items = await runApifyActor('powerai~vrbo-reviews-scraper', { searchUrl: url, maxItems: max });
+    // VRBO actively blocks scrapers, so this is best-effort. shahidirfan's actor
+    // (free) is the most reliable; it returns a rating LABEL, not a star number.
+    const items = await runApifyActor('shahidirfan~vrbo-reviews-scraper', { url });
     if (items == null) return null;
-    return shapeReviews(items.map(it => ({
-      text: it.reviewText ?? it.text, rating: it.rating, date: it.stayedText ?? it.date, author: it.author,
-    })));
+    const LABEL = { wonderful: 5, excellent: 5, 'very good': 4, good: 4, average: 3, okay: 3, mediocre: 2, disappointing: 2, poor: 2, terrible: 1 };
+    return shapeReviews((items || [])
+      .filter(it => it.review_text) // drop failure/diagnostic records
+      .map(it => ({
+        text: it.review_text,
+        rating: LABEL[String(it.rating_label || '').toLowerCase()] ?? 4,
+        date: it.trip_summary || null,
+        author: it.author,
+      })));
   }
   return null; // Booking.com / other sources have no review actor wired up
 }
