@@ -1494,7 +1494,7 @@ async function scrapeListingDetails(cleanUrl, parsed) {
       for (const img of imgs) {
         const u = typeof img === 'string' ? img : (img.url || img.contentUrl || '');
         if (u && !result.photos.includes(u)) result.photos.push(u);
-        if (result.photos.length >= 8) break;
+        if (result.photos.length >= 16) break;
       }
     }
 
@@ -1520,12 +1520,12 @@ async function scrapeListingDetails(cleanUrl, parsed) {
   if (parsed.source === 'Airbnb') {
     for (const u of airbnbPhotosFromHtml(html)) {
       if (!result.photos.includes(u)) result.photos.push(u);
-      if (result.photos.length >= 8) break;
+      if (result.photos.length >= 16) break;
     }
   } else if (parsed.source === 'VRBO') {
     for (const u of vrboPhotosFromHtml(html)) {
       if (!result.photos.includes(u)) result.photos.push(u);
-      if (result.photos.length >= 8) break;
+      if (result.photos.length >= 16) break;
     }
   }
 
@@ -2340,6 +2340,26 @@ const hGenTour = async (req, res) => {
 };
 app.post('/api/admin/tours/:listingId/generate', requireAdmin, hGenTour);
 app.post('/api/trips/:tripId/tours/:listingId/generate', requireTripOwner, hGenTour);
+
+// Admin one-off: re-fetch photos for a trip's curated listings (now up to 16 each,
+// so exteriors get captured for tours). Only replaces photos when it finds more.
+app.post('/api/admin/refetch-photos', requireAdmin, async (req, res) => {
+  const tripId = (req.body && req.body.tripId) || LA_TRIP_ID;
+  const data = loadListings(tripId);
+  const out = [];
+  for (const l of (data.listings || [])) {
+    const before = (l.photos || []).length;
+    const parsed = l.url ? parseListingUrl(l.url) : null;
+    if (!parsed) { out.push({ id: l.id, before, after: before, note: 'no url' }); continue; }
+    try {
+      const scraped = await scrapeListingDetails(l.url.split('?')[0], parsed);
+      if (scraped.photos && scraped.photos.length > before) l.photos = scraped.photos;
+      out.push({ id: l.id, before, after: (l.photos || []).length });
+    } catch (e) { out.push({ id: l.id, before, after: before, error: e.message }); }
+  }
+  saveListings(data, tripId);
+  res.json({ updated: out });
+});
 
 // ── Admin: Apify token usage (current month spend vs the $5 free cap) ───────────
 app.get('/api/admin/apify-usage', requireAdmin, async (req, res) => {
