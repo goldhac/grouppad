@@ -1,4 +1,4 @@
-import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Plane, FerrisWheel, Pin, BadgeCheck } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Plane, FerrisWheel, Pin, BadgeCheck, Clapperboard } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Badge, BudgetBadge } from '@/components/ui/Badge';
 import { Carousel } from '@/components/Carousel';
@@ -22,11 +22,12 @@ function DistIcon({ kind }: { kind?: string }) {
 
 export function Card({ listing: l, isSubmitted = false, isPipeline = false }: CardProps) {
   const {
-    user, votes, final, isOwner, split, trip, selected, reviewsMap,
+    user, votes, final, isOwner, split, trip, selected, reviewsMap, toursMap,
     castVote, toggleFinalPick, setDecision, deleteListing, toggleSelect, openDetail, requireSignIn,
   } = useApp();
 
   const rev = reviewsMap[`${l.source}:${l.id}`];
+  const hasTour = toursMap[l.id]?.status === 'ready' && (toursMap[l.id]?.clips.some((c) => c.videoUrl) ?? false);
 
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
   const finalCount = final.counts[l.id] ?? 0;
@@ -60,6 +61,12 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
       {isDecision && (
         <div className="absolute left-0 top-0 z-10 inline-flex items-center gap-1 rounded-br-lg bg-accent px-2 py-1 text-[11px] font-bold text-[#06210f]">
           <BadgeCheck className="h-3.5 w-3.5" aria-hidden /> Official pick
+        </div>
+      )}
+
+      {hasTour && (
+        <div className="absolute right-0 top-0 z-10 inline-flex items-center gap-1 rounded-bl-lg bg-black/70 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur">
+          <Clapperboard className="h-3.5 w-3.5" aria-hidden /> Tour
         </div>
       )}
 

@@ -9,6 +9,7 @@ import type {
   Listing,
   ListingReviews,
   ListingsResponse,
+  ListingTour,
   NotifPrefs,
   PipelineResponse,
   TripPulse,
@@ -142,6 +143,9 @@ export const api = {
     request<ListingReviews>(`${t(tripId)}/reviews/fetch`, { method: 'POST', body: { source, id, url, force } }),
   refreshReviews: (tripId: string, force?: boolean) =>
     request<{ fetched: number; skipped: number; total: number }>(`${t(tripId)}/reviews/refresh-all`, { method: 'POST', body: { force } }),
+  tours: (tripId: string) => request<Record<string, ListingTour>>(`${t(tripId)}/tours`),
+  generateTour: (tripId: string, listingId: string, force?: boolean) =>
+    request<ListingTour>(`${t(tripId)}/tours/${encodeURIComponent(listingId)}/generate`, { method: 'POST', body: { force } }),
 
   final: (tripId: string) => request<FinalState>(`${t(tripId)}/final`),
   finalVote: (tripId: string, listing_id: string | null) =>

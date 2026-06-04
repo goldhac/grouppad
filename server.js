@@ -600,6 +600,132 @@ async function fetchListingReviews(source, url, max = 20) {
   return null; // Booking.com / other sources have no review actor wired up
 }
 
+// ── Walkthrough tours (Gemini picks best photos → fal.ai image-to-video) ────────
+// Pay-as-you-go video via fal.ai (Minimax Hailuo, ~$0.27/clip). One tour per
+// listing, cached + shared; generated when a listing first becomes someone's top
+// choice (or via the organizer button). Bounded by a per-trip cap.
+const FAL_KEY = process.env.FAL_KEY || '';
+const FAL_MODEL = process.env.FAL_MODEL || 'fal-ai/minimax/hailuo-02/standard/image-to-video';
+const TOUR_MAX_CLIPS = Math.max(1, Number(process.env.TOUR_MAX_CLIPS || 3));
+const TOUR_TRIP_CAP  = Math.max(1, Number(process.env.TOUR_TRIP_CAP || 12));
+const TOUR_CLIP_SECONDS = Number(process.env.TOUR_CLIP_SECONDS || 6);
+function falConfigured() { return !!FAL_KEY; }
+
+function loadTours(tripId)    { return readJson(tripFile(tripId, 'tours.json'), {}); }
+function saveTours(m, tripId) { writeJsonAtomic(tripFile(tripId, 'tours.json'), m); }
+
+// Gemini vision: rank a listing's photos → indices of the best spaces to feature.
+async function pickBestPhotos(photos, maxN = TOUR_MAX_CLIPS) {
+  const gk = process.env.GEMINI_API_KEY;
+  const list = (photos || []).slice(0, 12);
+  const fallback = () => list.slice(0, maxN).map((_, i) => ({ index: i, feature: 'Highlight' }));
+  if (!gk || list.length === 0) return fallback();
+  if (list.length <= maxN) return fallback();
+  const parts = [{ text: `These are photos of ONE vacation rental, in order (index 0..${list.length - 1}). For a GROUP trip, choose the ${maxN} MOST impressive, share-worthy spaces to feature in a short video tour — the wow factors (pool, games room, view, great room, theater, hot tub). Avoid plain bedrooms/bathrooms/closets. Respond JSON only: {"picks":[{"index":n,"feature":"short label"}]}` }];
+  for (const url of list) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) continue;
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 4_000_000) continue;
+      parts.push({ inline_data: { mime_type: r.headers.get('content-type') || 'image/jpeg', data: buf.toString('base64') } });
+    } catch { /* skip unreachable photo */ }
+  }
+  try {
+    const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${gk}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } }),
+    });
+    const d = await r.json();
+    bumpUsage('gemini', { calls: 1 });
+    if (!r.ok) return fallback();
+    const j = JSON.parse(d.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '{}');
+    const picks = (j.picks || []).filter(p => Number.isInteger(p.index) && p.index >= 0 && p.index < list.length).slice(0, maxN);
+    return picks.length ? picks : fallback();
+  } catch { return fallback(); }
+}
+
+const TOUR_PROMPT = (feature) => `Fast-paced cinematic real-estate house tour of the ${feature || 'space'}: the camera glides briskly and continuously through the space in one flowing take, covering the whole area, smooth steady gimbal motion, bright natural light, premium and inviting, no people, no text.`;
+
+// Submit one image→video job to fal.ai's queue; returns {requestId,statusUrl,responseUrl}.
+async function falSubmit(imageUrl, prompt) {
+  if (!FAL_KEY) return null;
+  try {
+    const r = await fetch(`https://queue.fal.run/${FAL_MODEL}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Key ${FAL_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_url: imageUrl, prompt, duration: String(TOUR_CLIP_SECONDS) }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.request_id) { console.error('[fal] submit', r.status, JSON.stringify(d).slice(0, 200)); return null; }
+    bumpUsage('fal', { submits: 1 });
+    return { requestId: d.request_id, statusUrl: d.status_url, responseUrl: d.response_url };
+  } catch (e) { console.error('[fal] submit error', e.message); return null; }
+}
+// Poll one in-flight clip; returns { done, videoUrl }.
+async function falPoll(clip) {
+  if (!FAL_KEY || !clip.statusUrl) return { done: false };
+  try {
+    const sr = await fetch(clip.statusUrl, { headers: { Authorization: `Key ${FAL_KEY}` } });
+    const sd = await sr.json().catch(() => ({}));
+    if (sd.status !== 'COMPLETED') return { done: false };
+    const rr = await fetch(clip.responseUrl, { headers: { Authorization: `Key ${FAL_KEY}` } });
+    const rd = await rr.json().catch(() => ({}));
+    const url = rd.video?.url || rd.output?.video?.url || (Array.isArray(rd.videos) && rd.videos[0]?.url) || null;
+    return { done: !!url, videoUrl: url };
+  } catch { return { done: false }; }
+}
+
+// Ensure a listing has a tour (generate clips if missing). Returns the tour or null.
+async function ensureTour(tripId, listingId, { force = false } = {}) {
+  if (!falConfigured()) return null;
+  const key = String(listingId);
+  const tours = loadTours(tripId);
+  if (tours[key] && !force) return tours[key];
+  if (!force && Object.keys(tours).length >= TOUR_TRIP_CAP) { console.warn(`[tours] cap reached for ${tripId}`); return null; }
+  const listing = findListingByIdInTrip(tripId, key);
+  const photos = (listing && listing.photos) || [];
+  if (!listing || photos.length === 0) return null;
+  const picks = await pickBestPhotos(photos);
+  if (!picks.length) return null;
+  const clips = [];
+  for (const p of picks) {
+    const sub = await falSubmit(photos[p.index], TOUR_PROMPT(p.feature));
+    clips.push({ photo: photos[p.index], feature: p.feature || 'Highlight', requestId: sub?.requestId || null, statusUrl: sub?.statusUrl || null, responseUrl: sub?.responseUrl || null, videoUrl: null });
+  }
+  if (!clips.some(c => c.requestId)) return null; // all submits failed
+  const tour = { listing_id: key, name: (listing.name || null), status: 'generating', clips, created_at: new Date().toISOString() };
+  const fresh = loadTours(tripId); fresh[key] = tour; saveTours(fresh, tripId);
+  console.log(`[tours] generating ${clips.length}-clip tour for ${tripId}/${key}`);
+  return tour;
+}
+
+// Background ticker: advance in-flight tours (fill clip URLs, mark ready).
+async function tickTours() {
+  if (!falConfigured()) return;
+  for (const tripId of Object.keys(loadTrips())) {
+    let tours;
+    try { tours = loadTours(tripId); } catch { continue; }
+    let changed = false;
+    for (const t of Object.values(tours)) {
+      if (t.status === 'ready') continue;
+      for (const c of t.clips) {
+        if (c.videoUrl || !c.requestId) continue;
+        const { done, videoUrl } = await falPoll(c);
+        if (done && videoUrl) { c.videoUrl = videoUrl; changed = true; }
+      }
+      if (t.clips.every(c => c.videoUrl)) { if (t.status !== 'ready') { t.status = 'ready'; changed = true; } }
+    }
+    if (changed) saveTours(tours, tripId);
+  }
+}
+function scheduleTours() {
+  if (!falConfigured()) { console.log('[tours] FAL_KEY not set — video tours disabled'); return; }
+  setInterval(() => { tickTours().catch(e => console.error('[tours] tick', e.message)); }, 30000);
+  console.log('[tours] poller armed (every 30s)');
+}
+
 // ── Apify token management + spend guard ───────────────────────────────────────
 // Two keys: a primary and an optional backup (the free tier is $5/key/month). When
 // the primary nears its cap, GroupPad auto-swaps to the backup so searches keep
@@ -2117,7 +2243,12 @@ const hFinalVote = (req, res) => {
     votes[req.user.id] = String(raw).slice(0, 80);
   }
   saveFinalVotes(votes, tripId);
-  if (raw) logEvent(tripId, 'pick', `${req.user.name || 'A member'} set a top choice`);
+  if (raw) {
+    logEvent(tripId, 'pick', `${req.user.name || 'A member'} set a top choice`);
+    // Auto-generate a walkthrough tour for a listing the group is converging on
+    // (cached + shared; capped; no-op if FAL_KEY unset or tour already exists).
+    ensureTour(tripId, String(raw)).catch((e) => console.error('[tours] auto', e.message));
+  }
   noteJoin(tripId, req.user);
   const { counts, total } = tallyFinal(votes);
   res.json({ counts, total, myPick: votes[req.user.id] || null, decision: loadDecision(tripId) });
@@ -2191,6 +2322,20 @@ const hRefreshReviews = async (req, res) => {
 };
 app.post('/api/admin/reviews/refresh-all', requireAdmin, hRefreshReviews);
 app.post('/api/trips/:tripId/reviews/refresh-all', requireTripOwner, hRefreshReviews);
+
+// ── Walkthrough tours: cached map (free) + organizer/auto generation ────────────
+const hGetTours = (req, res) => res.json(loadTours(req.params.tripId));
+app.get('/api/tours', hGetTours);
+app.get('/api/trips/:tripId/tours', loadTripOr404, hGetTours);
+
+const hGenTour = async (req, res) => {
+  if (!falConfigured()) return res.status(503).json({ error: 'Video tours aren’t configured yet (FAL_KEY missing on server).' });
+  const t = await ensureTour(req.params.tripId, req.params.listingId, { force: !!(req.body && req.body.force) });
+  if (!t) return res.status(400).json({ error: 'Could not start a tour — no photos for this listing, or the per-trip tour cap was reached.' });
+  res.json(t);
+};
+app.post('/api/admin/tours/:listingId/generate', requireAdmin, hGenTour);
+app.post('/api/trips/:tripId/tours/:listingId/generate', requireTripOwner, hGenTour);
 
 // ── Admin: Apify token usage (current month spend vs the $5 free cap) ───────────
 app.get('/api/admin/apify-usage', requireAdmin, async (req, res) => {
@@ -2590,4 +2735,5 @@ app.listen(PORT, () => {
   backfillSubmissionDistances().catch((e) => console.error('[backfill-sub] failed:', e.message));
   schedulePipeline();
   scheduleDigest();
+  scheduleTours();
 });

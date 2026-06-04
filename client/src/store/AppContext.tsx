@@ -19,6 +19,7 @@ import type {
   Itinerary,
   Listing,
   ListingReviews,
+  ListingTour,
   TripView,
   User,
   VoteDir,
@@ -62,6 +63,7 @@ interface AppState {
   insights: Insights | null;
   final: FinalState;
   reviewsMap: Record<string, ListingReviews>;
+  toursMap: Record<string, ListingTour>;
 
   // ui / local
   adminKey: string | null;
@@ -112,6 +114,8 @@ interface AppActions {
   // reviews
   loadReviewsFor: (listing: Listing) => Promise<void>;
   refreshAllReviews: (force?: boolean) => Promise<{ fetched: number; skipped: number; total: number }>;
+  // tours
+  generateTour: (listingId: string, force?: boolean) => Promise<void>;
   // platform admin key
   setAdminKey: (key: string) => Promise<boolean>;
   clearAdminKey: () => void;
@@ -152,6 +156,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [insights, setInsights] = useState<Insights | null>(null);
   const [final, setFinal] = useState<FinalState>(EMPTY_FINAL);
   const [reviewsMap, setReviewsMap] = useState<Record<string, ListingReviews>>({});
+  const [toursMap, setToursMap] = useState<Record<string, ListingTour>>({});
 
   // ui
   const [adminKey, setAdminKeyState] = useState<string | null>(() => localStorage.getItem(ADMIN_KEY_LS));
@@ -222,7 +227,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTripError(null);
     setSelected(new Set());
     try {
-      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, revRes] =
+      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, revRes, tourRes] =
         await Promise.all([
           api.getTrip(id),
           api.listings(id),
@@ -234,6 +239,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           api.insights(id),
           api.final(id),
           api.reviews(id).catch(() => ({})),
+          api.tours(id).catch(() => ({})),
         ]);
       if (token !== loadTokenRef.current) return; // a newer enterTrip superseded us
       setTrip(tripView);
@@ -246,6 +252,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setInsights(insRes.analysis ? insRes : null);
       setFinal(finalRes);
       setReviewsMap(revRes);
+      setToursMap(tourRes as Record<string, ListingTour>);
     } catch (e) {
       if (token !== loadTokenRef.current) return;
       setTripError(e instanceof ApiError && e.status === 404 ? 'Trip not found.' : 'Could not load this trip.');
@@ -296,6 +303,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     return r;
   }, []);
+
+  // Organizer: generate (or re-generate) a walkthrough tour for a listing.
+  const generateTour = useCallback(async (listingId: string, force?: boolean) => {
+    const id = tripIdRef.current;
+    if (!id) return;
+    const tour = await api.generateTour(id, listingId, force);
+    if (tripIdRef.current === id) setToursMap((m) => ({ ...m, [listingId]: tour }));
+  }, []);
+  const toursRef = useRef(toursMap);
+  toursRef.current = toursMap;
   useEffect(() => {
     const h = window.setInterval(async () => {
       const id = tripIdRef.current;
@@ -305,6 +322,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (tripIdRef.current !== id) return;
         if (JSON.stringify(v) !== JSON.stringify(votesRef.current)) setVotes(v);
         if (JSON.stringify(f) !== JSON.stringify(finalRef.current)) setFinal(f);
+        // While any tour is still rendering, refresh the map so it flips to ready.
+        if (Object.values(toursRef.current).some((t) => t.status !== 'ready')) {
+          const tr = await api.tours(id);
+          if (tripIdRef.current === id && JSON.stringify(tr) !== JSON.stringify(toursRef.current)) setToursMap(tr);
+        }
       } catch {
         /* transient */
       }
@@ -561,24 +583,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       user, myTrips, accountLoading,
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
-      listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap,
+      listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
-      runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, setAdminKey, clearAdminKey, runPipeline,
+      runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, setSplit, toast, dismissToast,
     }),
     [
       user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
-      listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap,
+      listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
-      runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, setAdminKey, clearAdminKey, runPipeline,
+      runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, toast, dismissToast,
     ],
   );

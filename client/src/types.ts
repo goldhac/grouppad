@@ -84,6 +84,21 @@ export interface ListingReviews {
   fetched_at: string;
 }
 
+/** One AI-generated clip in a listing's walkthrough tour. */
+export interface TourClip {
+  photo: string;
+  feature: string;
+  videoUrl: string | null;
+}
+/** A listing's walkthrough tour (clips of its best spaces). */
+export interface ListingTour {
+  listing_id: string;
+  name: string | null;
+  status: 'generating' | 'ready';
+  clips: TourClip[];
+  created_at: string;
+}
+
 /**
  * A rental listing. The backend has three sources (curated `listings.json`,
  * the scraped pipeline, and community submissions) whose shapes overlap but

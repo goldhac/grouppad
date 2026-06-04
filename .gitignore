@@ -7,6 +7,7 @@ data/caveats.json
 data/insights.json
 data/events.json
 data/reviews.json
+data/tours.json
 data/pipeline.db
 data/pipeline.db-shm
 data/pipeline.db-wal

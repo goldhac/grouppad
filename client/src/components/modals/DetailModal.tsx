@@ -1,12 +1,54 @@
 import { useEffect, useState } from 'react';
-import { ThumbsUp, ThumbsDown, Star, ExternalLink, MapPin, Plane, FerrisWheel, Pin, BadgeCheck, Link2 } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, ExternalLink, MapPin, Plane, FerrisWheel, Pin, BadgeCheck, Link2, Clapperboard, Sparkles } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/Dialog';
 import { BudgetBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { amenityLabel, fmt, fmtMins, tallyVotes } from '@/lib/utils';
-import type { ReviewSnippet } from '@/types';
+import type { ReviewSnippet, ListingTour } from '@/types';
+
+/** Plays a listing's walkthrough clips back-to-back as one tour. */
+function TourPlayer({ tour }: { tour: ListingTour }) {
+  const clips = tour.clips.filter((c) => c.videoUrl);
+  const [idx, setIdx] = useState(0);
+  useEffect(() => { setIdx(0); }, [tour.listing_id]);
+  if (!clips.length) return null;
+  const clip = clips[Math.min(idx, clips.length - 1)];
+  return (
+    <div className="space-y-2">
+      <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold">
+        <Clapperboard className="h-4 w-4" /> Walkthrough tour
+      </h3>
+      <video
+        key={clip.videoUrl!}
+        src={clip.videoUrl!}
+        className="aspect-video w-full rounded-lg border border-border bg-black"
+        autoPlay
+        muted
+        playsInline
+        controls
+        onEnded={() => setIdx((i) => (i < clips.length - 1 ? i + 1 : i))}
+      />
+      {clips.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {clips.map((c, i) => (
+            <button
+              key={i}
+              onClick={() => setIdx(i)}
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-xs transition-colors',
+                i === idx ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted hover:text-text',
+              )}
+            >
+              {c.feature || `Clip ${i + 1}`}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DistIcon({ kind }: { kind?: string }) {
   const Icon = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
@@ -47,8 +89,22 @@ export function DetailModal() {
   const {
     detailId, closeDetail, findListing, trip, split,
     user, votes, final, isOwner, castVote, toggleFinalPick, setDecision, requireSignIn,
-    reviewsMap, loadReviewsFor,
+    reviewsMap, loadReviewsFor, toursMap, generateTour, toast,
   } = useApp();
+  const [tourBusy, setTourBusy] = useState(false);
+
+  async function onGenTour() {
+    if (!l) return;
+    setTourBusy(true);
+    try {
+      await generateTour(l.id);
+      toast('Generating the walkthrough — it’ll appear here shortly.', 'success');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not start the tour.', 'error');
+    } finally {
+      setTourBusy(false);
+    }
+  }
 
   const l = detailId ? findListing(detailId) : undefined;
   const [photoIdx, setPhotoIdx] = useState(0);
@@ -172,6 +228,27 @@ export function DetailModal() {
             )}
           </div>
         )}
+
+        {/* Walkthrough tour — AI clips of the listing's best spaces */}
+        {(() => {
+          const tour = toursMap[l.id];
+          if (tour?.status === 'ready' && tour.clips.some((c) => c.videoUrl)) return <TourPlayer tour={tour} />;
+          if (tour?.status === 'generating') {
+            return (
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-panel-2 p-3 text-sm text-muted">
+                <Sparkles className="h-4 w-4 animate-pulse text-accent" /> Generating a walkthrough of the best spaces… (~a minute)
+              </div>
+            );
+          }
+          if (isOwner && !tour) {
+            return (
+              <Button variant="default" size="sm" disabled={tourBusy} onClick={() => void onGenTour()}>
+                <Clapperboard className="h-4 w-4" /> {tourBusy ? 'Starting…' : 'Generate walkthrough tour'}
+              </Button>
+            );
+          }
+          return null;
+        })()}
 
         {/* Specs + reviews */}
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
