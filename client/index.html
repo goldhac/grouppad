@@ -1,13 +1,38 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GroupPad — Pick one rental, together</title>
     <meta name="description" content="One shared board for your group to browse vacation rentals, vote, compare with AI, and lock in the place everyone's happy with." />
-    <meta name="theme-color" content="#0f1115" />
+    <meta name="theme-color" content="#FFFDF8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#15201E" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-    <!-- Open Graph (link previews on iMessage, Slack, WhatsApp, Facebook, etc.) -->
+    <!-- No-FOUC theme bootstrap: set the warm theme before first paint. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('gp_theme');
+          if (t !== 'light' && t !== 'dark') {
+            t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+
+    <!-- Brand type: Bricolage Grotesque (display) + Hanken Grotesk (sans) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Open Graph (link previews) -->
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="GroupPad" />
     <meta property="og:title" content="GroupPad — Pick one rental, together" />

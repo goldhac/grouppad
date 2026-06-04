@@ -1,11 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { ChevronDown, Plus, LogOut, LayoutGrid, Check, Bell } from 'lucide-react';
+import { ChevronDown, Plus, LogOut, LayoutGrid, Check, Bell, Sun, Moon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
+import { PeakLogo } from '@/components/ui/PeakLogo';
+import { useTheme } from '@/lib/useTheme';
 import { cn } from '@/lib/cn';
 import type { NotifPrefs } from '@/types';
+
+/** Warm light/dark theme toggle. */
+function ThemeToggle() {
+  const { theme, toggle } = useTheme();
+  return (
+    <button
+      onClick={toggle}
+      aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+      title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-inset hover:text-text"
+    >
+      {theme === 'dark' ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
+    </button>
+  );
+}
 
 /** A single labelled checkbox row for the notifications modal. */
 function Toggle({ label, desc, checked, disabled, onChange }: {
@@ -138,9 +155,8 @@ export function Navbar() {
     <header className="sticky top-0 z-40 border-b border-border bg-panel/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-4 sm:px-6">
         {/* Brand */}
-        <Link to="/" className="flex items-center gap-2 font-bold tracking-tight hover:no-underline">
-          <span className="text-xl">🏡</span>
-          <span className="text-[15px]">GroupPad</span>
+        <Link to="/" className="flex items-center text-accent hover:no-underline" aria-label="GroupPad home">
+          <PeakLogo withWord />
         </Link>
 
         {/* Trip switcher (when a trip is active) */}
@@ -190,6 +206,7 @@ export function Navbar() {
 
         {/* Right side */}
         <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle />
           {user ? (
             <>
               <Button variant="primary" size="sm" onClick={() => navigate('/trips/new')}>

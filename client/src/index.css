@@ -2,34 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg: #0f1115;
-  --panel: #181b22;
-  --panel-2: #1f232c;
-  --border: #2a2f3a;
-  --text: #e7ebf3;
-  --muted: #8a93a4;
-  --accent: #56d364;
-  --warn: #f0b440;
-  --danger: #f47070;
-  --link: #7ec5ff;
-  --radius: 14px;
-}
+/* Theme tokens + base typography live in ds2/tokens.css (imported in main.tsx,
+   loaded after this file so the v2 tokens win). */
 
 @layer base {
   * {
     @apply border-border;
-  }
-  html {
-    color-scheme: dark;
-  }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.5;
-    min-height: 100dvh;
   }
   a {
     color: var(--link);
@@ -38,26 +16,16 @@
   a:hover {
     text-decoration: underline;
   }
-  /* Respect reduced-motion globally (a11y rule reduced-motion). */
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.01ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.01ms !important;
-    }
-  }
 }
 
 @layer utilities {
-  /* Thin custom scrollbar for the dark theme. */
+  /* Thin custom scrollbar (warm-tinted, both themes). */
   .scrollbar-thin::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: var(--border);
+    background: var(--border-strong);
     border-radius: 8px;
   }
 }
@@ -86,10 +54,11 @@
   margin: 0.2em 0;
 }
 .md code {
-  background: var(--panel-2);
+  background: var(--surface-sunken);
   padding: 0.1em 0.35em;
   border-radius: 6px;
   font-size: 0.9em;
+  font-family: var(--font-mono);
 }
 .md strong {
   color: var(--text);
@@ -108,5 +77,5 @@
   text-align: left;
 }
 .md table.cmp-table th {
-  background: var(--panel-2);
+  background: var(--surface-sunken);
 }

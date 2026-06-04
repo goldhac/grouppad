@@ -16,7 +16,7 @@ export const DialogOverlay = forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 bg-black/60 backdrop-blur-sm data-[state=open]:animate-fade-in',
+      'fixed inset-0 z-50 bg-scrim backdrop-blur-sm data-[state=open]:animate-fade-in',
       className,
     )}
     {...props}
@@ -41,7 +41,7 @@ export const DialogContent = forwardRef<
       ref={ref}
       className={cn(
         'fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4',
-        'rounded-lg border border-border bg-panel p-6 shadow-2xl',
+        'rounded-lg border border-border bg-surface-raised p-6 shadow-pop',
         'max-h-[90vh] overflow-y-auto scrollbar-thin',
         'data-[state=open]:animate-pop-in',
         width,
@@ -52,7 +52,7 @@ export const DialogContent = forwardRef<
       {children}
       {showClose && (
         <DialogPrimitive.Close
-          className="absolute right-4 top-4 rounded-md p-1 text-muted opacity-80 transition-opacity hover:opacity-100 hover:bg-panel-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className="absolute right-4 top-4 rounded-md p-1.5 text-text-muted opacity-80 transition-opacity hover:bg-surface-inset hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ring)]"
           aria-label="Close"
         >
           <X className="h-5 w-5" />

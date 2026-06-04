@@ -25,3 +25,6 @@ data/finalvotes.json
 data/decision.json
 # Local tooling (installed globally too) — not app code.
 .claude/skills/
+
+# Imported Claude Design exports (un-ignore if you want it tracked)
+/design-v2/

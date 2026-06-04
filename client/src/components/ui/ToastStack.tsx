@@ -17,7 +17,7 @@ const TONE: Record<Toast['type'], string> = {
 
 const ICON_TONE: Record<Toast['type'], string> = {
   info: 'text-link',
-  success: 'text-accent',
+  success: 'text-accent-text',
   error: 'text-danger',
 };
 
@@ -36,7 +36,7 @@ export function ToastStack() {
             key={t.id}
             onClick={() => dismissToast(t.id)}
             className={cn(
-              'flex items-start gap-2.5 rounded-lg border bg-panel px-3.5 py-3 text-left text-sm text-text shadow-xl animate-toast-in',
+              'flex items-start gap-2.5 rounded-lg border bg-surface-raised px-3.5 py-3 text-left text-sm text-text shadow-lg animate-toast-in',
               TONE[t.type],
             )}
           >
