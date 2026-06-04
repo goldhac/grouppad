@@ -621,7 +621,11 @@ async function pickBestPhotos(photos, maxN = TOUR_MAX_CLIPS) {
   const fallback = () => list.slice(0, maxN).map((_, i) => ({ index: i, feature: 'Highlight' }));
   if (!gk || list.length === 0) return fallback();
   if (list.length <= maxN) return fallback();
-  const parts = [{ text: `These are photos of ONE vacation rental, in order (index 0..${list.length - 1}). For a GROUP trip, choose the ${maxN} MOST impressive, share-worthy spaces to feature in a short video tour — the wow factors (pool, games room, view, great room, theater, hot tub). Avoid plain bedrooms/bathrooms/closets. Respond JSON only: {"picks":[{"index":n,"feature":"short label"}]}` }];
+  const parts = [{ text: `These are photos of ONE vacation rental, in order (index 0..${list.length - 1}). Build a short house-tour shot list of ${maxN} photos, IN TOUR ORDER:
+1) FIRST pick the best establishing EXTERIOR shot — the front of the house, facade, building, or full exterior — if ANY photo shows one (this should lead the tour).
+2) Then pick the most impressive interior/outdoor WOW spaces (pool, games room, view, great room, theater, hot tub).
+Avoid plain bedrooms, bathrooms, and closets. If no exterior photo exists, just pick the ${maxN} best spaces.
+Respond JSON only: {"picks":[{"index":n,"feature":"short label"}]}` }];
   for (const url of list) {
     try {
       const r = await fetch(url);
