@@ -6,26 +6,70 @@ import { BudgetBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/cn';
 import { amenityLabel, fmt, fmtMins, tallyVotes } from '@/lib/utils';
+import type { ReviewSnippet } from '@/types';
 
 function DistIcon({ kind }: { kind?: string }) {
   const Icon = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
   return <Icon className="h-4 w-4" aria-hidden />;
 }
 
+/** One sentiment column of review snippets in the detail modal. */
+function ReviewList({ title, tone, items }: { title: string; tone: 'pos' | 'neg'; items: ReviewSnippet[] }) {
+  return (
+    <div>
+      <div className={cn('mb-1.5 inline-flex items-center gap-1 text-xs font-semibold', tone === 'pos' ? 'text-accent' : 'text-warn')}>
+        {tone === 'pos' ? <ThumbsUp className="h-3.5 w-3.5" /> : <ThumbsDown className="h-3.5 w-3.5" />}
+        {title}
+      </div>
+      {items.length === 0 ? (
+        <p className="text-xs text-muted">—</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((r, i) => (
+            <li key={i} className="rounded-lg border border-border bg-panel-2 p-2.5 text-xs">
+              <div className="mb-1 flex flex-wrap items-center gap-1.5 text-muted">
+                {r.rating != null && (
+                  <span className="inline-flex items-center gap-0.5"><Star className="h-3 w-3 fill-current" />{r.rating}</span>
+                )}
+                {r.author && <span>· {r.author}</span>}
+                {r.date && <span className="opacity-70">· {r.date}</span>}
+              </div>
+              <p className="leading-relaxed text-text">{r.text}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function DetailModal() {
   const {
     detailId, closeDetail, findListing, trip, split,
     user, votes, final, isOwner, castVote, toggleFinalPick, setDecision, requireSignIn,
+    reviewsMap, loadReviewsFor,
   } = useApp();
 
   const l = detailId ? findListing(detailId) : undefined;
   const [photoIdx, setPhotoIdx] = useState(0);
   const [copied, setCopied] = useState(false);
   const [refIdx, setRefIdx] = useState(0); // which reference point the map routes to
+  const [revLoading, setRevLoading] = useState(false);
   useEffect(() => {
     setPhotoIdx(0);
     setRefIdx(0);
   }, [detailId]);
+
+  // Lazily fetch reviews the first time a listing's detail is opened (members only;
+  // cached after the first fetch so it never re-spends).
+  useEffect(() => {
+    if (!l || !user || reviewsMap[`${l.source}:${l.id}`]) return;
+    let active = true;
+    setRevLoading(true);
+    loadReviewsFor(l).finally(() => { if (active) setRevLoading(false); });
+    return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailId, l?.id, user?.id]);
 
   const copyLink = async () => {
     if (!trip || !l) return;
@@ -176,6 +220,33 @@ export function DetailModal() {
             })}
           </div>
         )}
+
+        {/* Guest reviews — lazy-loaded on open, cached, split by star rating */}
+        {(() => {
+          const rev = reviewsMap[`${l.source}:${l.id}`];
+          const supported = /airbnb|vrbo/i.test(String(l.source));
+          if (rev || revLoading) {
+            return (
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold">Guest reviews{rev ? ` · ${rev.total}` : ''}</h3>
+                {revLoading && !rev ? (
+                  <p className="text-xs text-muted">Loading reviews…</p>
+                ) : rev && (rev.pos.length > 0 || rev.neg.length > 0) ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <ReviewList title="Loved it" tone="pos" items={rev.pos} />
+                    <ReviewList title="Concerns" tone="neg" items={rev.neg} />
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted">No written reviews available for this home.</p>
+                )}
+              </div>
+            );
+          }
+          if (supported && !user) {
+            return <p className="text-xs text-muted">Sign in to load guest reviews for this home.</p>;
+          }
+          return null;
+        })()}
 
         {/* Map — routes to a reference point; toggle the 3 (defaults to downtown) */}
         {dists.length > 0 && (

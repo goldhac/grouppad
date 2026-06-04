@@ -5,6 +5,8 @@ data/submitted.json
 data/itinerary.json
 data/caveats.json
 data/insights.json
+data/events.json
+data/reviews.json
 data/pipeline.db
 data/pipeline.db-shm
 data/pipeline.db-wal

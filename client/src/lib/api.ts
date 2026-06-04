@@ -7,7 +7,9 @@ import type {
   Insights,
   Itinerary,
   Listing,
+  ListingReviews,
   ListingsResponse,
+  NotifPrefs,
   PipelineResponse,
   TripPulse,
   TripView,
@@ -96,6 +98,11 @@ export const api = {
   deleteTrip: (tripId: string) =>
     request<{ ok: true }>(t(tripId), { method: 'DELETE' }),
   tripPulse: (tripId: string) => request<TripPulse>(`${t(tripId)}/pulse`),
+  invite: (tripId: string, emails: string) =>
+    request<{ sent: number; attempted: number }>(`${t(tripId)}/invite`, { method: 'POST', body: { emails } }),
+  notifPrefs: () => request<NotifPrefs>('/api/me/notifications'),
+  setNotifPrefs: (prefs: Partial<NotifPrefs>) =>
+    request<NotifPrefs>('/api/me/notifications', { method: 'POST', body: prefs }),
   runSearch: (tripId: string, max = 10) =>
     request<{ ok: true }>(`${t(tripId)}/run-search`, { method: 'POST', body: { max } }),
   searchStatus: (tripId: string) =>
@@ -129,6 +136,12 @@ export const api = {
       method: 'POST',
       body: { listings, criteria, ...(mode ? { mode } : {}) },
     }),
+
+  reviews: (tripId: string) => request<Record<string, ListingReviews>>(`${t(tripId)}/reviews`),
+  fetchReviews: (tripId: string, source: string, id: string, url: string, force?: boolean) =>
+    request<ListingReviews>(`${t(tripId)}/reviews/fetch`, { method: 'POST', body: { source, id, url, force } }),
+  refreshReviews: (tripId: string, force?: boolean) =>
+    request<{ fetched: number; skipped: number; total: number }>(`${t(tripId)}/reviews/refresh-all`, { method: 'POST', body: { force } }),
 
   final: (tripId: string) => request<FinalState>(`${t(tripId)}/final`),
   finalVote: (tripId: string, listing_id: string | null) =>

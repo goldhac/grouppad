@@ -62,6 +62,28 @@ export interface TripPulse {
   listings: number;
 }
 
+/** Per-user email notification preferences. */
+export interface NotifPrefs {
+  digest: boolean;
+  instant: boolean;
+}
+
+/** A single scraped guest review. */
+export interface ReviewSnippet {
+  text: string;
+  rating: number | null;
+  date: string | null;
+  author: string;
+}
+
+/** Cached review snippets for one listing — split by sentiment (stars). */
+export interface ListingReviews {
+  pos: ReviewSnippet[];
+  neg: ReviewSnippet[];
+  total: number;
+  fetched_at: string;
+}
+
 /**
  * A rental listing. The backend has three sources (curated `listings.json`,
  * the scraped pipeline, and community submissions) whose shapes overlap but

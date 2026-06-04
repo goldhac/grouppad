@@ -22,9 +22,11 @@ function DistIcon({ kind }: { kind?: string }) {
 
 export function Card({ listing: l, isSubmitted = false, isPipeline = false }: CardProps) {
   const {
-    user, votes, final, isOwner, split, trip, selected,
+    user, votes, final, isOwner, split, trip, selected, reviewsMap,
     castVote, toggleFinalPick, setDecision, deleteListing, toggleSelect, openDetail, requireSignIn,
   } = useApp();
+
+  const rev = reviewsMap[`${l.source}:${l.id}`];
 
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
   const finalCount = final.counts[l.id] ?? 0;
@@ -135,6 +137,26 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
               ? `${l.reviews} reviews`
               : 'no rating yet'}
         </div>
+
+        {/* Review peek — only once reviews have been fetched/cached for this home */}
+        {rev && (rev.pos.length > 0 || rev.neg.length > 0) && (
+          <div className="space-y-1">
+            {rev.pos[0] && (
+              <p className="line-clamp-2 text-xs italic text-muted">“{rev.pos[0].text}”</p>
+            )}
+            <div className="flex items-center gap-3 text-[11px]">
+              <span className="inline-flex items-center gap-1 text-accent">
+                <ThumbsUp className="h-3 w-3" /> {rev.pos.length}
+              </span>
+              <span className="inline-flex items-center gap-1 text-warn">
+                <ThumbsDown className="h-3 w-3" /> {rev.neg.length}
+              </span>
+              <button onClick={() => openDetail(l.id)} className="text-link hover:underline">
+                read reviews
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Price */}
         <div className="mt-auto flex items-baseline justify-between gap-2 pt-1">

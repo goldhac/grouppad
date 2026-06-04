@@ -175,6 +175,33 @@ primitives + `Card.tsx` to match — keep all behavior/types intact." Then page 
 
 ---
 
+## 7.5 Feature work IN FLIGHT — paused June 2026 (resume here)
+
+Three features were requested: **① email reminders/alerts, ② review snippets, ③ Higgsfield walkthrough video.** Order chosen: ①→②→③. **① and ② are built + locally verified but NOT committed/deployed** (working tree only). ③ not started.
+
+**Blocking on:** registering **`goldhac.com`** (blanket domain for all future apps) + verifying a `send.goldhac.com` sending domain in Resend. Until then, member emails only deliver to the owner's own inbox (Resend sandbox limitation).
+
+### ① Email (built, verified, undeployed)
+- `server.js`: generic `sendEmail`, `tripRecipients` (joins users.json), per-user `notif`+`unsub` tokens, `events.json` activity log (`logEvent` at vote/submit/caveat/pick/decision), **daily digest** job `runDigestJob`/`scheduleDigest` (16:00 UTC, skips empty trips, `last_digest_at` window), **instant alerts** `emailDecisionLocked` (→ all members) + `noteJoin` (→ organizer on new join). Routes: `POST /api/trips/:id/invite`, `GET/POST /api/me/notifications`, `GET /api/notify/unsubscribe?u=<token>` (HTML page). `APP_BASE_URL` env (defaults to live URL).
+- Client: `ManageView` invite-by-email box; `Navbar` account-menu "Email notifications" modal (`NotifModal`); `api.invite/notifPrefs/setNotifPrefs`; `NotifPrefs` type.
+
+### ② Reviews — last 4 👍 / 4 👎 (built, verified, undeployed)
+- Decision: **lazy fetch on detail-open + organizer "Fetch all" button; cached hard** (chosen to protect the $5/mo Apify free tier).
+- Actors: Airbnb `tri_angle~airbnb-reviews-scraper` (multi-URL/run; fields `text`/`rating`/`createdAt`), VRBO `powerai~vrbo-reviews-scraper` (1 URL/run; `reviewText`/`rating`/`stayedText`). $0.005/review (~$1.40 for the 14-home LA board, one-time). Split by stars (≥4 pos / ≤3 neg).
+- `server.js`: `runApifyActor`, `shapeReviews`, `fetchListingReviews`, per-trip `reviews.json` cache (`loadReviews/saveReviews`). Routes: `GET /api/trips/:id/reviews` (free cached map), `POST …/reviews/fetch` (requireAuth + apifyGuard + rateLimit), `POST …/reviews/refresh-all` (requireTripOwner, cap 40).
+- Client: `AppContext` `reviewsMap` + `loadReviewsFor` (members-only) + `refreshAllReviews`; `DetailModal` "Guest reviews" Loved-it/Concerns columns + auto-fetch on open; `Card` review peek (quote + 👍/👎 counts) when cached; `ManageView` "Fetch all reviews"; `api.reviews/fetchReviews/refreshReviews`; `ReviewSnippet`/`ListingReviews` types.
+- **Unverified:** live actor output field names (came from research, not a live call). First real fetch (~$0.10, auto on first detail-open in prod) confirms the mapping; off-by-a-field = one-line fix.
+
+### ③ Higgsfield walkthrough — NOT started
+- MCP connected (`mcp__eaad7a5f…`), **200 credits, "starter" plan.** Models are image-to-video (Seedance/Kling/Minimax/Higgsfield-preset), 4–15s clips with invented camera motion — animates photos, does NOT measure rooms. Scope chosen: **research/prototype only** (generate ONE sample from a real listing's photos to judge quality; confirm credit cost before spending).
+
+### TO RESUME (when domain verified)
+1. User pings "verified" with the from-address. Set Railway env: `railway variables --set "MAIL_FROM=GroupPad <trips@send.goldhac.com>"` (service `exquisite-inspiration`).
+2. `cd client && npm run build` → `railway up --service exquisite-inspiration --detach`.
+3. Verify: open a listing in prod → reviews fetch (confirm actor field mapping); send a test invite to a non-owner inbox; lock a decision → confirm member email.
+4. Then build ③ (video prototype) — confirm Higgsfield credit cost first.
+- New stores added to `.gitignore`: `data/events.json`, `data/reviews.json`.
+
 ## 8. How to resume cold in a new session
 1. Open `/Users/goldnwbou/Documents/Flight_Search`. `git pull` on `main`.
 2. Read this file + `DESIGN_REFERENCE.md` (+ skim `docs/screenshots/`).

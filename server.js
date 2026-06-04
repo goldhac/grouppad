@@ -119,6 +119,22 @@ function saveFinalVotes(v, tripId) { writeJsonAtomic(tripFile(tripId, 'finalvote
 function loadDecision(tripId)    { return readJson(tripFile(tripId, 'decision.json'), null); }
 function saveDecision(d, tripId) { writeJsonAtomic(tripFile(tripId, 'decision.json'), d); }
 
+// Cached review snippets per trip, keyed by `${source}:${id}` → { pos, neg, total,
+// fetched_at }. Decoupled from listing storage so it works for curated, pipeline,
+// and community listings alike. Scraped lazily (on detail-open) and cached hard.
+function loadReviews(tripId)    { return readJson(tripFile(tripId, 'reviews.json'), {}); }
+function saveReviews(m, tripId) { writeJsonAtomic(tripFile(tripId, 'reviews.json'), m); }
+
+// Activity log per trip — the source for the daily email digest. [{ ts, type, text }]
+function loadEvents(tripId) { return readJson(tripFile(tripId, 'events.json'), []); }
+function logEvent(tripId, type, text) {
+  try {
+    const list = loadEvents(tripId);
+    list.push({ ts: Date.now(), type, text: String(text || '').slice(0, 240) });
+    writeJsonAtomic(tripFile(tripId, 'events.json'), list.slice(-500)); // bounded
+  } catch (e) { console.error('[events] log failed:', e.message); }
+}
+
 // ── Trips registry (global) ───────────────────────────────────────────────────
 // trips.json: { [tripId]: { id, name, destination, checkin, checkout_5n,
 //   checkout_4n, adults, budget, tax_rate, cleaning_placeholder, owner_id,
@@ -414,28 +430,235 @@ async function sendManagerEmail(subject, html) {
   } catch (e) { console.error('[alert] send error:', e.message); }
 }
 
-// Apify spend guard: returns true if it's OK to spend, false if we're near the
-// monthly cap — in which case the site manager is emailed (throttled to 12h) so
-// they can rotate APIFY_TOKEN. Unknown limit / errors → allow (never hard-block).
+// ── Member notifications (daily digest + instant alerts) ───────────────────────
+// Where emails link back to. Set APP_BASE_URL in prod; defaults to the live URL.
+const APP_BASE_URL = (process.env.APP_BASE_URL || 'https://exquisite-inspiration-production-7511.up.railway.app').replace(/\/+$/, '');
+const boardUrl = (tripId) => `${APP_BASE_URL}/#/t/${tripId}/board`;
+
+// Generic transactional send (member digests, instant alerts, invites).
+// Returns true on success; never throws — email is best-effort.
+async function sendEmail(to, subject, html) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key || !isEmail(to)) { console.log(`[mail] (skipped) ${subject} → ${to}`); return false; }
+  const from = process.env.MAIL_FROM || 'GroupPad <onboarding@resend.dev>';
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], subject, html }),
+    });
+    if (!res.ok) { console.error('[mail] send failed:', res.status); return false; }
+    return true;
+  } catch (e) { console.error('[mail] send error:', e.message); return false; }
+}
+
+// Per-user prefs live on the user record: { notif:{digest,instant}, unsub }.
+// Opt-out model — both default ON until the user unsubscribes.
+function notifPrefs(user) {
+  const n = (user && user.notif) || {};
+  return { digest: n.digest !== false, instant: n.instant !== false };
+}
+// Lazily mint (and persist) a stable unsubscribe token for one user.
+function unsubToken(userId) {
+  const users = loadUsers();
+  const u = users[userId];
+  if (!u) return null;
+  if (!u.unsub) { u.unsub = crypto.randomBytes(16).toString('hex'); saveUsers(users); }
+  return u.unsub;
+}
+// Resolve a trip's members to emailable recipients (joins users.json), minting
+// unsubscribe tokens in a single pass.
+function tripRecipients(trip) {
+  if (!trip) return [];
+  const users = loadUsers();
+  let dirty = false;
+  const out = [];
+  for (const id of (trip.members || [])) {
+    const u = users[id];
+    if (!u || !isEmail(u.email)) continue;
+    if (!u.unsub) { u.unsub = crypto.randomBytes(16).toString('hex'); dirty = true; }
+    out.push({ id: u.id, email: u.email, name: u.name || u.email.split('@')[0], prefs: notifPrefs(u), unsub: u.unsub });
+  }
+  if (dirty) saveUsers(users);
+  return out;
+}
+// Find a listing (curated or community) by id within a trip — to name the pick.
+function findListingByIdInTrip(tripId, id) {
+  const sid = String(id);
+  const main = (loadListings(tripId).listings || []).find(l => String(l.id) === sid);
+  return main || (loadSubmitted(tripId).find(l => String(l.id) === sid) || null);
+}
+
+// Shared, restrained email chrome (clean + CAN-SPAM compliant unsubscribe).
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function btn(href, label) {
+  return `<a href="${href}" style="display:inline-block;background:#2f6df6;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-weight:600;font-size:14px">${esc(label)}</a>`;
+}
+function emailShell(bodyHtml, { unsub } = {}) {
+  const foot = unsub
+    ? `<p style="margin:24px 0 0;color:#9aa0aa;font-size:12px;line-height:1.6">You're getting this because you're in this GroupPad trip. <a href="${APP_BASE_URL}/api/notify/unsubscribe?u=${unsub}" style="color:#9aa0aa">Unsubscribe from trip emails</a>.</p>`
+    : '';
+  return `<div style="max-width:560px;margin:0 auto;padding:8px 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1a1d23">${bodyHtml}${foot}<p style="margin:20px 0 0;color:#b6bbc4;font-size:12px">GroupPad — pick one place, together.</p></div>`;
+}
+
+// Instant alert: a participant just joined → tell the organizer.
+function noteJoin(tripId, user) {
+  if (!tripId || !user) return;
+  const trip = getTrip(tripId);
+  if (!trip) return;
+  const wasMember = Array.isArray(trip.members) && trip.members.includes(user.id);
+  addMember(tripId, user.id);
+  if (wasMember || trip.owner_id === user.id) return; // not a new join
+  const owner = loadUsers()[trip.owner_id];
+  if (!owner || !isEmail(owner.email) || !notifPrefs(owner).instant) return;
+  const html = emailShell(
+    `<h2 style="margin:0 0 8px;font-size:19px">${esc(user.name || 'Someone')} joined ${esc(trip.name)}</h2>
+     <p style="margin:0 0 16px;color:#444;font-size:14px;line-height:1.6">Your group's coming together — they can now browse, vote, and add homes.</p>
+     ${btn(boardUrl(tripId), 'Open the board')}`,
+    { unsub: unsubToken(owner.id) }
+  );
+  sendEmail(owner.email, `${user.name || 'Someone'} joined ${trip.name}`, html).catch(() => {});
+}
+
+// Instant alert: the organizer locked the final pick → tell every member.
+async function emailDecisionLocked(tripId, listingId, actorId) {
+  const trip = getTrip(tripId);
+  if (!trip) return;
+  const listing = findListingByIdInTrip(tripId, listingId);
+  const name = (listing && listing.name) || 'the final pick';
+  const recips = tripRecipients(trip).filter((r) => r.prefs.instant && r.id !== actorId);
+  for (const r of recips) {
+    const html = emailShell(
+      `<p style="margin:0 0 6px;color:#2f6df6;font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase">It's official</p>
+       <h2 style="margin:0 0 8px;font-size:20px">${esc(trip.name)} has a winner</h2>
+       <p style="margin:0 0 16px;color:#444;font-size:15px;line-height:1.6">The organizer locked in <strong>${esc(name)}</strong> as the group's pick. Time to book your spot.</p>
+       ${btn(boardUrl(tripId), 'See the pick')}`,
+      { unsub: r.unsub }
+    );
+    await sendEmail(r.email, `It's official: ${name} — ${trip.name}`, html);
+  }
+  if (recips.length) console.log(`[notify] decision-locked → ${recips.length} member(s) on ${tripId}`);
+}
+
+// ── Review snippets (lazy, cached) ─────────────────────────────────────────────
+// Run an Apify actor synchronously and return its dataset items (or null). Slugs
+// use the vendor~name form. Counts toward the app-side usage meter.
+async function runApifyActor(slug, input, timeoutMs = 120000) {
+  const token = getApifyToken();
+  if (!token) return null;
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`https://api.apify.com/v2/acts/${slug}/run-sync-get-dataset-items?token=${token}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input), signal: ctrl.signal,
+    });
+    if (!res.ok) { console.error(`[reviews] apify ${slug} ${res.status}`); return null; }
+    const items = await res.json();
+    bumpUsage('apify', { calls: 1, results: Array.isArray(items) ? items.length : 0 });
+    return Array.isArray(items) ? items : [];
+  } catch (e) { console.error(`[reviews] apify ${slug} error:`, e.message); return null; }
+  finally { clearTimeout(to); }
+}
+
+// Normalize + split raw reviews into newest-first positive (≥4★) / negative (≤3★).
+function shapeReviews(raw) {
+  const norm = (raw || [])
+    .map(r => ({
+      text: String(r.text || '').replace(/\s+/g, ' ').trim().slice(0, 400),
+      rating: Number.isFinite(+r.rating) ? +r.rating : null,
+      date: r.date ? String(r.date).slice(0, 40) : null,
+      author: String(r.author || '').slice(0, 40),
+    }))
+    .filter(r => r.text);
+  return {
+    pos: norm.filter(r => (r.rating ?? 5) >= 4).slice(0, 4),
+    neg: norm.filter(r => (r.rating ?? 5) <= 3).slice(0, 4),
+    total: norm.length,
+    fetched_at: new Date().toISOString(),
+  };
+}
+
+// Fetch review text for one listing via the platform-appropriate Apify actor.
+// Returns a shaped object, or null if the source is unsupported / the run failed.
+async function fetchListingReviews(source, url, max = 20) {
+  if (!url) return null;
+  const s = String(source || '').toLowerCase();
+  if (s.includes('airbnb')) {
+    const items = await runApifyActor('tri_angle~airbnb-reviews-scraper', {
+      startUrls: [{ url }], maxReviewsPerListing: max, sortBy: 'most-recent',
+    });
+    if (items == null) return null;
+    return shapeReviews(items.map(it => ({
+      text: it.text ?? it.localizedText, rating: it.rating, date: it.createdAt,
+      author: it.reviewer?.firstName ?? it.reviewerName,
+    })));
+  }
+  if (s.includes('vrbo')) {
+    const items = await runApifyActor('powerai~vrbo-reviews-scraper', { searchUrl: url, maxItems: max });
+    if (items == null) return null;
+    return shapeReviews(items.map(it => ({
+      text: it.reviewText ?? it.text, rating: it.rating, date: it.stayedText ?? it.date, author: it.author,
+    })));
+  }
+  return null; // Booking.com / other sources have no review actor wired up
+}
+
+// ── Apify token management + spend guard ───────────────────────────────────────
+// Two keys: a primary and an optional backup (the free tier is $5/key/month). When
+// the primary nears its cap, GroupPad auto-swaps to the backup so searches keep
+// working; only when BOTH are near-limit does it pause + email the manager.
+// `_activeApify` is the key currently in use; spawned children (pipeline.js) get it
+// passed in as APIFY_TOKEN, so the swap propagates everywhere.
+const APIFY_PRIMARY  = process.env.APIFY_TOKEN || '';
+const APIFY_FALLBACK = process.env.APIFY_TOKEN_FALLBACK || '';
+let _activeApify = APIFY_PRIMARY || APIFY_FALLBACK;
 let _lastApifyAlertAt = 0;
+let _lastApifySwapAt = 0;
 const APIFY_ALERT_PCT = Number(process.env.APIFY_ALERT_PCT || 0.85);
+function getApifyToken() { return _activeApify; }
+function apifyConfigured() { return !!(APIFY_PRIMARY || APIFY_FALLBACK); }
+// True if a usage summary shows headroom (or is unknown — never hard-block on errors).
+const _apifyHasRoom = (s) =>
+  !s || s.usageUsd == null || s.limitUsd == null || s.limitUsd <= 0 || (s.usageUsd / s.limitUsd) < APIFY_ALERT_PCT;
+
 async function apifyGuard(context) {
   try {
-    const s = await fetchApifySummary();
-    if (!s || s.usageUsd == null || s.limitUsd == null || s.limitUsd <= 0) return true;
-    const pct = s.usageUsd / s.limitUsd;
-    if (pct < APIFY_ALERT_PCT) return true;
-    const now = Date.now();
-    if (now - _lastApifyAlertAt > 12 * 60 * 60 * 1000) {
-      _lastApifyAlertAt = now;
-      await sendManagerEmail(
-        `⚠️ GroupPad: Apify usage at ${Math.round(pct * 100)}%`,
-        `<p>The Apify account is at <b>${Math.round(pct * 100)}%</b> of its monthly limit ($${s.usageUsd.toFixed(2)} of $${s.limitUsd.toFixed(2)}).</p>
-         <p>GroupPad <b>paused ${context}</b> to avoid overage. Rotate <code>APIFY_TOKEN</code> on Railway (or upgrade the plan) to resume rental searches.</p>`
-      );
-      console.warn(`[apify-guard] near limit (${Math.round(pct * 100)}%) — paused ${context}, manager alerted`);
+    if (!apifyConfigured()) return true; // nothing configured → never hard-block
+    // Prefer the primary while it has headroom.
+    if (APIFY_PRIMARY) {
+      const ps = await fetchApifySummary(APIFY_PRIMARY);
+      if (_apifyHasRoom(ps)) { _activeApify = APIFY_PRIMARY; return true; }
+      // Primary near limit → auto-swap to the backup if it still has room.
+      if (APIFY_FALLBACK) {
+        const fb = await fetchApifySummary(APIFY_FALLBACK);
+        if (_apifyHasRoom(fb)) {
+          if (_activeApify !== APIFY_FALLBACK) {
+            _activeApify = APIFY_FALLBACK;
+            _lastApifySwapAt = Date.now();
+            const pctP = Math.round((ps.usageUsd / ps.limitUsd) * 100);
+            console.warn(`[apify-guard] primary at ${pctP}% — auto-swapped to backup key for ${context}`);
+            sendManagerEmail('GroupPad: switched to the backup Apify key',
+              `<p>Your primary Apify key reached <b>${pctP}%</b> of its monthly limit, so GroupPad automatically switched to the backup key to keep ${context} running — no action needed right now.</p>
+               <p>When you get a chance, drop a fresh key into <code>APIFY_TOKEN_FALLBACK</code> on Railway so there's always a spare.</p>`).catch(() => {});
+          }
+          return true;
+        }
+      }
+      // Both keys near limit → pause + alert (throttled to once / 12h).
+      const pct = ps.usageUsd / ps.limitUsd;
+      const now = Date.now();
+      if (now - _lastApifyAlertAt > 12 * 60 * 60 * 1000) {
+        _lastApifyAlertAt = now;
+        await sendManagerEmail(`⚠️ GroupPad: Apify usage at ${Math.round(pct * 100)}%`,
+          `<p>${APIFY_FALLBACK ? 'Both Apify keys are' : 'The Apify key is'} near the monthly limit. GroupPad <b>paused ${context}</b> to avoid overage. Rotate <code>APIFY_TOKEN</code>${APIFY_FALLBACK ? ' / <code>APIFY_TOKEN_FALLBACK</code>' : ''} on Railway (or upgrade the plan) to resume.</p>`);
+        console.warn(`[apify-guard] near limit (${Math.round(pct * 100)}%) — paused ${context}, manager alerted`);
+      }
+      return false;
     }
-    return false;
+    // Only a backup is configured → use it, guarded by its own usage.
+    _activeApify = APIFY_FALLBACK;
+    return _apifyHasRoom(await fetchApifySummary(APIFY_FALLBACK));
   } catch (e) {
     console.error('[apify-guard]', e.message);
     return true;
@@ -1399,7 +1622,8 @@ const hPostVotes = (req, res) => {
   if (vote === null) delete votes[listing_id][voter];
   else votes[listing_id][voter] = vote;
   saveVotes(votes, tripId);
-  if (tripId) addMember(tripId, voter); // auto-join on first participation
+  if (vote) logEvent(tripId, 'vote', `${req.user.name || 'A member'} voted on a home`);
+  noteJoin(tripId, req.user); // auto-join on first participation (+ alerts organizer)
   res.json(votes);
 };
 app.post('/api/votes', requireAuth, hPostVotes);
@@ -1533,7 +1757,8 @@ const hSubmit = async (req, res) => {
   const fresh = loadSubmitted(tripId);
   fresh.push(entry);
   saveSubmitted(fresh, tripId);
-  if (tripId) addMember(tripId, req.user.id); // auto-join on first contribution
+  logEvent(tripId, 'submit', `${by} added "${scraped.name || 'a home'}"`);
+  noteJoin(tripId, req.user); // auto-join on first contribution (+ alerts organizer)
   res.json(entry);
 };
 app.post('/api/submit', requireAuth, rateLimit({ windowMs: 60000, max: 5 }), hSubmit);
@@ -1792,12 +2017,12 @@ app.post('/api/trips/:tripId/compare-listings', loadTripOr404, rateLimit({ windo
 
 // Admin: trigger a pipeline run (runs pipeline.js as a child process)
 app.post('/api/admin/run-pipeline', requireAdmin, async (req, res) => {
-  if (!process.env.APIFY_TOKEN) return res.status(400).json({ error: 'APIFY_TOKEN not set on server' });
+  if (!apifyConfigured()) return res.status(400).json({ error: 'No Apify key set on server' });
   if (!(await apifyGuard('the manual pipeline run')))
     return res.status(429).json({ error: 'Apify usage is near its monthly limit — paused. Rotate APIFY_TOKEN to resume.' });
   const { spawn } = require('child_process');
   console.log('[Admin] Starting pipeline run…');
-  const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env: { ...process.env }, detached: true, stdio: 'ignore' });
+  const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env: { ...process.env, APIFY_TOKEN: getApifyToken() }, detached: true, stdio: 'ignore' });
   child.unref();
   res.json({ ok: true, message: 'Pipeline started in background — check server logs' });
 });
@@ -1835,7 +2060,8 @@ const hPostCaveat = (req, res) => {
   list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), user_id: req.user.id, name, text, created_at: new Date().toISOString() });
   const trimmed = list.slice(-200); // keep the log bounded
   saveCaveats(trimmed, tripId);
-  if (tripId) addMember(tripId, req.user.id);
+  logEvent(tripId, 'caveat', `${name}: "${text.slice(0, 100)}"`);
+  noteJoin(tripId, req.user);
   res.json(trimmed);
 };
 app.post('/api/caveats', requireAuth, hPostCaveat);
@@ -1882,7 +2108,8 @@ const hFinalVote = (req, res) => {
     votes[req.user.id] = String(raw).slice(0, 80);
   }
   saveFinalVotes(votes, tripId);
-  if (tripId) addMember(tripId, req.user.id);
+  if (raw) logEvent(tripId, 'pick', `${req.user.name || 'A member'} set a top choice`);
+  noteJoin(tripId, req.user);
   const { counts, total } = tallyFinal(votes);
   res.json({ counts, total, myPick: votes[req.user.id] || null, decision: loadDecision(tripId) });
 };
@@ -1898,15 +2125,68 @@ const hDecision = (req, res) => {
   }
   const decision = { listing_id: String(raw).slice(0, 80), locked_at: new Date().toISOString() };
   saveDecision(decision, tripId);
+  logEvent(tripId, 'decision', 'The organizer locked the final pick');
+  emailDecisionLocked(tripId, decision.listing_id, req.user && req.user.id).catch((e) => console.error('[notify] decision email failed:', e.message));
   res.json({ decision });
 };
 app.post('/api/admin/decision', requireAdmin, hDecision);
 app.post('/api/trips/:tripId/decision', requireTripOwner, hDecision);
 
+// ── Review snippets: cached map (free) + lazy fetch + organizer refresh ──────────
+const hGetReviews = (req, res) => res.json(loadReviews(req.params.tripId));
+app.get('/api/reviews', hGetReviews);
+app.get('/api/trips/:tripId/reviews', loadTripOr404, hGetReviews);
+
+// Fetch-if-missing for one listing (members only; guarded + rate-limited).
+const hFetchReviews = async (req, res) => {
+  const tripId = req.params.tripId;
+  const { source, id, url, force } = req.body || {};
+  if (!source || id == null) return res.status(400).json({ error: 'source and id required' });
+  if (!url || !parseListingUrl(url)) return res.status(400).json({ error: 'A valid Airbnb/VRBO listing URL is required.' });
+  const key = `${source}:${id}`;
+  const cached = loadReviews(tripId)[key];
+  if (cached && !force) return res.json(cached); // already cached → no spend
+  if (!(await apifyGuard('a reviews fetch')))
+    return res.status(429).json({ error: 'Reviews are paused — Apify usage is near its monthly limit.' });
+  const shaped = await fetchListingReviews(source, url, 20);
+  if (!shaped) return res.status(502).json({ error: 'Reviews aren’t available for this listing yet.' });
+  const fresh = loadReviews(tripId);
+  fresh[key] = shaped;
+  saveReviews(fresh, tripId);
+  res.json(shaped);
+};
+app.post('/api/reviews/fetch', requireAuth, rateLimit({ windowMs: 60000, max: 12 }), hFetchReviews);
+app.post('/api/trips/:tripId/reviews/fetch', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 12 }), hFetchReviews);
+
+// Organizer: fetch reviews for every listing still missing them (one click, guarded).
+const hRefreshReviews = async (req, res) => {
+  const tripId = req.params.tripId;
+  if (!(await apifyGuard('a reviews refresh')))
+    return res.status(429).json({ error: 'Reviews are paused — Apify usage is near its monthly limit.' });
+  const force = !!(req.body && req.body.force);
+  const seen = new Set();
+  const listings = [...(loadListings(tripId).listings || []), ...loadSubmitted(tripId)]
+    .filter(l => l && l.url && parseListingUrl(l.url))
+    .filter(l => { const k = `${l.source}:${l.id}`; if (seen.has(k)) return false; seen.add(k); return true; })
+    .slice(0, 40); // hard cap to bound spend
+  const map = loadReviews(tripId);
+  let fetched = 0, skipped = 0;
+  for (const l of listings) {
+    const key = `${l.source}:${l.id}`;
+    if (map[key] && !force) { skipped++; continue; }
+    const shaped = await fetchListingReviews(l.source, l.url, 20);
+    if (shaped) { map[key] = shaped; fetched++; }
+  }
+  saveReviews(map, tripId);
+  res.json({ fetched, skipped, total: listings.length });
+};
+app.post('/api/admin/reviews/refresh-all', requireAdmin, hRefreshReviews);
+app.post('/api/trips/:tripId/reviews/refresh-all', requireTripOwner, hRefreshReviews);
+
 // ── Admin: Apify token usage (current month spend vs the $5 free cap) ───────────
 app.get('/api/admin/apify-usage', requireAdmin, async (req, res) => {
-  const token = process.env.APIFY_TOKEN;
-  if (!token) return res.status(400).json({ error: 'APIFY_TOKEN not set on server' });
+  const token = getApifyToken();
+  if (!token) return res.status(400).json({ error: 'No Apify key set on server' });
   try {
     const [limitsR, runsR] = await Promise.all([
       fetch(`https://api.apify.com/v2/users/me/limits?token=${token}`),
@@ -1955,8 +2235,7 @@ async function fetchFirecrawlCredits() {
   return null;
 }
 
-async function fetchApifySummary() {
-  const token = process.env.APIFY_TOKEN;
+async function fetchApifySummary(token = _activeApify) {
   if (!token) return null;
   try {
     const [limitsR, runsR] = await Promise.all([
@@ -2008,7 +2287,7 @@ app.get('/api/admin/usage', requireAdmin, async (req, res) => {
       planCredits: firecrawl ? firecrawl.plan : null,
     },
     apify: {
-      configured: !!process.env.APIFY_TOKEN,
+      configured: apifyConfigured(),
       spentUsd: apify ? apify.usageUsd : null,
       limitUsd: apify ? apify.limitUsd : null,
       recent: apify ? apify.recent : [],
@@ -2028,10 +2307,10 @@ app.get('/api/admin/usage', requireAdmin, async (req, res) => {
 // created trip. Writes a .searching marker immediately so the client's status
 // poll is accurate from t=0; pipeline.js clears it when the run finishes.
 function spawnTripSearch(tripId, maxItems) {
-  if (!process.env.APIFY_TOKEN || tripId === LA_TRIP_ID) return false;
+  if (!apifyConfigured() || tripId === LA_TRIP_ID) return false;
   try { fs.writeFileSync(path.join(tripDir(tripId), '.searching'), new Date().toISOString()); } catch {}
   const { spawn } = require('child_process');
-  const env = { ...process.env, TRIP_ID: tripId };
+  const env = { ...process.env, TRIP_ID: tripId, APIFY_TOKEN: getApifyToken() };
   if (maxItems) env.TRIP_SEARCH_MAX = String(maxItems);
   const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env, detached: true, stdio: 'ignore' });
   child.unref();
@@ -2085,8 +2364,8 @@ app.post('/api/trips/:tripId/join', requireAuth, (req, res) => {
   const code = (req.body && req.body.join_code) || '';
   if (trip.join_code && code && code !== trip.join_code)
     return res.status(403).json({ error: 'Invalid invite link.' });
-  const updated = addMember(trip.id, req.user.id);
-  res.json(tripView(updated, req.user));
+  noteJoin(trip.id, req.user);
+  res.json(tripView(getTrip(trip.id), req.user));
 });
 
 // Leave a trip (the organizer cannot leave their own).
@@ -2099,6 +2378,58 @@ app.post('/api/trips/:tripId/leave', requireAuth, (req, res) => {
   trip.members = (trip.members || []).filter(id => id !== req.user.id);
   saveTrips(trips);
   res.json({ ok: true });
+});
+
+// Organizer: invite people by email (each gets a one-tap join link). "You're invited."
+app.post('/api/trips/:tripId/invite', requireTripOwner, async (req, res) => {
+  const trip = req.trip;
+  const raw = String((req.body && req.body.emails) || '');
+  const emails = [...new Set(raw.split(/[\s,;]+/).map(s => s.trim().toLowerCase()).filter(isEmail))].slice(0, 25);
+  if (!emails.length) return res.status(400).json({ error: 'Enter at least one valid email address.' });
+  const link = `${boardUrl(trip.id)}?join=${trip.join_code}`;
+  const inviter = req.user.name || 'The organizer';
+  let sent = 0;
+  for (const e of emails) {
+    const html = emailShell(
+      `<h2 style="margin:0 0 8px;font-size:20px">You're invited to ${esc(trip.name)}</h2>
+       <p style="margin:0 0 16px;color:#444;font-size:15px;line-height:1.6">${esc(inviter)} invited you to help pick the place${trip.destination ? ` in ${esc(trip.destination)}` : ''} on GroupPad. Browse homes, vote, and weigh in.</p>
+       ${btn(link, 'Join the trip')}
+       <p style="margin:16px 0 0;color:#9aa0aa;font-size:12px">If you weren't expecting this, you can safely ignore it.</p>`
+    );
+    if (await sendEmail(e, `You're invited: ${trip.name}`, html)) sent++;
+  }
+  res.json({ sent, attempted: emails.length });
+});
+
+// Per-user email notification preferences (digest + instant).
+app.get('/api/me/notifications', requireAuth, (req, res) => res.json(notifPrefs(req.user)));
+app.post('/api/me/notifications', requireAuth, (req, res) => {
+  const users = loadUsers();
+  const u = users[req.user.id];
+  if (!u) return res.status(404).json({ error: 'No account.' });
+  const b = req.body || {};
+  const cur = notifPrefs(u);
+  u.notif = {
+    digest: b.digest !== undefined ? !!b.digest : cur.digest,
+    instant: b.instant !== undefined ? !!b.instant : cur.instant,
+  };
+  saveUsers(users);
+  res.json(notifPrefs(u));
+});
+
+// One-click unsubscribe from the email footer (token, no auth). Turns all off.
+app.get('/api/notify/unsubscribe', (req, res) => {
+  const token = String(req.query.u || '');
+  const users = loadUsers();
+  const entry = token && Object.values(users).find(u => u.unsub && u.unsub === token);
+  if (entry) { entry.notif = { digest: false, instant: false }; saveUsers(users); }
+  res.set('Content-Type', 'text/html').send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${entry ? 'Unsubscribed' : 'Link expired'}</title></head>
+<body style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f1115;color:#e7e9ee;display:flex;min-height:92vh;align-items:center;justify-content:center;text-align:center">
+<div style="max-width:440px;padding:24px">
+<h1 style="font-size:22px;margin:0 0 10px">${entry ? "You're unsubscribed" : 'Link expired'}</h1>
+<p style="color:#9aa0aa;font-size:15px;line-height:1.6">${entry ? "You won't get any more GroupPad trip emails. You can turn them back on anytime from your account settings." : "We couldn't find that unsubscribe link — it may already have been used."}</p>
+<p style="margin-top:22px"><a href="${APP_BASE_URL}" style="color:#6ea0ff;text-decoration:none">Back to GroupPad &rarr;</a></p>
+</div></body></html>`);
 });
 
 // Organizer: (re)run the rental search for this trip (capped).
@@ -2161,15 +2492,15 @@ const PIPELINE_HOUR_UTC     = Number(process.env.PIPELINE_HOUR_UTC ?? 15);
 const PIPELINE_INTERVAL_DAYS = Math.max(1, Number(process.env.PIPELINE_INTERVAL_DAYS ?? 3));
 
 async function runPipelineJob() {
-  if (!process.env.APIFY_TOKEN) {
-    console.log('[Cron] Skipping pipeline run — APIFY_TOKEN not set');
+  if (!apifyConfigured()) {
+    console.log('[Cron] Skipping pipeline run — no Apify key configured');
     return;
   }
   if (!(await apifyGuard('the scheduled LA refresh'))) return;
   const { spawn } = require('child_process');
   console.log('[Cron] Starting scheduled pipeline run…');
   const child = spawn('node', ['pipeline.js'], {
-    cwd: __dirname, env: { ...process.env }, detached: true, stdio: 'ignore',
+    cwd: __dirname, env: { ...process.env, APIFY_TOKEN: getApifyToken() }, detached: true, stdio: 'ignore',
   });
   child.unref();
 }
@@ -2187,6 +2518,71 @@ function schedulePipeline() {
   }, delay);
 }
 
+// ── Daily member digest ─────────────────────────────────────────────────────────
+// Once a day, email each trip's members a recap of the last day's activity. Trips
+// with nothing new are skipped (no spam). Respects per-user prefs + unsubscribe.
+const DIGEST_HOUR_UTC = Number(process.env.DIGEST_HOUR_UTC ?? 16);
+const DIGEST_LABELS = { submit: 'new home', caveat: 'must-have', pick: 'top-choice pick', vote: 'vote', decision: 'decision' };
+
+function buildDigest(tripId, sinceTs) {
+  const events = loadEvents(tripId).filter(e => e.ts > sinceTs);
+  if (!events.length) return null;
+  const groups = {};
+  for (const e of events) (groups[e.type] = groups[e.type] || []).push(e);
+  return { total: events.length, groups };
+}
+function digestHtml(trip, digest, recip) {
+  const rows = [];
+  for (const type of ['submit', 'caveat', 'pick', 'vote', 'decision']) {
+    const list = digest.groups[type];
+    if (!list || !list.length) continue;
+    const head = `${list.length} ${DIGEST_LABELS[type]}${list.length === 1 ? '' : 's'}`;
+    const samples = (type === 'submit' || type === 'caveat')
+      ? `<ul style="margin:6px 0 0;padding-left:18px">${list.slice(-4).map(e => `<li style="margin:2px 0;color:#555;font-size:13px">${esc(e.text)}</li>`).join('')}</ul>`
+      : '';
+    rows.push(`<li style="margin:0 0 10px;font-size:15px"><strong>${esc(head)}</strong>${samples}</li>`);
+  }
+  return emailShell(
+    `<p style="margin:0 0 6px;color:#2f6df6;font-weight:600;font-size:13px;letter-spacing:.03em;text-transform:uppercase">Daily recap</p>
+     <h2 style="margin:0 0 4px;font-size:20px">${esc(trip.name)}</h2>
+     <p style="margin:0 0 16px;color:#666;font-size:14px">Here's what your group got up to in the last day.</p>
+     <ul style="margin:0 0 18px;padding-left:18px;list-style:disc">${rows.join('')}</ul>
+     ${btn(boardUrl(trip.id), 'Open the board')}`,
+    { unsub: recip.unsub }
+  );
+}
+async function runDigestJob() {
+  const trips = loadTrips();
+  const now = Date.now();
+  for (const trip of Object.values(trips)) {
+    try {
+      const since = trip.last_digest_at ? Date.parse(trip.last_digest_at) : (now - 24 * 3600 * 1000);
+      const digest = buildDigest(trip.id, since);
+      if (digest) {
+        const recips = tripRecipients(trip).filter(r => r.prefs.digest);
+        for (const r of recips) await sendEmail(r.email, `${trip.name}: your daily recap`, digestHtml(trip, digest, r));
+        if (recips.length) console.log(`[digest] ${trip.id}: sent ${recips.length} (${digest.total} events)`);
+      }
+    } catch (e) { console.error('[digest] trip failed:', trip.id, e.message); }
+  }
+  // Advance the window for every trip (re-read in case membership changed mid-run).
+  const fresh = loadTrips();
+  for (const id of Object.keys(fresh)) fresh[id].last_digest_at = new Date(now).toISOString();
+  saveTrips(fresh);
+}
+function scheduleDigest() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCHours(DIGEST_HOUR_UTC, 0, 0, 0);
+  while (next <= now) next.setUTCDate(next.getUTCDate() + 1);
+  const delay = next - now;
+  console.log(`[digest] Next member digest at ${next.toISOString()} (in ${Math.round(delay / 3600000)}h)`);
+  setTimeout(() => {
+    runDigestJob().catch(e => console.error('[digest] job failed:', e.message));
+    scheduleDigest();
+  }, delay);
+}
+
 app.listen(PORT, () => {
   console.log(`GroupPad listening on :${PORT}`);
   try { migrateLegacyTripIfNeeded(); } catch (e) { console.error('[migrate] failed:', e.message); }
@@ -2194,4 +2590,5 @@ app.listen(PORT, () => {
   // Backfill 3-distance chips on pre-existing community submissions (one-time).
   backfillSubmissionDistances().catch((e) => console.error('[backfill-sub] failed:', e.message));
   schedulePipeline();
+  scheduleDigest();
 });

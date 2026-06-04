@@ -18,6 +18,7 @@ import type {
   Insights,
   Itinerary,
   Listing,
+  ListingReviews,
   TripView,
   User,
   VoteDir,
@@ -60,6 +61,7 @@ interface AppState {
   caveats: Caveat[];
   insights: Insights | null;
   final: FinalState;
+  reviewsMap: Record<string, ListingReviews>;
 
   // ui / local
   adminKey: string | null;
@@ -107,6 +109,9 @@ interface AppActions {
   // compare / itinerary
   runCompare: (items: CompareListingInput[], criteria: string, mode?: '1v1') => Promise<string>;
   saveItinerary: (text: string) => Promise<void>;
+  // reviews
+  loadReviewsFor: (listing: Listing) => Promise<void>;
+  refreshAllReviews: (force?: boolean) => Promise<{ fetched: number; skipped: number; total: number }>;
   // platform admin key
   setAdminKey: (key: string) => Promise<boolean>;
   clearAdminKey: () => void;
@@ -146,6 +151,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [caveats, setCaveats] = useState<Caveat[]>([]);
   const [insights, setInsights] = useState<Insights | null>(null);
   const [final, setFinal] = useState<FinalState>(EMPTY_FINAL);
+  const [reviewsMap, setReviewsMap] = useState<Record<string, ListingReviews>>({});
 
   // ui
   const [adminKey, setAdminKeyState] = useState<string | null>(() => localStorage.getItem(ADMIN_KEY_LS));
@@ -216,7 +222,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTripError(null);
     setSelected(new Set());
     try {
-      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes] =
+      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, revRes] =
         await Promise.all([
           api.getTrip(id),
           api.listings(id),
@@ -227,6 +233,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           api.caveats(id),
           api.insights(id),
           api.final(id),
+          api.reviews(id).catch(() => ({})),
         ]);
       if (token !== loadTokenRef.current) return; // a newer enterTrip superseded us
       setTrip(tripView);
@@ -238,6 +245,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCaveats(cavRes);
       setInsights(insRes.analysis ? insRes : null);
       setFinal(finalRes);
+      setReviewsMap(revRes);
     } catch (e) {
       if (token !== loadTokenRef.current) return;
       setTripError(e instanceof ApiError && e.status === 404 ? 'Trip not found.' : 'Could not load this trip.');
@@ -261,6 +269,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
   votesRef.current = votes;
   const finalRef = useRef(final);
   finalRef.current = final;
+  const reviewsRef = useRef(reviewsMap);
+  reviewsRef.current = reviewsMap;
+
+  // Lazily fetch (and cache) review snippets for one listing — on detail-open.
+  // Members only, so a view-by-link visitor can never trigger Apify spend.
+  const loadReviewsFor = useCallback(async (l: Listing) => {
+    const id = tripIdRef.current;
+    const key = `${l?.source}:${l?.id}`;
+    if (!id || !l?.url || !userRef.current || reviewsRef.current[key]) return;
+    try {
+      const r = await api.fetchReviews(id, String(l.source), String(l.id), String(l.url));
+      if (tripIdRef.current === id) setReviewsMap((m) => ({ ...m, [key]: r }));
+    } catch {
+      /* leave uncached — e.g. unsupported source or guard paused */
+    }
+  }, []);
+
+  // Organizer: fetch reviews for every listing still missing them.
+  const refreshAllReviews = useCallback(async (force?: boolean) => {
+    const id = tripIdRef.current;
+    if (!id) return { fetched: 0, skipped: 0, total: 0 };
+    const r = await api.refreshReviews(id, force);
+    if (tripIdRef.current === id) {
+      try { setReviewsMap(await api.reviews(id)); } catch { /* ignore */ }
+    }
+    return r;
+  }, []);
   useEffect(() => {
     const h = window.setInterval(async () => {
       const id = tripIdRef.current;
@@ -526,24 +561,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       user, myTrips, accountLoading,
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
-      listings, votes, submitted, pipeline, itinerary, caveats, insights, final,
+      listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
-      runCompare, saveItinerary, setAdminKey, clearAdminKey, runPipeline,
+      runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, setSplit, toast, dismissToast,
     }),
     [
       user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
-      listings, votes, submitted, pipeline, itinerary, caveats, insights, final,
+      listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
-      runCompare, saveItinerary, setAdminKey, clearAdminKey, runPipeline,
+      runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, toast, dismissToast,
     ],
   );
