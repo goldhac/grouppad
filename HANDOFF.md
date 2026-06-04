@@ -175,9 +175,9 @@ primitives + `Card.tsx` to match — keep all behavior/types intact." Then page 
 
 ---
 
-## 7.5 Feature work — ① + ② SHIPPED June 2026, ③ next
+## 7.5 Feature work — ① ② ③ ALL SHIPPED June 2026
 
-Three features requested: **① email reminders/alerts, ② review snippets, ③ Higgsfield walkthrough video.** Order ①→②→③. **① and ② are LIVE in production and merged to `main` + pushed** (HEAD `62b7886`). ③ = working prototype only (see below).
+Three features requested: **① email reminders/alerts, ② review snippets, ③ walkthrough tour video.** All **LIVE in production, merged to `main` + pushed.**
 
 **Also shipped (same `main`):** premium email redesign (all templates extracted to `emails.js` — magic-link/invite/joined/decision/digest share one branded template; previews sent to gold.nwobu); **reviews auto-fetch on community submit** (background, in `hSubmit`); **link previews** — Open Graph + Twitter meta in `client/index.html` + branded `client/public/og.png` (regen via `node scripts/make-og.cjs`). Magic-link now delivers to anyone (verified domain). Test/preview script: `node scripts/email-preview.cjs [to]`.
 
@@ -196,16 +196,21 @@ Three features requested: **① email reminders/alerts, ② review snippets, ③
 - Client: `AppContext` `reviewsMap` + `loadReviewsFor` (members-only) + `refreshAllReviews`; `DetailModal` "Guest reviews" Loved-it/Concerns columns + auto-fetch on open; `Card` review peek (quote + 👍/👎 counts) when cached; `ManageView` "Fetch all reviews"; `api.reviews/fetchReviews/refreshReviews`; `ReviewSnippet`/`ListingReviews` types.
 - **Live results (LA board, backfilled twice):** Airbnb 12/12 listings, 141 reviews, mapping confirmed correct; negatives surface only where they exist (≤20 reviews/listing so most-recent already captures all). **VRBO 0/4 — blocked** (`"Target likely blocked the requests"`); VRBO anti-bot defeats scraping. Now uses `shahidirfan~vrbo-reviews-scraper` (powerai returned 0); maps `rating_label`→star. Airbnb fetch is now **dual-sort** (most-recent + lowest-rated, merged) so concerns fill for big-review listings.
 
-### ③ Higgsfield walkthrough — PROTOTYPE done (not a feature yet)
-- MCP `mcp__eaad7a5f…`, **"starter" plan, ~120 credits left** (3 sample clips made). **Seedance/Kling require Plus plan** → use **`minimax_hailuo`** (works on starter; image-to-video, `start_image` role, durations 6/10; ~22–40 credits per clip). Generates a cinematic camera move from ONE listing photo (animates the photo; does not reconstruct geometry).
-- Samples (on user's Desktop): take-1 living room 6s (too static), take-2 POOL + KITCHEN 10s (better — used the listing's best photos). To pick best photos headlessly: render them in a Playwright grid (curl can't reach `a0.muscache.com`, but a browser can) and screenshot.
-- **If building the real feature:** organizer-triggered per listing → one 10s clip per standout room → stitch + cache + show on the listing. Cost ~22–40 credits/room. Awaiting user's go/no-go on quality.
+### ③ Walkthrough tours — LIVE (built against fal.ai, not Higgsfield)
+- **Provider = fal.ai** (pay-as-you-go REST; Higgsfield is subscription-only → wrong for server-side). Model `fal-ai/minimax/hailuo-02/standard/image-to-video`, ~$0.045/s (~$0.27 per 6s clip, ~$0.80 per 3-clip tour). Env **`FAL_KEY`** set on Railway (pay-as-you-go account). Replicate is the fallback provider if needed.
+- **Flow:** `pickBestPhotos()` (Gemini vision ranks the listing's photos → 2–3 best spaces, **exterior shot first** when present) → `falSubmit()` queues each as image-to-video → `tickTours()` 30s poller fills clip URLs → tour cached in per-trip `tours.json` keyed by listingId.
+- **Trigger:** auto on first ⭐ top-choice vote (`ensureTour` in `hFinalVote`), cached + shared, per-trip cap `TOUR_TRIP_CAP=12`; organizer force via `POST /api/trips/:id/tours/:listingId/generate`. Routes: `GET …/tours` (free map), generate (owner/admin). Env: `TOUR_MAX_CLIPS=3`, `TOUR_CLIP_SECONDS=6`, `FAL_MODEL`.
+- **Client:** `toursMap` in `AppContext` (+8s poll while any tour `generating`); `DetailModal` `TourPlayer` plays clips back-to-back (state: ready player / generating / organizer "Generate" button); `Card` shows a "Tour" badge when ready.
+- **Verified live:** first real run generated a 3-clip tour (Gemini picked Living&Game / Dining&Kitchen / Outdoor&Games) → all rendered ready in ~2 min. fal integration correct on first try.
+- **Exterior caveat:** tours lead with an exterior **only if the listing's photos include one**. Photo cap raised 8→16 (pipeline.js + scrapeListingDetails) so NEW search/pipeline listings (Apify `it.images` = full gallery) capture exteriors automatically. Existing LA curated listings have only ~6 photos and a URL re-scrape can't get more (Airbnb gallery is dynamic; HTML exposes ~6) — `POST /api/admin/refetch-photos` exists but is a no-op for them. Decision: accepted, not chasing (would need an Apify per-listing detail actor). Community URL submissions also limited to ~6.
+- Design brief for the tour UI (4 states + card badge) was handed to the user for Claude Design.
 
-### NEXT STEPS
-1. **③ Video** — pending user verdict on the take-2 clips. If go: design organizer-triggered multi-room walkthrough (clip/room, stitched, cached); confirm a per-listing credit budget.
-2. **VRBO reviews** are best-effort/blocked — could revisit with a paid residential-proxy actor later, or just accept Airbnb-only.
-3. New `.gitignore` stores: `data/events.json`, `data/reviews.json`.
-4. **Revoke** the one-time setup tokens (full Resend key + Cloudflare DNS token) — user to do via dashboards.
+### NEXT STEPS / open items
+1. **Design overhaul** (Claude Design) — the tour player + all surfaces are functional-but-plain, ready for a premium pass. Brief + the earlier design-system prompt in §7a.
+2. **VRBO reviews** best-effort/blocked — revisit with a paid residential-proxy actor or accept Airbnb-only.
+3. **Exteriors on LA board** — optional future: Apify per-listing detail actor to re-pull full galleries.
+4. New `.gitignore` stores: `data/events.json`, `data/reviews.json`, `data/tours.json`.
+5. **Revoke** the one-time setup tokens (full Resend key + Cloudflare DNS token) — user to do via dashboards. (`FAL_KEY`, send-only Resend key, `APIFY_TOKEN_FALLBACK` all stay.)
 
 ## 8. How to resume cold in a new session
 1. Open `/Users/goldnwbou/Documents/Flight_Search`. `git pull` on `main`.
