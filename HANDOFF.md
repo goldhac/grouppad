@@ -177,7 +177,9 @@ primitives + `Card.tsx` to match — keep all behavior/types intact." Then page 
 
 ## 7.5 Feature work — ① + ② SHIPPED June 2026, ③ next
 
-Three features requested: **① email reminders/alerts, ② review snippets, ③ Higgsfield walkthrough video.** Order ①→②→③. **① and ② are LIVE in production** (deployed; committed on branch `feature/email-reviews-apify`, NOT yet merged to `main`/pushed). ③ not started.
+Three features requested: **① email reminders/alerts, ② review snippets, ③ Higgsfield walkthrough video.** Order ①→②→③. **① and ② are LIVE in production and merged to `main` + pushed** (HEAD `62b7886`). ③ = working prototype only (see below).
+
+**Also shipped (same `main`):** premium email redesign (all templates extracted to `emails.js` — magic-link/invite/joined/decision/digest share one branded template; previews sent to gold.nwobu); **reviews auto-fetch on community submit** (background, in `hSubmit`); **link previews** — Open Graph + Twitter meta in `client/index.html` + branded `client/public/og.png` (regen via `node scripts/make-og.cjs`). Magic-link now delivers to anyone (verified domain). Test/preview script: `node scripts/email-preview.cjs [to]`.
 
 **Email infra is fully live:** blanket domain **`goldhac.com`** registered on Cloudflare; **`send.goldhac.com`** verified in Resend (Resend domain id `0358d9cf-cd1c-4973-b0d4-abb7c578507c`); DKIM + SPF(MX/TXT) records in Cloudflare DNS (zone `e8dc6a0fce42907cd419b05884602253`); Railway `MAIL_FROM=GroupPad <trips@send.goldhac.com>`. Live delivery test to a non-account inbox = **delivered**. Future apps reuse `…@send.goldhac.com` (one Resend verification). Setup tokens (full Resend key + CF DNS token) were one-time — revoke after.
 
@@ -192,17 +194,18 @@ Three features requested: **① email reminders/alerts, ② review snippets, ③
 - Actors: Airbnb `tri_angle~airbnb-reviews-scraper` (multi-URL/run; fields `text`/`rating`/`createdAt`), VRBO `powerai~vrbo-reviews-scraper` (1 URL/run; `reviewText`/`rating`/`stayedText`). $0.005/review (~$1.40 for the 14-home LA board, one-time). Split by stars (≥4 pos / ≤3 neg).
 - `server.js`: `runApifyActor`, `shapeReviews`, `fetchListingReviews`, per-trip `reviews.json` cache (`loadReviews/saveReviews`). Routes: `GET /api/trips/:id/reviews` (free cached map), `POST …/reviews/fetch` (requireAuth + apifyGuard + rateLimit), `POST …/reviews/refresh-all` (requireTripOwner, cap 40).
 - Client: `AppContext` `reviewsMap` + `loadReviewsFor` (members-only) + `refreshAllReviews`; `DetailModal` "Guest reviews" Loved-it/Concerns columns + auto-fetch on open; `Card` review peek (quote + 👍/👎 counts) when cached; `ManageView` "Fetch all reviews"; `api.reviews/fetchReviews/refreshReviews`; `ReviewSnippet`/`ListingReviews` types.
-- **Unverified:** live actor output field names (came from research, not a live call). First real fetch (~$0.10, auto on first detail-open in prod) confirms the mapping; off-by-a-field = one-line fix.
+- **Live results (LA board, backfilled twice):** Airbnb 12/12 listings, 141 reviews, mapping confirmed correct; negatives surface only where they exist (≤20 reviews/listing so most-recent already captures all). **VRBO 0/4 — blocked** (`"Target likely blocked the requests"`); VRBO anti-bot defeats scraping. Now uses `shahidirfan~vrbo-reviews-scraper` (powerai returned 0); maps `rating_label`→star. Airbnb fetch is now **dual-sort** (most-recent + lowest-rated, merged) so concerns fill for big-review listings.
 
-### ③ Higgsfield walkthrough — NOT started
-- MCP connected (`mcp__eaad7a5f…`), **200 credits, "starter" plan.** Models are image-to-video (Seedance/Kling/Minimax/Higgsfield-preset), 4–15s clips with invented camera motion — animates photos, does NOT measure rooms. Scope chosen: **research/prototype only** (generate ONE sample from a real listing's photos to judge quality; confirm credit cost before spending).
+### ③ Higgsfield walkthrough — PROTOTYPE done (not a feature yet)
+- MCP `mcp__eaad7a5f…`, **"starter" plan, ~120 credits left** (3 sample clips made). **Seedance/Kling require Plus plan** → use **`minimax_hailuo`** (works on starter; image-to-video, `start_image` role, durations 6/10; ~22–40 credits per clip). Generates a cinematic camera move from ONE listing photo (animates the photo; does not reconstruct geometry).
+- Samples (on user's Desktop): take-1 living room 6s (too static), take-2 POOL + KITCHEN 10s (better — used the listing's best photos). To pick best photos headlessly: render them in a Playwright grid (curl can't reach `a0.muscache.com`, but a browser can) and screenshot.
+- **If building the real feature:** organizer-triggered per listing → one 10s clip per standout room → stitch + cache + show on the listing. Cost ~22–40 credits/room. Awaiting user's go/no-go on quality.
 
 ### NEXT STEPS
-1. **Git:** branch `feature/email-reviews-apify` is committed locally but NOT merged to `main` or pushed. Merge → `main` + `git push origin main` so GitHub = prod (do when the user OKs a push).
-2. **Reviews actor mapping** still unconfirmed against a live call — the first real detail-open fetch in prod (~$0.10) confirms `text`/`rating`/`createdAt` (Airbnb) + `reviewText`/`rating`/`stayedText` (VRBO). If a field is empty, fix the mapping in `fetchListingReviews`.
-3. **③ Video prototype** — confirm Higgsfield credit cost, then generate ONE sample walkthrough from a real listing's photos for quality judgement.
-- New stores added to `.gitignore`: `data/events.json`, `data/reviews.json`.
-- Verified live (curl): `/api/trips/:id/reviews`→200, `/reviews/fetch`→401, `/me/notifications`→401, `/notify/unsubscribe`→200, `/invite`→401, `/listings`→200.
+1. **③ Video** — pending user verdict on the take-2 clips. If go: design organizer-triggered multi-room walkthrough (clip/room, stitched, cached); confirm a per-listing credit budget.
+2. **VRBO reviews** are best-effort/blocked — could revisit with a paid residential-proxy actor later, or just accept Airbnb-only.
+3. New `.gitignore` stores: `data/events.json`, `data/reviews.json`.
+4. **Revoke** the one-time setup tokens (full Resend key + Cloudflare DNS token) — user to do via dashboards.
 
 ## 8. How to resume cold in a new session
 1. Open `/Users/goldnwbou/Documents/Flight_Search`. `git pull` on `main`.
