@@ -175,17 +175,19 @@ primitives + `Card.tsx` to match — keep all behavior/types intact." Then page 
 
 ---
 
-## 7.5 Feature work IN FLIGHT — paused June 2026 (resume here)
+## 7.5 Feature work — ① + ② SHIPPED June 2026, ③ next
 
-Three features were requested: **① email reminders/alerts, ② review snippets, ③ Higgsfield walkthrough video.** Order chosen: ①→②→③. **① and ② are built + locally verified but NOT committed/deployed** (working tree only). ③ not started.
+Three features requested: **① email reminders/alerts, ② review snippets, ③ Higgsfield walkthrough video.** Order ①→②→③. **① and ② are LIVE in production** (deployed; committed on branch `feature/email-reviews-apify`, NOT yet merged to `main`/pushed). ③ not started.
 
-**Blocking on:** registering **`goldhac.com`** (blanket domain for all future apps) + verifying a `send.goldhac.com` sending domain in Resend. Until then, member emails only deliver to the owner's own inbox (Resend sandbox limitation).
+**Email infra is fully live:** blanket domain **`goldhac.com`** registered on Cloudflare; **`send.goldhac.com`** verified in Resend (Resend domain id `0358d9cf-cd1c-4973-b0d4-abb7c578507c`); DKIM + SPF(MX/TXT) records in Cloudflare DNS (zone `e8dc6a0fce42907cd419b05884602253`); Railway `MAIL_FROM=GroupPad <trips@send.goldhac.com>`. Live delivery test to a non-account inbox = **delivered**. Future apps reuse `…@send.goldhac.com` (one Resend verification). Setup tokens (full Resend key + CF DNS token) were one-time — revoke after.
 
-### ① Email (built, verified, undeployed)
+**Also shipped this batch — Apify key auto-swap:** `APIFY_TOKEN` (primary) + `APIFY_TOKEN_FALLBACK` (backup, set on Railway). `apifyGuard` auto-switches primary→backup when primary nears the monthly cap (emails manager on swap), pauses only if both exhausted; active key passed to spawned `pipeline.js`. Helpers: `getApifyToken()`, `apifyConfigured()`, `_activeApify`.
+
+### ① Email (LIVE)
 - `server.js`: generic `sendEmail`, `tripRecipients` (joins users.json), per-user `notif`+`unsub` tokens, `events.json` activity log (`logEvent` at vote/submit/caveat/pick/decision), **daily digest** job `runDigestJob`/`scheduleDigest` (16:00 UTC, skips empty trips, `last_digest_at` window), **instant alerts** `emailDecisionLocked` (→ all members) + `noteJoin` (→ organizer on new join). Routes: `POST /api/trips/:id/invite`, `GET/POST /api/me/notifications`, `GET /api/notify/unsubscribe?u=<token>` (HTML page). `APP_BASE_URL` env (defaults to live URL).
 - Client: `ManageView` invite-by-email box; `Navbar` account-menu "Email notifications" modal (`NotifModal`); `api.invite/notifPrefs/setNotifPrefs`; `NotifPrefs` type.
 
-### ② Reviews — last 4 👍 / 4 👎 (built, verified, undeployed)
+### ② Reviews — last 4 👍 / 4 👎 (LIVE)
 - Decision: **lazy fetch on detail-open + organizer "Fetch all" button; cached hard** (chosen to protect the $5/mo Apify free tier).
 - Actors: Airbnb `tri_angle~airbnb-reviews-scraper` (multi-URL/run; fields `text`/`rating`/`createdAt`), VRBO `powerai~vrbo-reviews-scraper` (1 URL/run; `reviewText`/`rating`/`stayedText`). $0.005/review (~$1.40 for the 14-home LA board, one-time). Split by stars (≥4 pos / ≤3 neg).
 - `server.js`: `runApifyActor`, `shapeReviews`, `fetchListingReviews`, per-trip `reviews.json` cache (`loadReviews/saveReviews`). Routes: `GET /api/trips/:id/reviews` (free cached map), `POST …/reviews/fetch` (requireAuth + apifyGuard + rateLimit), `POST …/reviews/refresh-all` (requireTripOwner, cap 40).
@@ -195,12 +197,12 @@ Three features were requested: **① email reminders/alerts, ② review snippets
 ### ③ Higgsfield walkthrough — NOT started
 - MCP connected (`mcp__eaad7a5f…`), **200 credits, "starter" plan.** Models are image-to-video (Seedance/Kling/Minimax/Higgsfield-preset), 4–15s clips with invented camera motion — animates photos, does NOT measure rooms. Scope chosen: **research/prototype only** (generate ONE sample from a real listing's photos to judge quality; confirm credit cost before spending).
 
-### TO RESUME (when domain verified)
-1. User pings "verified" with the from-address. Set Railway env: `railway variables --set "MAIL_FROM=GroupPad <trips@send.goldhac.com>"` (service `exquisite-inspiration`).
-2. `cd client && npm run build` → `railway up --service exquisite-inspiration --detach`.
-3. Verify: open a listing in prod → reviews fetch (confirm actor field mapping); send a test invite to a non-owner inbox; lock a decision → confirm member email.
-4. Then build ③ (video prototype) — confirm Higgsfield credit cost first.
+### NEXT STEPS
+1. **Git:** branch `feature/email-reviews-apify` is committed locally but NOT merged to `main` or pushed. Merge → `main` + `git push origin main` so GitHub = prod (do when the user OKs a push).
+2. **Reviews actor mapping** still unconfirmed against a live call — the first real detail-open fetch in prod (~$0.10) confirms `text`/`rating`/`createdAt` (Airbnb) + `reviewText`/`rating`/`stayedText` (VRBO). If a field is empty, fix the mapping in `fetchListingReviews`.
+3. **③ Video prototype** — confirm Higgsfield credit cost, then generate ONE sample walkthrough from a real listing's photos for quality judgement.
 - New stores added to `.gitignore`: `data/events.json`, `data/reviews.json`.
+- Verified live (curl): `/api/trips/:id/reviews`→200, `/reviews/fetch`→401, `/me/notifications`→401, `/notify/unsubscribe`→200, `/invite`→401, `/listings`→200.
 
 ## 8. How to resume cold in a new session
 1. Open `/Users/goldnwbou/Documents/Flight_Search`. `git pull` on `main`.
