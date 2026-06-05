@@ -205,7 +205,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const me = (await api.me()).user;
       setUser(me);
       userRef.current = me;
-      if (me) setMyTrips((await api.myTrips()).trips);
+      if (me) {
+        setMyTrips((await api.myTrips()).trips);
+        // First sign-in → auto-show the welcome tour once (gated by gp_onboarded,
+        // which the tour sets when finished or skipped). Returning users skip it.
+        if (!localStorage.getItem(ONBOARDED_LS)) setOnboardingOpen(true);
+      }
     } catch {
       /* leave signed out */
     } finally {
