@@ -2512,6 +2512,7 @@ app.get('/api/admin/usage', requireAdmin, async (req, res) => {
     },
     group: {
       members: Object.keys(loadUsers()).length,
+      trips: Object.keys(loadTrips()).length,
       votes,
       picks: Object.keys(loadFinalVotes()).length,
       submissions: loadSubmitted().length,
@@ -2519,6 +2520,28 @@ app.get('/api/admin/usage', requireAdmin, async (req, res) => {
       refreshedAt: trip ? trip.refreshed_at : null,
     },
   });
+});
+
+// Super-admin: per-trip platform stats for the admin "Recent trips" table.
+// Real engagement only (members/homes/votes/pick) — per-trip API cost isn't metered.
+app.get('/api/admin/trips', requireAdmin, (req, res) => {
+  const trips = loadTrips();
+  const rows = Object.values(trips).map((t) => {
+    const id = t.id;
+    const homes = ((loadListings(id).listings) || []).length + (loadSubmitted(id) || []).length;
+    const votesObj = loadVotes(id);
+    const votes = Object.values(votesObj).reduce((n, m) => n + Object.keys(m || {}).length, 0);
+    const locked = !!loadDecision(id);
+    const state = locked ? 'locked' : (votes > 0 || homes > 0) ? 'active' : 'idle';
+    return {
+      id, name: t.name || 'Untitled trip',
+      members: Array.isArray(t.members) ? t.members.length : 0,
+      homes, votes, locked, state,
+      created_at: t.created_at || null,
+    };
+  });
+  rows.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  res.json({ trips: rows });
 });
 
 // Spawn the trip-scoped rental search (pipeline.js in TRIP_ID mode) for a newly

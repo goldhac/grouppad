@@ -235,11 +235,23 @@ export interface ApifyUsage {
 
 export interface GroupPulse {
   members: number;
+  trips?: number;
   votes: number;
   picks: number;
   submissions: number;
   decisionLocked: boolean;
   refreshedAt: string | null;
+}
+
+export interface AdminTripRow {
+  id: string;
+  name: string;
+  members: number;
+  homes: number;
+  votes: number;
+  locked: boolean;
+  state: 'locked' | 'active' | 'idle';
+  created_at: string | null;
 }
 
 export interface AdminUsage {
