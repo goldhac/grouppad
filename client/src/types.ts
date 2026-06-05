@@ -25,6 +25,8 @@ export interface Trip {
   tax_rate?: number;
   cleaning_placeholder?: number;
   refreshed_at?: string | null;
+  /** Organizer froze likes/top-choices. */
+  voting_closed?: boolean;
 }
 
 /** A trip plus the calling user's membership flags (from GET /api/trips/:id). */
@@ -53,6 +55,14 @@ export interface CreateTripInput {
   bedrooms?: number | null;
   home_type?: string;
   itinerary?: string;
+}
+
+export interface TripMember {
+  id: string;
+  name: string;
+  email: string;
+  role: 'organizer' | 'member';
+  isYou: boolean;
 }
 
 export interface TripPulse {

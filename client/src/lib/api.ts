@@ -12,6 +12,7 @@ import type {
   ListingTour,
   NotifPrefs,
   PipelineResponse,
+  TripMember,
   TripPulse,
   TripView,
   User,
@@ -101,6 +102,13 @@ export const api = {
   tripPulse: (tripId: string) => request<TripPulse>(`${t(tripId)}/pulse`),
   invite: (tripId: string, emails: string) =>
     request<{ sent: number; attempted: number }>(`${t(tripId)}/invite`, { method: 'POST', body: { emails } }),
+  members: (tripId: string) => request<{ members: TripMember[] }>(`${t(tripId)}/members`),
+  patchTrip: (tripId: string, patch: Partial<CreateTripInput> & { voting_closed?: boolean }) =>
+    request<TripView>(t(tripId), { method: 'PATCH', body: patch }),
+  transferOrganizer: (tripId: string, userId: string) =>
+    request<TripView>(`${t(tripId)}/transfer`, { method: 'POST', body: { userId } }),
+  removeMember: (tripId: string, userId: string) =>
+    request<{ ok: true }>(`${t(tripId)}/members/remove`, { method: 'POST', body: { userId } }),
   notifPrefs: () => request<NotifPrefs>('/api/me/notifications'),
   setNotifPrefs: (prefs: Partial<NotifPrefs>) =>
     request<NotifPrefs>('/api/me/notifications', { method: 'POST', body: prefs }),

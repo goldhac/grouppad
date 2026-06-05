@@ -1775,6 +1775,8 @@ app.get('/api/trips/:tripId/votes', loadTripOr404, hGetVotes);
 // votes map to a real account and can't be spoofed by typing someone's name.
 const hPostVotes = (req, res) => {
   const tripId = req.params.tripId;
+  if (tripId && getTrip(tripId)?.voting_closed)
+    return res.status(403).json({ error: 'Voting is closed for this trip.' });
   const { listing_id, vote } = req.body || {};
   if (!listing_id || !['up', 'down', null].includes(vote))
     return res.status(400).json({ error: 'expected { listing_id, vote: "up"|"down"|null }' });
@@ -2275,6 +2277,8 @@ app.get('/api/trips/:tripId/final', loadTripOr404, hGetFinal);
 
 const hFinalVote = (req, res) => {
   const tripId = req.params.tripId;
+  if (tripId && getTrip(tripId)?.voting_closed)
+    return res.status(403).json({ error: 'Voting is closed for this trip.' });
   const raw = req.body && req.body.listing_id;
   const votes = loadFinalVotes(tripId);
   if (raw === null || raw === undefined || raw === '') {
@@ -2610,6 +2614,79 @@ app.post('/api/trips/:tripId/invite', requireTripOwner, async (req, res) => {
     if (await sendEmail(e, `You're invited: ${trip.name}`, html)) sent++;
   }
   res.json({ sent, attempted: emails.length });
+});
+
+// Organizer: the resolved member roster (names + emails + roles). Owner-only.
+app.get('/api/trips/:tripId/members', requireTripOwner, (req, res) => {
+  const trip = req.trip;
+  const users = loadUsers();
+  const list = (trip.members || []).map((id) => {
+    const u = users[id] || {};
+    return {
+      id,
+      name: u.name || (u.email ? u.email.split('@')[0] : 'Member'),
+      email: u.email || '',
+      role: id === trip.owner_id ? 'organizer' : 'member',
+      isYou: id === req.user.id,
+    };
+  });
+  // organizer first, then alphabetical
+  list.sort((a, b) => (a.role === 'organizer' ? -1 : b.role === 'organizer' ? 1 : a.name.localeCompare(b.name)));
+  res.json({ members: list });
+});
+
+// Organizer: edit trip settings. Members keep their votes.
+app.patch('/api/trips/:tripId', requireTripOwner, (req, res) => {
+  const trips = loadTrips();
+  const trip = trips[req.params.tripId];
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const b = req.body || {};
+  const has = (k) => Object.prototype.hasOwnProperty.call(b, k);
+
+  if (has('name') && !String(b.name).trim()) return res.status(400).json({ error: 'Give the trip a name.' });
+  if (has('destination') && !String(b.destination).trim()) return res.status(400).json({ error: 'Add a destination.' });
+  const cin = has('checkin') ? b.checkin : trip.checkin;
+  const cout = has('checkout_5n') ? b.checkout_5n : trip.checkout_5n;
+  if (cin && cout && cout <= cin) return res.status(400).json({ error: 'Check-out must be after check-in.' });
+  if (has('adults') && Number(b.adults) < 2) return res.status(400).json({ error: 'Guests must be 2 or more.' });
+  if (has('budget') && Number(b.budget) <= 0) return res.status(400).json({ error: 'Enter a budget.' });
+
+  if (has('name')) trip.name = String(b.name).trim().slice(0, 120);
+  if (has('destination')) trip.destination = String(b.destination).trim().slice(0, 120);
+  if (has('checkin')) trip.checkin = b.checkin;
+  if (has('checkout_5n')) trip.checkout_5n = b.checkout_5n;
+  if (has('adults')) trip.adults = Math.max(2, Number(b.adults) || 2);
+  if (has('budget')) trip.budget = Math.max(0, Number(b.budget) || 0);
+  if (has('home_type')) trip.home_type = String(b.home_type || 'Any');
+  if (has('bedrooms')) trip.bedrooms = b.bedrooms == null || b.bedrooms === '' ? null : Math.max(1, Number(b.bedrooms));
+  if (has('voting_closed')) trip.voting_closed = !!b.voting_closed;
+  saveTrips(trips);
+  res.json(tripView(trip, req.user));
+});
+
+// Organizer: hand the organizer role to another member.
+app.post('/api/trips/:tripId/transfer', requireTripOwner, (req, res) => {
+  const trips = loadTrips();
+  const trip = trips[req.params.tripId];
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const userId = String((req.body && req.body.userId) || '');
+  if (!userId || !(trip.members || []).includes(userId))
+    return res.status(400).json({ error: 'That person is not a member of this trip.' });
+  trip.owner_id = userId;
+  saveTrips(trips);
+  res.json(tripView(trip, req.user));
+});
+
+// Organizer: remove a member from the trip (cannot remove the organizer).
+app.post('/api/trips/:tripId/members/remove', requireTripOwner, (req, res) => {
+  const trips = loadTrips();
+  const trip = trips[req.params.tripId];
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const userId = String((req.body && req.body.userId) || '');
+  if (userId === trip.owner_id) return res.status(400).json({ error: 'The organizer cannot be removed.' });
+  trip.members = (trip.members || []).filter((id) => id !== userId);
+  saveTrips(trips);
+  res.json({ ok: true });
 });
 
 // Per-user email notification preferences (digest + instant).

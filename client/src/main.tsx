@@ -10,6 +10,7 @@ import './ds2/demo-panel.css';
 import './ds2/trips.css';
 import './ds2/board.css';
 import './ds2/detail.css';
+import './ds2/manage.css';
 import { App } from './App';
 import { AppProvider } from './store/AppContext';
 
