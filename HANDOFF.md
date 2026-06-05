@@ -226,3 +226,10 @@ User-requested, captured 2026-06 during Board increment:
 2. **Carousel rows open to their own views** — wire Community "See all" + Live "Browse all (63)" to a focused view (All-homes filtered to just that source, or a dedicated sub-view).
 3. **Missing listings** — investigate: 63 live but few shown; confirm grid filters aren't wrongly dropping homes. (Deferred per user.)
 4. **Consistency** — apply the same collapse/popover pattern across all screens once they're v2.
+
+## Utility / legal pages backlog (do after the last screens — user-requested)
+Build real pages (not `href="#"` placeholders) and publish with relevant content:
+- **Terms of Service** + **Privacy Policy** — currently placeholder links in AuthModal fine print (`<a href="#">`). Wire to real routes/pages.
+- Audit every footer + nav link for dead `#`/placeholder targets (Product / Resources / "How it works" / Start a trip / Your trips) and point them at real destinations.
+- Any other standard utility pages (About, Contact / support, 404) with on-brand v2 styling + real copy.
+- Once live, update the AuthModal fine-print links + footer to the real URLs.

@@ -1,79 +1,72 @@
-const CARDS: { title: string; body: React.ReactNode }[] = [
-  {
-    title: '👍 Like vs ⭐ Top choice vs ✅ Official pick',
-    body: (
-      <ul className="list-disc space-y-1.5 pl-5">
-        <li>
-          <strong>👍 / 👎 Like</strong> — your quick read on a home. Any home with net likes ≥ 1
-          rises into the <strong>Shortlist</strong>. Like as many as you want.
-        </li>
-        <li>
-          <strong>⭐ Top choice</strong> — your <em>single</em> favorite. Everyone gets one. The
-          tally shows the group's leaderboard (your individual pick stays private — only totals
-          show).
-        </li>
-        <li>
-          <strong>✅ Official pick</strong> — the organizer locks the final decision. It pins a
-          banner to the top so everyone knows what we're booking.
-        </li>
-      </ul>
-    ),
-  },
-  {
-    title: '🏠 Browsing & details',
-    body: (
-      <p>
-        Tap any card to open the full detail view: bigger gallery, all amenities, the price broken
-        down, your per-person share, and a map of the area. Use the filters up top (under budget,
-        pool, parking) to narrow the list, and the split slider to see cost per person for any
-        headcount.
-      </p>
-    ),
-  },
-  {
-    title: '➕ Add a listing',
-    body: (
-      <p>
-        Found one we missed? Paste any VRBO / Airbnb / Booking.com URL into{' '}
-        <strong>"+ Add a listing."</strong> We fetch the details and price for the trip dates
-        automatically. It shows under <strong>Community Submissions</strong> until it earns a like.
-      </p>
-    ),
-  },
-  {
-    title: '🤖 AI compare & 💬 caveats',
-    body: (
-      <p>
-        From the shortlist, hit <strong>Compare with AI</strong> for a side-by-side weighing against
-        the itinerary and budget — or tick the "compare" box on two cards for a 1v1. Drop must-haves
-        and dealbreakers in <strong>Group caveats</strong>; they feed the AI ranking.
-      </p>
-    ),
-  },
-  {
-    title: '🔐 Signing in',
-    body: (
-      <p>
-        Sign in with Google (or an email magic-link) so your votes and picks are tied to you across
-        devices. You can browse without signing in, but you'll need an account to vote, add homes,
-        or post caveats.
-      </p>
-    ),
-  },
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowLeft, LayoutGrid, Link2, ThumbsUp, Users, BadgeCheck, HelpCircle, ChevronDown } from 'lucide-react';
+import { useApp } from '@/store/AppContext';
+import { Icon } from '@/components/ui/Icon';
+
+const CARDS = [
+  { icon: LayoutGrid, step: 'The core loop', h: 'One board for the group', p: 'Everyone’s ideas land on one shared board — no more rentals lost in a 200-message group chat.' },
+  { icon: Link2, step: 'Step 1', h: 'Browse & add any rental', p: 'Paste an Airbnb, VRBO, or Booking link — or let GroupPad pull fresh homes for your dates. Each is priced and placed automatically.' },
+  { icon: ThumbsUp, step: 'Step 2', h: 'Vote in the open', p: 'Public thumbs, not secret hearts. Any home that reaches net +1 rises into the group’s shortlist on its own.' },
+  { icon: Users, step: 'The signature', h: 'The per-person number', p: 'Every home shows the real all-in cost split across your group — the figure people actually argue about — recomputed live as the group changes.' },
+  { icon: BadgeCheck, step: 'The decision', h: 'Compare with AI & lock the pick', p: 'Down to two? AI weighs price, distance, and your must-haves and calls a winner. The organizer makes one pick official for everyone.', gold: true },
+];
+
+const FAQ = [
+  { q: 'How do I add a home?', a: 'On the board, paste any Airbnb, VRBO, or Booking link into “Add a listing” (an optional price helps if the page hides it). GroupPad scrapes the details, prices it all-in, and drops it into Community Submissions for the group to vote on.' },
+  { q: 'How do I invite people?', a: 'Open Manage trip → copy the invite link and share it anywhere. Anyone with the link can view the board; they sign in with a one-tap link to vote or add homes. You can also send email invites from the same screen.' },
+  { q: 'How do we change the official pick?', a: 'The organizer can Unlock the current pick from the board or from Manage → Danger zone (“Reset the official pick”). All votes are kept, so the group can keep deciding and lock a new winner.' },
+  { q: 'How do I delete a trip?', a: 'Manage trip → Danger zone → Delete trip. It asks you to type DELETE to confirm, then removes the board, listings, and votes for everyone. This can’t be undone.' },
 ];
 
 export function HelpView() {
+  const { trip } = useApp();
+  const [open, setOpen] = useState(0);
+  const boardHref = trip ? `/t/${trip.id}/board` : '/trips';
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-8">
-      <h2 className="text-2xl font-bold">How GroupPad works</h2>
-      <div className="mt-6 space-y-4">
-        {CARDS.map((c) => (
-          <div key={c.title} className="rounded-lg border border-border bg-panel p-5">
-            <h3 className="text-base font-semibold">{c.title}</h3>
-            <div className="mt-2 text-sm leading-relaxed text-muted">{c.body}</div>
+    <main className="uu-main">
+      <div className="tp-wrap uu-wrap">
+        <Link className="uu-back" to={boardHref}><Icon icon={ArrowLeft} className="ico" /> Back to board</Link>
+
+        <div className="help-head">
+          <div className="ey">How GroupPad works</div>
+          <h1>Pick one rental, together.</h1>
+          <p>GroupPad turns “where should we stay?” into one shared board. Here’s the whole loop — it takes about a minute to get going.</p>
+        </div>
+
+        <div className="help-grid five">
+          {CARDS.map((c, i) => (
+            <div className={`help-card${c.gold ? ' gold' : ''}${i === 4 ? ' span-row' : ''}`} key={c.h}>
+              <div className="ic"><Icon icon={c.icon} className="ico" /></div>
+              <div className="step">{c.step}</div>
+              <h3>{c.h}</h3>
+              <p>{c.p}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="faq-wrap">
+          <h2>Common questions</h2>
+          <div className="faq">
+            {FAQ.map((f, i) => (
+              <div className={`faq-item${open === i ? ' open' : ''}`} key={f.q}>
+                <button
+                  className="faq-q"
+                  onClick={() => setOpen(open === i ? -1 : i)}
+                  aria-expanded={open === i}
+                  style={{ width: '100%', background: 'none', border: 0, font: 'inherit', textAlign: 'left' }}
+                >
+                  <Icon icon={HelpCircle} className="ico-lead" />
+                  <span className="q">{f.q}</span>
+                  <Icon icon={ChevronDown} className="chev" />
+                </button>
+                <div className="faq-a">{f.a}</div>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
