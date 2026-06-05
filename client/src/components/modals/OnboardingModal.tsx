@@ -1,87 +1,122 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Link2, ArrowUp, ThumbsUp, ThumbsDown, Users, BadgeCheck, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/Dialog';
-import { Button } from '@/components/ui/Button';
-import { cn } from '@/lib/cn';
+import { Icon } from '@/components/ui/Icon';
+import { useFocusTrap } from '@/lib/useFocusTrap';
 
-interface Slide {
-  icon: string;
-  title: string;
-  body: string;
+function BoardArt() {
+  return (
+    <div className="obv obv-board-wrap">
+      <div className="obv-board">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div className="c" key={i}><div className="p" /><div className="l" /><div className="l s" /></div>
+        ))}
+      </div>
+      <div className="obv-avatars">
+        <span className="av">MA</span>
+        <span className="av" style={{ background: 'var(--c-indigo-600)' }}>JL</span>
+        <span className="av" style={{ background: 'var(--c-cyan-600)' }}>RP</span>
+        <span className="av" style={{ background: 'var(--surface-sunken)', color: 'var(--text-2)' }}>+11</span>
+      </div>
+    </div>
+  );
+}
+function AddArt() {
+  return (
+    <div className="obv obv-add">
+      <div className="bar"><Icon icon={Link2} className="ico" /><span className="ph" /><span className="go">Add</span></div>
+      <div className="src"><span>airbnb</span><span>VRBO</span><span>Booking</span><span>live LA</span></div>
+    </div>
+  );
+}
+function VoteArt() {
+  return (
+    <div className="obv obv-vote">
+      <span className="rise"><Icon icon={ArrowUp} className="ico" /> Rose to shortlist</span>
+      <div className="mini-card"><div className="p" /><div className="l" /><div className="l" style={{ width: '55%' }} /></div>
+      <div className="votebar">
+        <button className="vote up on"><Icon icon={ThumbsUp} className="ico" /></button>
+        <span className="net pos tnum">+5</span>
+        <button className="vote down"><Icon icon={ThumbsDown} className="ico" /></button>
+      </div>
+    </div>
+  );
+}
+function PpArt() {
+  return (
+    <div className="obv obv-pp">
+      <div className="big tnum">$359</div>
+      <div className="lab"><Icon icon={Users} className="ico" /> per person · split 14 ways</div>
+      <div className="strike"><b>$5,022</b> all-in · 5 nights</div>
+    </div>
+  );
+}
+function LockArt() {
+  return (
+    <div className="obv obv-lock">
+      <div className="seal"><Icon icon={BadgeCheck} className="ico" /><span className="gd" /></div>
+      <span className="chip"><span className="gdot" /> Official pick · locked</span>
+    </div>
+  );
 }
 
-const SLIDES: Slide[] = [
-  {
-    icon: '🏡',
-    title: 'Welcome to GroupPad',
-    body: "One shared board to pick the LA house for 14 — together. Here's the 30-second tour.",
-  },
-  {
-    icon: '👍',
-    title: 'Browse & like',
-    body: 'Skim every 7+ bedroom home. Open any card for full photos, the price broken down, your per-person share, and a map. 👍 the ones you\'d actually stay in.',
-  },
-  {
-    icon: '⭐',
-    title: 'Shortlist & compare',
-    body: 'Liked homes rise into a shared shortlist. Tap 🤖 Compare with AI to weigh them against the itinerary and budget — or tick two cards for a 1v1.',
-  },
-  {
-    icon: '✅',
-    title: 'Pick the winner',
-    body: 'Everyone casts one ⭐ top choice (your individual pick stays private — only totals show). The organizer locks the ✅ official pick when the group converges.',
-  },
-  {
-    icon: '➕',
-    title: 'Add & sign in',
-    body: 'Found one we missed? Paste any VRBO / Airbnb / Booking.com link to add it. Sign in with Google or an email link so your votes follow you across devices.',
-  },
+const SLIDES = [
+  { tag: 'Step 1 of 5', h: 'One board for the whole group', p: 'Everyone’s ideas land in one place — no more links lost in the group chat.', v: 'v1', Art: BoardArt },
+  { tag: 'Step 2 of 5', h: 'Browse & add any rental', p: 'Paste an Airbnb, VRBO, or Booking link — or let GroupPad pull fresh homes for your dates.', v: 'v2', Art: AddArt },
+  { tag: 'Step 3 of 5', h: 'Vote in the open', p: 'Shared thumbs, not secret hearts. Liked homes rise into the group’s shortlist on their own.', v: 'v3', Art: VoteArt },
+  { tag: 'Step 4 of 5', h: 'The number that ends the argument', p: 'Every home shows the real all-in cost split across your group — recomputed live as it grows.', v: 'v4', Art: PpArt },
+  { tag: 'Step 5 of 5', h: 'Compare with AI, then lock it', p: 'Down to two? AI calls the winner. The organizer makes it official — and the debate is over.', v: 'v5', Art: LockArt },
 ];
 
 export function OnboardingModal() {
   const { onboardingOpen, endOnboarding } = useApp();
   const [idx, setIdx] = useState(0);
-  const slide = SLIDES[idx];
-  const last = idx === SLIDES.length - 1;
+  const scrimRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(scrimRef, onboardingOpen);
 
-  const close = () => {
-    setIdx(0);
-    endOnboarding();
-  };
+  useEffect(() => { if (onboardingOpen) setIdx(0); }, [onboardingOpen]);
+  useEffect(() => {
+    if (!onboardingOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') endOnboarding();
+      else if (e.key === 'ArrowRight') setIdx((i) => Math.min(SLIDES.length - 1, i + 1));
+      else if (e.key === 'ArrowLeft') setIdx((i) => Math.max(0, i - 1));
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onboardingOpen, endOnboarding]);
+
+  if (!onboardingOpen) return null;
+  const s = SLIDES[idx];
+  const last = idx === SLIDES.length - 1;
+  const close = () => { setIdx(0); endOnboarding(); };
 
   return (
-    <Dialog open={onboardingOpen} onOpenChange={(o) => !o && close()}>
-      <DialogContent width="max-w-md" showClose={false}>
-        <div className="flex items-center justify-end">
-          <button className="text-xs text-muted hover:text-text" onClick={close}>
-            Skip
-          </button>
+    <div className="modal-scrim open" onClick={close}>
+      <div className="modal ob" role="dialog" aria-modal="true" aria-labelledby="obTitle" onClick={(e) => e.stopPropagation()}>
+        <button className="ob-skip" onClick={close}>Skip tour</button>
+        <div className={`ob-visual ${s.v}`}>
+          <div className="ob-slide anim" key={`v${idx}`}><s.Art /></div>
         </div>
-
-        <div className="flex flex-col items-center gap-3 px-2 py-4 text-center">
-          <div className="text-5xl">{slide.icon}</div>
-          <DialogTitle className="text-xl font-bold">{slide.title}</DialogTitle>
-          <p className="max-w-xs text-sm leading-relaxed text-muted">{slide.body}</p>
+        <div className="ob-body">
+          <div className="ob-slidewrap">
+            <div className="ob-slide anim" key={`t${idx}`}>
+              <div className="ob-step-tag">{s.tag}</div>
+              <h2 id="obTitle">{s.h}</h2>
+              <p>{s.p}</p>
+            </div>
+          </div>
+          <div className="ob-foot">
+            <div className="ob-dots">{SLIDES.map((_, i) => <i key={i} className={i === idx ? 'on' : ''} />)}</div>
+            <div className="ob-nav">
+              {idx > 0 && <button className="btn btn-ghost" onClick={() => setIdx((i) => i - 1)}><Icon icon={ArrowLeft} className="ico" /> Back</button>}
+              {last
+                ? <button className="btn btn-primary" onClick={close}><Icon icon={ArrowRight} className="ico" /> Start planning</button>
+                : <button className="btn btn-primary" onClick={() => setIdx((i) => i + 1)}>Next <Icon icon={ArrowRight} className="ico" /></button>}
+            </div>
+          </div>
         </div>
-
-        <div className="flex justify-center gap-1.5">
-          {SLIDES.map((_, i) => (
-            <span
-              key={i}
-              className={cn('h-1.5 rounded-full transition-all', i === idx ? 'w-5 bg-accent' : 'w-1.5 bg-border')}
-            />
-          ))}
-        </div>
-
-        <div className="flex items-center justify-between gap-2">
-          <Button variant="ghost" onClick={() => setIdx((i) => Math.max(0, i - 1))} className={cn(idx === 0 && 'invisible')}>
-            Back
-          </Button>
-          <Button variant="primary" onClick={() => (last ? close() : setIdx((i) => i + 1))}>
-            {last ? 'Get started' : 'Next'}
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
