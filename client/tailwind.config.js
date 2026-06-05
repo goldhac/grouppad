@@ -61,6 +61,7 @@ export default {
       fontFamily: {
         display: ['Bricolage Grotesque', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         sans: ['Hanken Grotesk', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        brand: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       borderRadius: {

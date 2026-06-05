@@ -1,9 +1,9 @@
 import { cn } from '@/lib/cn';
 
 /**
- * The Peak brand mark — a roof/house glyph with the gold "decision" dot.
- * The outline inherits `currentColor`; the dot is always the gold signal.
- * `withWord` appends the GroupPad wordmark in the display face.
+ * The GroupPad brand mark (from the Figma Brand Mark Kit) — a rounded house with
+ * the gold "decision" dot. Outline inherits `currentColor` (adapts to theme); the
+ * dot is always the gold signal. `withWord` appends the Fraunces wordmark.
  */
 export function PeakLogo({
   size = 22,
@@ -15,25 +15,26 @@ export function PeakLogo({
   className?: string;
 }) {
   return (
-    <span className={cn('inline-flex items-center gap-2', className)}>
+    <span className={cn('inline-flex items-center gap-2.5', className)}>
       <svg
         width={size}
         height={size}
-        viewBox="0 0 24 24"
+        viewBox="0 0 360 360"
         fill="none"
-        stroke="currentColor"
-        strokeWidth={1.85}
-        strokeLinecap="round"
-        strokeLinejoin="round"
         aria-hidden
         className="shrink-0"
       >
-        <path d="M4.5 12.5 L12 6 L19.5 12.5" />
-        <path d="M6.6 11 V18.4 H17.4 V11" />
-        <circle cx="12" cy="14.7" r="1.6" fill="var(--gold-dot)" stroke="none" />
+        <path d="M67.5 187.5 L180 90 L292.5 187.5" stroke="currentColor" strokeWidth={24} strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M99 165 V276 H261 V165" stroke="currentColor" strokeWidth={24} strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="180" cy="220.5" r="24" fill="var(--gold-dot)" />
       </svg>
       {withWord && (
-        <span className="font-display text-[15px] font-bold tracking-tight text-text">GroupPad</span>
+        <span
+          className="font-brand text-[19px] font-semibold leading-none tracking-[-0.02em] text-text"
+          style={{ fontVariationSettings: '"SOFT" 0, "WONK" 1' }}
+        >
+          GroupPad
+        </span>
       )}
     </span>
   );

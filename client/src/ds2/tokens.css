@@ -93,6 +93,7 @@
   /* Type */
   --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
   --font-sans:    'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-brand:   'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
   --font-mono:    ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 16px;
   --text-lg: 20px; --text-xl: 24px; --text-2xl: 32px; --text-3xl: 40px; --text-4xl: 56px;
