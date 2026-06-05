@@ -44,7 +44,8 @@ function TripCard({ trip, i }: { trip: TripView; i: number }) {
   return (
     <Link to={`/t/${trip.id}/board`} className="trip-card hover:no-underline">
       <div className="ph">
-        <SafeImg src={photoFor(i)} alt="" />
+        {/* Real cover from the trip's top-voted home; editorial Unsplash as fallback for new trips. */}
+        <SafeImg src={trip.coverPhoto || photoFor(i)} alt="" />
         <div className="scrim" />
         <span className="dest"><Icon icon={MapPin} className="ico" /> {trip.destination || 'Trip'}</span>
         {trip.isOwner && (

@@ -200,6 +200,30 @@ function tripView(trip, user) {
   };
 }
 
+// Pick a representative cover photo for a trip's dashboard card: the most
+// up-voted home that has a photo, else the first home with a photo. Returns null
+// when a trip has no photographed homes yet (new, submission-powered trips) — the
+// client then falls back to an editorial placeholder.
+function tripCoverPhoto(tripId) {
+  try {
+    const homes = [
+      ...((loadListings(tripId).listings) || []),
+      ...(loadSubmitted(tripId) || []),
+    ].filter(l => Array.isArray(l.photos) && l.photos[0]);
+    if (homes.length === 0) return null;
+    const votes = loadVotes(tripId);
+    const net = (l) => {
+      const v = votes[l.id] || votes[String(l.id)] || {};
+      let n = 0;
+      for (const k in v) n += v[k] === 'up' ? 1 : v[k] === 'down' ? -1 : 0;
+      return n;
+    };
+    let best = homes[0], bestNet = net(homes[0]);
+    for (const h of homes) { const n = net(h); if (n > bestNet) { best = h; bestNet = n; } }
+    return best.photos[0];
+  } catch { return null; }
+}
+
 // One-time, non-destructive migration: if the trips registry is empty, register
 // the original single-trip data as the LA trip. Its data files stay exactly where
 // they are (DATA_DIR flat) because tripDir(LA_TRIP_ID) === DATA_DIR — nothing is
@@ -2503,7 +2527,7 @@ app.get('/api/me/trips', requireAuth, (req, res) => {
   const mine = Object.values(trips)
     .filter(t => t.owner_id === req.user.id || (Array.isArray(t.members) && t.members.includes(req.user.id)))
     .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-    .map(t => tripView(t, req.user));
+    .map(t => ({ ...tripView(t, req.user), coverPhoto: tripCoverPhoto(t.id) }));
   res.json({ trips: mine });
 });
 

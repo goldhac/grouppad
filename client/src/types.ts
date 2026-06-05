@@ -35,6 +35,8 @@ export interface TripView extends Trip {
   isMember: boolean;
   memberCount: number;
   created_at?: string;
+  /** Cover photo from the trip's top-voted home; null for new trips (client falls back to an editorial image). */
+  coverPhoto?: string | null;
   // organizer-only fields
   join_code?: string;
   members?: string[];
