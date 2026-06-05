@@ -26,12 +26,15 @@
 
 /* full-bleed photo band with floating caption + inset product */
 .d1-band { position: relative; margin-top: 44px; border-radius: var(--r-xl); overflow: hidden; height: clamp(360px, 52vw, 620px); }
-.d1-band img.bg { width: 100%; height: 100%; object-fit: cover; }
-.d1-band .frame-line { position: absolute; inset: 0; box-shadow: inset 0 0 0 1px var(--photo-border); border-radius: var(--r-xl); pointer-events: none; }
-.d1-band .scrim { position: absolute; inset: 0; background: linear-gradient(105deg, rgba(15,23,22,0.5) 0%, rgba(15,23,22,0.12) 42%, transparent 70%); }
-.d1-band .cap { position: absolute; left: 28px; bottom: 26px; color: #fff; max-width: 30ch; }
-.d1-band .cap .t { font-family: var(--font-display); font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
-.d1-band .cap .s { font-size: 14px; opacity: 0.9; margin-top: 5px; }
+.d1-band img.bg, .d1-band video.bg { width: 100%; height: 100%; object-fit: cover; display: block; }
+.d1-band .frame-line { position: absolute; inset: 0; box-shadow: inset 0 0 0 1px var(--photo-border); border-radius: var(--r-xl); pointer-events: none; z-index: 3; }
+/* dual scrim: bottom-up (for the caption) + a soft left wash — caption stays legible over any frame */
+.d1-band .scrim { position: absolute; inset: 0; background:
+  linear-gradient(to top, rgba(12,18,17,0.74) 0%, rgba(12,18,17,0.28) 26%, transparent 54%),
+  linear-gradient(105deg, rgba(12,18,17,0.32) 0%, transparent 50%); }
+.d1-band .cap { position: absolute; left: 28px; right: 28px; bottom: 24px; z-index: 2; color: #fff; max-width: 34ch; text-shadow: 0 1px 14px rgba(0,0,0,0.32); }
+.d1-band .cap .t { font-family: var(--font-display); font-size: clamp(19px, 2.3vw, 25px); font-weight: 700; letter-spacing: -0.01em; line-height: 1.16; }
+.d1-band .cap .s { font-size: 14px; opacity: 0.95; margin-top: 6px; }
 .d1-band .pricepill { position: absolute; top: 22px; right: 22px; display: inline-flex; align-items: center; gap: 8px; background: var(--surface-overlay); backdrop-filter: blur(8px); border: 1px solid var(--photo-border); border-radius: var(--r-pill); padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--text); }
 .d1-band .pricepill .pp { color: var(--under); }
 
@@ -89,7 +92,10 @@
 .d1-cta-inner .c { position: relative; z-index: 2; }
 .d1-cta-inner h2 { font-family: var(--font-display); font-size: clamp(34px, 5vw, 58px); font-weight: 800; letter-spacing: -0.03em; color: #fff; line-height: 1.02; }
 .d1-cta-inner p { font-size: 18px; color: rgba(255,255,255,0.88); margin: 16px 0 0; }
+.d1-cta-inner .d1-cta-kicker { display: inline-flex; align-items: center; gap: 9px; font-size: 12.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.82); margin-bottom: 4px; }
 .d1-cta-inner .cta { display: flex; justify-content: center; gap: 12px; margin-top: 30px; }
+.d1-cta-inner .d1-cta-tertiary { display: inline-flex; align-items: center; gap: 6px; margin-top: 20px; font-family: var(--font-sans); font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.82); background: none; border: 0; cursor: pointer; transition: color var(--dur-fast) var(--ease-standard); }
+.d1-cta-inner .d1-cta-tertiary:hover { color: #fff; }
 .btn-onphoto { background: #fff; color: var(--c-teal-900); border-color: transparent; }
 .btn-onphoto:hover { background: rgba(255,255,255,0.9); }
 .btn-ghostphoto { background: transparent; color: #fff; border-color: rgba(255,255,255,0.4); }
@@ -139,7 +145,9 @@
 .d1-quote .ph-note { font-size: 12.5px; color: var(--text-muted); margin-top: 18px; }
 
 /* dark theme — a touch of Direction 3's cinematic energy */
-[data-theme="dark"] .d1-band .scrim { background: linear-gradient(105deg, rgba(7,12,11,0.62) 0%, rgba(7,12,11,0.2) 44%, transparent 72%); }
+[data-theme="dark"] .d1-band .scrim { background:
+  linear-gradient(to top, rgba(5,9,8,0.82) 0%, rgba(5,9,8,0.34) 28%, transparent 56%),
+  linear-gradient(105deg, rgba(5,9,8,0.40) 0%, transparent 50%); }
 [data-theme="dark"] .d1-band .pricepill { box-shadow: 0 0 22px -6px color-mix(in srgb, var(--gold-dot) 40%, transparent); }
 [data-theme="dark"] .d1-kicker .golddot-motif { box-shadow: 0 0 12px 1px color-mix(in srgb, var(--gold-dot) 55%, transparent); }
 [data-theme="dark"] .d1-hero h1 em { text-shadow: 0 0 30px color-mix(in srgb, var(--accent-text) 35%, transparent); }

@@ -141,9 +141,10 @@ export function LandingView() {
       {/* ── CTA BAND ─────────────────────────────────────────────────────── */}
       <section className="d1-cta wrap">
         <div className="d1-cta-inner rv">
-          <SafeImg src={IMG('1502005097973-6a7082348e28')} alt="" aria-hidden />
+          <SafeImg src={IMG('1564013799919-ab600027ffc6')} alt="" aria-hidden />
           <div className="scrim" />
           <div className="c">
+            <span className="d1-cta-kicker"><span className="golddot-motif" /> Ready when you are</span>
             <h2>Your group's next trip starts with one board.</h2>
             <p>Spin one up in under a minute, share the link, and let everyone weigh in.</p>
             <div className="cta">
@@ -154,19 +155,12 @@ export function LandingView() {
                 {user ? 'See how it works' : 'Sign in'}
               </button>
             </div>
+            <button className="d1-cta-tertiary" onClick={() => startOnboarding(true)}>
+              Prefer a 30-second guided tour? <ArrowRight className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </section>
-
-      {/* 30-second guided tour — keeps the existing onboarding entry */}
-      <div className="wrap" style={{ textAlign: 'center', paddingBottom: 48 }}>
-        <button
-          onClick={() => startOnboarding(true)}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent-text hover:underline"
-        >
-          Prefer a 30-second guided tour? <ArrowRight className="h-4 w-4" />
-        </button>
-      </div>
     </div>
   );
 }
