@@ -1,4 +1,4 @@
-import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Plane, FerrisWheel, Lock, Users, Check, X, Sparkles } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Plane, FerrisWheel, Lock, Users, Check, X, Sparkles, Clapperboard, Quote } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Carousel } from '@/components/Carousel';
 import { Icon } from '@/components/ui/Icon';
@@ -32,11 +32,12 @@ function initials(name?: string | null) {
 
 export function Card({ listing: l, isSubmitted = false, isPipeline = false, compact = false }: CardProps) {
   const {
-    user, votes, final, isOwner, split, trip, selected, reviewsMap,
+    user, votes, final, isOwner, split, trip, selected, reviewsMap, toursMap,
     castVote, toggleFinalPick, setDecision, deleteListing, toggleSelect, openDetail, requireSignIn,
   } = useApp();
 
   const rev = reviewsMap[`${l.source}:${l.id}`];
+  const hasTour = toursMap[l.id]?.status === 'ready' && (toursMap[l.id]?.clips.some((c) => c.videoUrl) ?? false);
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
   const net = tally.up - tally.down;
   const isMyPick = final.myPick === l.id;
@@ -71,6 +72,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
   const photo = (
     <Carousel photos={l.photos} alt={l.name}>
       {isDecision && <span className="corner"><Icon icon={Lock} className="ico" /> Official pick</span>}
+      {hasTour && <span className="tourflag"><Icon icon={Clapperboard} className="ico" /> Tour</span>}
       <button
         type="button"
         className={cn('star-btn', isMyPick && 'on')}
@@ -223,10 +225,18 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
               {isFav && <span className="chip-amen chip-fav"><Icon icon={Star} className="ico" /> Superhost</span>}
             </div>
 
-            {(l.note || (rev && rev.pos[0])) && (
+            {l.note && (
               <div className="reviews">
                 <Icon icon={Sparkles} className="ico" style={{ color: 'var(--accent-text)', fill: 'none' }} />
-                <span className="line-clamp-2">{l.note || `“${rev?.pos[0]?.text}”`}</span>
+                <span className="line-clamp-2">{l.note}</span>
+              </div>
+            )}
+
+            {/* review peek — a real guest quote (separate from the AI note) */}
+            {rev?.pos[0]?.text && (
+              <div className="reviews" style={{ alignItems: 'flex-start' }}>
+                <Icon icon={Quote} className="ico" style={{ color: 'var(--text-muted)' }} />
+                <span className="line-clamp-2 italic">“{rev.pos[0].text}”{rev.pos[0].author ? <span className="not-italic" style={{ color: 'var(--text-muted)' }}> — {rev.pos[0].author}</span> : null}</span>
               </div>
             )}
 

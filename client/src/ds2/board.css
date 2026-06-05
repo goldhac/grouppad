@@ -197,6 +197,10 @@
 .h-scroll > .card .body.compact .specs { font-size: 12.5px; gap: 10px; }
 .h-scroll > .card .body.compact .perperson { padding: 3px 9px; font-size: 12px; }
 
+/* "Tour" flag on a card photo when a walkthrough video exists */
+.card .photo .tourflag { position: absolute; left: 10px; bottom: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: #fff; background: rgba(20,33,32,0.62); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.18); padding: 5px 9px; border-radius: var(--r-pill); box-shadow: var(--shadow-sm); }
+.card .photo .tourflag .ico { width: 12px; height: 12px; }
+
 /* the card grid */
 .b-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
 .b-grid > .card { width: 100%; }
