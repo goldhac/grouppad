@@ -21,11 +21,13 @@ import { Button } from '@/components/ui/Button';
 
 type Tab = 'all' | 'shortlist' | 'decision' | 'discussion';
 
-/** Paste-a-URL add toolbar (the masthead's Add-listing row). */
+/** Paste-a-URL add toolbar — collapsed to a button until you start adding,
+ *  to keep the masthead light. */
 function AddToolbar({ onFindMore }: { onFindMore: () => void }) {
   const { submitListing, requireSignIn, isOwner, toast } = useApp();
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [openField, setOpenField] = useState(false);
 
   async function add() {
     if (!url.trim()) return;
@@ -34,6 +36,7 @@ function AddToolbar({ onFindMore }: { onFindMore: () => void }) {
     try {
       await submitListing(url.trim());
       setUrl('');
+      setOpenField(false);
       toast('Added — it rises into the Shortlist at net +1.', 'success');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not add that link.', 'error');
@@ -44,18 +47,26 @@ function AddToolbar({ onFindMore }: { onFindMore: () => void }) {
 
   return (
     <div className="b-toolbar">
-      <div className="add">
-        <input
-          className="field"
-          placeholder="Paste an Airbnb, VRBO, or Booking link to add a home…"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
-        />
-        <button className="btn btn-primary" onClick={add} disabled={busy}>
-          <Icon icon={Plus} className="ico" /> {busy ? 'Adding…' : 'Add'}
+      {openField ? (
+        <div className="add">
+          <input
+            className="field"
+            autoFocus
+            placeholder="Paste an Airbnb, VRBO, or Booking link…"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            onBlur={() => !url.trim() && setOpenField(false)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void add(); if (e.key === 'Escape') setOpenField(false); }}
+          />
+          <button className="btn btn-primary" onClick={add} disabled={busy}>
+            <Icon icon={Plus} className="ico" /> {busy ? 'Adding…' : 'Add'}
+          </button>
+        </div>
+      ) : (
+        <button className="btn btn-ghost btn-sm" onClick={() => setOpenField(true)}>
+          <Icon icon={Plus} className="ico" /> Add a home
         </button>
-      </div>
+      )}
       <span className="spacer" />
       {isOwner && (
         <button className="btn btn-ghost btn-sm" onClick={onFindMore}>Find more</button>
