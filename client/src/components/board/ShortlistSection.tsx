@@ -1,127 +1,119 @@
 import { useMemo } from 'react';
-import { Sparkles, Swords, Star, Bot } from 'lucide-react';
+import { Sparkles, Swords, Heart, Lightbulb, AlertCircle } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
-import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
 import { Card } from '@/components/Card';
 import { Markdown } from '@/components/Markdown';
-import { netVotes, mansionScore, formatDateTime } from '@/lib/utils';
+import { netVotes, mansionScore, fmt } from '@/lib/utils';
 import type { CompareController } from '@/hooks/useCompare';
 import type { Listing } from '@/types';
 
 export function ShortlistSection({ compare }: { compare: CompareController }) {
-  const { shortlistIds, findListing, votes, selected, insights, clearSelection } = useApp();
+  const { shortlistIds, findListing, votes, selected, insights, trip, clearSelection } = useApp();
 
   const shortlist = useMemo(() => {
     const items = [...shortlistIds].map((id) => findListing(id)).filter(Boolean) as Listing[];
-    return items.sort(
-      (a, b) => netVotes(votes, b.id) - netVotes(votes, a.id) || mansionScore(b) - mansionScore(a),
-    );
+    return items.sort((a, b) => netVotes(votes, b.id) - netVotes(votes, a.id) || mansionScore(b) - mansionScore(a));
   }, [shortlistIds, findListing, votes]);
 
   const selCount = selected.size;
 
-  // Staleness: server-loaded insights carry the ids they were computed from.
   const stale = useMemo(() => {
     if (!insights?.ids) return false;
-    const a = [...insights.ids].sort().join(',');
-    const b = [...shortlistIds].sort().join(',');
-    return a !== b;
+    return [...insights.ids].sort().join(',') !== [...shortlistIds].sort().join(',');
   }, [insights, shortlistIds]);
 
-  if (shortlist.length === 0) return null;
+  // Illustrative weighing criteria (what the AI considers).
+  const ppBudget = trip?.budget && trip.adults ? Math.round(trip.budget / trip.adults) : null;
+  const crit = [
+    ppBudget ? `Under ${fmt(ppBudget)} / person` : 'Under budget',
+    'Distance to your plans',
+    trip?.adults ? `Sleeps ≥ ${trip.adults}` : 'Group size fit',
+    'Pool + parking',
+  ];
+
+  if (shortlist.length === 0) {
+    return (
+      <section className="flex flex-col items-center gap-3 py-16 text-center">
+        <Icon icon={Heart} className="ico" />
+        <h3 className="font-display text-lg font-semibold">No finalists yet</h3>
+        <p className="max-w-sm text-sm text-text-muted">
+          Homes rise here automatically when they reach <b>net +1</b> likes. Like the ones your group is into on the All homes tab.
+        </p>
+      </section>
+    );
+  }
 
   return (
-    <section className="px-4 py-3 sm:px-8">
-      <div className="rounded-lg border border-border bg-panel p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 font-semibold"><Star className="h-4 w-4 text-warn" aria-hidden /> Shortlist</span>
-          <span className="text-xs text-muted">
-            Liked by members & member-added homes — your group's top picks
-          </span>
-          <Button
-            variant="default"
-            size="sm"
-            className="ml-auto"
-            onClick={() => compare.setPanelOpen(!compare.panelOpen)}
-          >
-            <Sparkles className="h-4 w-4" /> Compare with AI
-          </Button>
-        </div>
+    <section className="flex flex-col gap-4">
+      <div className="row-head">
+        <Icon icon={Heart} className="ico-lead" />
+        <span className="ttl">Shortlist</span>
+        <span className="cnt tnum">{shortlist.length}</span>
+        <span className="sub">liked by the group · ranked by net likes</span>
+      </div>
 
-        {compare.panelOpen && (
-          <div className="mt-3 rounded-md border border-border bg-panel-2 p-3">
+      <div className="shortlist-wrap">
+        {/* ── Sticky AI compare panel ─────────────────────────────────────── */}
+        <div className="ai-panel">
+          <div className="ai-head">
+            <div className="spark"><Icon icon={Sparkles} className="ico" /></div>
+            <div>
+              <div className="at">Compare with AI</div>
+              <div className="as">Ranks the shortlist against your caveats</div>
+            </div>
+          </div>
+          <div className="ai-body">
+            <div className="crit">
+              {crit.map((c) => <span key={c} className="c">{c}</span>)}
+            </div>
+
             <input
               type="text"
               value={compare.criteria}
               onChange={(e) => compare.setCriteria(e.target.value)}
-              placeholder="Anything else to weigh? (e.g. must have hot tub, walkable, quiet street)"
-              className="h-10 w-full rounded-md border border-border bg-panel px-3 text-sm outline-none focus:ring-2 focus:ring-accent"
+              placeholder="Add anything else to weigh…"
+              className="field"
+              style={{ fontSize: 13 }}
             />
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={compare.running}
-                onClick={() => void compare.runWhole(shortlist)}
-              >
-                {compare.running ? 'Analyzing…' : 'Analyze & compare whole shortlist'}
-              </Button>
-            </div>
 
-            <div className="mt-3 border-t border-border pt-3">
-              <p className="text-xs text-muted">
-                <Swords className="mr-1 inline h-3.5 w-3.5" />
-                Or tick the <strong>compare</strong> box on cards below, then:
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted">{selCount} selected</span>
-                <Button
-                  variant="default"
-                  size="sm"
-                  disabled={selCount !== 2 || compare.running}
-                  onClick={() => void compare.runSelected('1v1')}
-                >
-                  <Swords className="h-3.5 w-3.5" /> 1v1 (pick exactly 2)
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  disabled={selCount < 2 || compare.running}
-                  onClick={() => void compare.runSelected('multi')}
-                >
-                  Compare selected
-                </Button>
-                <Button variant="ghost" size="sm" disabled={selCount === 0} onClick={clearSelection}>
-                  Clear
-                </Button>
+            {insights?.analysis ? (
+              <div className="insights">
+                <div className="ih"><Icon icon={Lightbulb} className="ico" /> Group insight</div>
+                <Markdown text={insights.analysis} />
+                {stale && (
+                  <div className="stale"><Icon icon={AlertCircle} className="ico" /> {shortlist.length} homes shortlisted — re-analyze to refresh.</div>
+                )}
               </div>
-              {compare.error && !compare.comparedListings && (
-                <p className="mt-2 text-sm text-danger">{compare.error}</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {insights?.analysis && (
-          <div className="mt-3 rounded-md border border-border bg-panel-2 p-3">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Bot className="h-4 w-4" aria-hidden /> Group AI insights
-              {insights.created_at && (
-                <span className="font-normal text-xs text-muted">
-                  updated {formatDateTime(insights.created_at)}
-                </span>
-              )}
-            </div>
-            {stale && (
-              <p className="mt-1.5 rounded bg-warn/10 px-2 py-1 text-xs text-warn">
-                The shortlist changed since this ran — re-run for fresh insights.
-              </p>
+            ) : (
+              <div className="insights">
+                <div className="ih"><Icon icon={Lightbulb} className="ico" /> Group insight</div>
+                <p>Run an analysis and the AI weighs every finalist against your budget, distances, and caveats — then explains the call.</p>
+              </div>
             )}
-            <Markdown className="mt-2" text={insights.analysis} />
-          </div>
-        )}
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex flex-wrap gap-2">
+              <button className="btn btn-primary btn-sm" disabled={compare.running} onClick={() => void compare.runWhole(shortlist)}>
+                <Icon icon={Sparkles} className="ico" /> {compare.running ? 'Analyzing…' : `Analyze ${shortlist.length}`}
+              </button>
+              <button className="btn btn-ghost btn-sm" disabled={selCount !== 2 || compare.running} onClick={() => void compare.runSelected('1v1')}>
+                <Icon icon={Swords} className="ico" /> 1v1
+              </button>
+              {selCount > 0 && (
+                <button className="btn btn-ghost btn-sm" onClick={clearSelection}>Clear ({selCount})</button>
+              )}
+            </div>
+            {selCount >= 2 && (
+              <button className="btn btn-ghost btn-sm" disabled={compare.running} onClick={() => void compare.runSelected('multi')}>
+                Compare {selCount} selected
+              </button>
+            )}
+            {compare.error && !compare.comparedListings && <p className="text-sm text-danger">{compare.error}</p>}
+          </div>
+        </div>
+
+        {/* ── Finalist grid ───────────────────────────────────────────────── */}
+        <div className="sl-grid">
           {shortlist.map((l) => (
             <Card
               key={l.id}
