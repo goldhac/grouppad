@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { ChevronDown, Plus, LogOut, LayoutGrid, Check, Bell, Sun, Moon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
@@ -149,7 +149,13 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 export function Navbar() {
   const { user, myTrips, trip, isOwner, signOut, openAuth } = useApp();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [notifOpen, setNotifOpen] = useState(false);
+
+  // The Trips dashboard and Create flow already provide their own prominent
+  // "New trip" CTA, so the global one would double up the screen's primary
+  // action there (one-primary-CTA-per-screen). Yield to the page on those routes.
+  const ownsNewTripCta = pathname === '/trips' || pathname.startsWith('/trips/new');
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-panel/95 backdrop-blur">
@@ -209,9 +215,11 @@ export function Navbar() {
           <ThemeToggle />
           {user ? (
             <>
-              <Button variant="primary" size="sm" onClick={() => navigate('/trips/new')}>
-                <Plus className="h-4 w-4" /> New trip
-              </Button>
+              {!ownsNewTripCta && (
+                <Button variant="primary" size="sm" onClick={() => navigate('/trips/new')}>
+                  <Plus className="h-4 w-4" /> New trip
+                </Button>
+              )}
               <Menu label={<span className="max-w-[120px] truncate">{user.name}</span>}>
                 {(close) => (
                   <>
