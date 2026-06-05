@@ -127,8 +127,14 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
             {l.bd != null && l.sleeps != null && <span className="dot-sep">·</span>}
             {l.sleeps != null && <span>sleeps {l.sleeps}</span>}
           </div>
-          <div className="price"><span className="amt tnum">{fmt(l.est_5n)}</span></div>
-          {perperson}
+          <div className="pricerow">
+            <span className="amt tnum">{fmt(l.est_5n)}</span>
+            {pp != null && (
+              <span className={cn('perperson tnum', ppOver ? 'bad' : 'ok')}>
+                <Icon icon={Users} className="ico" /> {fmt(pp)}/pp
+              </span>
+            )}
+          </div>
           {votebar}
         </div>
       </article>
