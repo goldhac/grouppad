@@ -9,6 +9,7 @@ import './ds2/landing.css';
 import './ds2/demo-panel.css';
 import './ds2/trips.css';
 import './ds2/board.css';
+import './ds2/detail.css';
 import { App } from './App';
 import { AppProvider } from './store/AppContext';
 
