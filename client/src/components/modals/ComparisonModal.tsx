@@ -1,7 +1,8 @@
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { MapPin, Swords, Sparkles, X, Lightbulb } from 'lucide-react';
+import { MapPin, Swords, X } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { Markdown } from '@/components/Markdown';
 import { fmt } from '@/lib/utils';
@@ -35,7 +36,7 @@ export function ComparisonModal({ compare }: { compare: CompareController }) {
         >
           <div className="cm-card">
             <div className="cm-head">
-              <span className="spark"><Icon icon={is1v1 ? Swords : Sparkles} className="ico" /></span>
+              <span className="spark">{is1v1 ? <Icon icon={Swords} className="ico" /> : <ScoutMark className="ico" />}</span>
               <DialogPrimitive.Title asChild><h3>{is1v1 ? 'Head-to-head' : `Comparing ${items.length} homes`}</h3></DialogPrimitive.Title>
               <DialogPrimitive.Close className="btn btn-ghost btn-sm x" aria-label="Close"><Icon icon={X} className="ico" /></DialogPrimitive.Close>
             </div>
@@ -54,15 +55,15 @@ export function ComparisonModal({ compare }: { compare: CompareController }) {
               )}
 
               {compare.running ? (
-                <div className="cm-verdict"><div className="vh"><Icon icon={Sparkles} className="ico" /> Analyzing</div>Weighing price, distance, and your caveats with Gemini…</div>
+                <div className="cm-verdict"><div className="vh"><ScoutMark className="ico" /> {AI_NAME} is thinking</div>Weighing price, distance, and your caveats…</div>
               ) : compare.result ? (
                 <div className="cm-verdict">
-                  <div className="vh"><Icon icon={Lightbulb} className="ico" /> AI verdict</div>
+                  <div className="vh"><ScoutMark className="ico" /> {AI_NAME}’s verdict</div>
                   <Markdown text={compare.result} />
                 </div>
               ) : compare.error ? (
                 <div className="cm-verdict" style={{ background: 'var(--over-bg)', borderColor: 'var(--over-border)' }}>
-                  <div className="vh" style={{ color: 'var(--over)' }}><Icon icon={Sparkles} className="ico" /> Couldn’t compare</div>
+                  <div className="vh" style={{ color: 'var(--over)' }}><ScoutMark className="ico" /> {AI_NAME} couldn’t compare</div>
                   {compare.error}
                 </div>
               ) : null}

@@ -65,7 +65,7 @@ const SLIDES = [
   { tag: 'Step 2 of 5', h: 'Browse & add any rental', p: 'Paste an Airbnb, VRBO, or Booking link — or let GroupPad pull fresh homes for your dates.', v: 'v2', Art: AddArt },
   { tag: 'Step 3 of 5', h: 'Vote in the open', p: 'Shared thumbs, not secret hearts. Liked homes rise into the group’s shortlist on their own.', v: 'v3', Art: VoteArt },
   { tag: 'Step 4 of 5', h: 'The number that ends the argument', p: 'Every home shows the real all-in cost split across your group — recomputed live as it grows.', v: 'v4', Art: PpArt },
-  { tag: 'Step 5 of 5', h: 'Compare with AI, then lock it', p: 'Down to two? AI calls the winner. The organizer makes it official — and the debate is over.', v: 'v5', Art: LockArt },
+  { tag: 'Step 5 of 5', h: 'Compare with Scout, then lock it', p: 'Down to two? Scout calls the winner. The organizer makes it official — and the debate is over.', v: 'v5', Art: LockArt },
 ];
 
 export function OnboardingModal() {

@@ -179,7 +179,7 @@ export function CreateTripView() {
                   <textarea className="field" name="itin"
                     placeholder="Rough plans help tailor the search — e.g. Fri: arrive + dinner downtown. Sat: pool day. Sun: museum…"
                     value={form.itin} onChange={set('itin')} />
-                  <span className="sub"><Info className="ico" /> Helps pick nearby reference points and powers the AI compare.</span>
+                  <span className="sub"><Info className="ico" /> Helps pick nearby reference points and powers Scout, our AI.</span>
                 </div>
               </div>
             </div>

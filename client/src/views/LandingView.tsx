@@ -1,9 +1,10 @@
 import { useNavigate } from 'react-router-dom';
-import { Plus, Sparkles, Users, Swords, Clapperboard, ArrowRight } from 'lucide-react';
+import { Plus, Sparkles, Users, Swords, Clapperboard, ArrowRight, LayoutGrid, ThumbsUp, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
+import { ScoutMark } from '@/components/ui/ScoutMark';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { CoreLoopDemo } from '@/views/landing/CoreLoopDemo';
 import { useScrollReveal } from '@/lib/useScrollReveal';
@@ -11,10 +12,10 @@ import { useScrollReveal } from '@/lib/useScrollReveal';
 const IMG = (id: string) => `https://images.unsplash.com/photo-${id}?w=1100&q=80&auto=format&fit=crop`;
 
 const LOOP = [
-  { ix: '01', h: 'Browse together', p: 'Everyone adds the rentals they\'re eyeing to one shared board — curated, scraped, or pasted from any link.' },
-  { ix: '02', h: 'Vote, see the real cost', p: 'A thumb up floats a home to the shortlist. Every price shows the all-in total and the per-person split, live.' },
-  { ix: '03', h: 'Let AI break the tie', p: 'Run a 1v1 or compare the shortlist — the AI weighs price, distance, and your plans, and explains the call.' },
-  { ix: '04', h: 'Lock the official pick', p: 'Everyone casts one top choice. The organizer seals the winner with a gold lock — debate over.' },
+  { icon: <Icon icon={LayoutGrid} className="ico" />, h: 'Browse together', p: 'Everyone adds the rentals they\'re eyeing to one shared board — curated, scraped, or pasted from any link.' },
+  { icon: <Icon icon={ThumbsUp} className="ico" />, h: 'Vote, see the real cost', p: 'A thumb up floats a home to the shortlist. Every price shows the all-in total and the per-person split, live.' },
+  { icon: <ScoutMark className="ico" />, h: 'Let Scout break the tie', p: 'Run a 1v1 or compare the shortlist — Scout weighs price, distance, and your plans, and explains the call.' },
+  { icon: <Icon icon={Lock} className="ico" />, h: 'Lock the official pick', p: 'Everyone casts one top choice. The organizer seals the winner with a gold lock — debate over.' },
 ];
 
 export function LandingView() {
@@ -46,7 +47,7 @@ export function LandingView() {
         <div className="d1-hero-sub">
           <p className="rv d2">
             GroupPad turns "where should we stay?" into one shared board — add rentals, vote, see the
-            real per-person cost, compare with AI, and lock the winner together.
+            real per-person cost, ask Scout, and lock the winner together.
           </p>
           <div className="cta rv d3">
             <Button variant="primary" size="lg" onClick={primary}>
@@ -94,8 +95,8 @@ export function LandingView() {
         <div className="d1-demoblock">
           <div className="d1-looplist rv">
             {LOOP.map((l) => (
-              <div className="d1-loopitem" key={l.ix}>
-                <span className="ix">{l.ix}</span>
+              <div className="d1-loopitem" key={l.h}>
+                <span className="ix">{l.icon}</span>
                 <div>
                   <h4>{l.h}</h4>
                   <p>{l.p}</p>
@@ -120,9 +121,9 @@ export function LandingView() {
         />
         <FeaturePair
           flip
-          tag="AI compare" tagIcon={Swords}
-          title="Let the AI settle the tie."
-          body="Stuck between two? Run a head-to-head and the AI weighs price, distance, and your itinerary — then tells you which wins and why, in plain language."
+          tag="Meet Scout" tagIcon={Swords}
+          title="Let Scout settle the tie."
+          body="Stuck between two? Run a head-to-head and Scout weighs price, distance, and your itinerary — then tells you which wins and why, in plain language."
           media={<SafeImg src={IMG('1600585152220-90363fe7e115')} alt="A standout vacation home exterior" />}
         />
         <FeaturePair

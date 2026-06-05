@@ -34,7 +34,8 @@ function Meter({ icon, name, src, used, limit, usedLabel, limitLabel, note, conf
 }
 
 export function AdminView() {
-  const { adminKey, setAdminKey, runPipeline, toast } = useApp();
+  const { user, adminKey, setAdminKey, runPipeline, toast } = useApp();
+  const superAdmin = !!user?.isSuperAdmin;
   const [usage, setUsage] = useState<AdminUsage | null>(null);
   const [trips, setTrips] = useState<AdminTripRow[]>([]);
   const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -42,19 +43,22 @@ export function AdminView() {
   const [keyDraft, setKeyDraft] = useState('');
   const [running, setRunning] = useState(false);
 
+  // Super-admins authenticate by session (no key); others use the admin key.
+  const authKey = superAdmin ? undefined : adminKey ?? undefined;
   const load = useCallback(async () => {
-    if (!adminKey) return;
+    if (!adminKey && !superAdmin) return;
     setStatus('loading');
     try {
-      const [u, t] = await Promise.all([api.adminUsage(adminKey), api.adminTrips(adminKey).catch(() => ({ trips: [] }))]);
+      const [u, t] = await Promise.all([api.adminUsage(authKey), api.adminTrips(authKey).catch(() => ({ trips: [] }))]);
       setUsage(u); setTrips(t.trips); setStatus('idle');
     } catch (e) {
       setErrMsg(e instanceof Error ? e.message : 'Could not load usage.'); setStatus('error');
     }
-  }, [adminKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [adminKey, superAdmin]);
   useEffect(() => { void load(); }, [load]);
 
-  if (!adminKey) {
+  if (!adminKey && !superAdmin) {
     return (
       <main className="uu-main"><div className="tp-wrap uu-wrap">
         <div className="mx-auto max-w-md py-20 text-center">
@@ -99,7 +103,7 @@ export function AdminView() {
         <>
           <div className="meters">
             <Meter
-              icon={Sparkles} name="Gemini" src={g!.configured ? `AI compare · ${g!.model}` : 'AI compare · geocoding'}
+              icon={Sparkles} name="Scout AI" src={g!.configured ? `AI compare · ${g!.model}` : 'AI compare · geocoding'}
               configured={g!.configured}
               used={g!.estCostUsd} limit={GEMINI_SOFT_BUDGET}
               usedLabel={money(g!.estCostUsd)} limitLabel={`$${GEMINI_SOFT_BUDGET} / mo · soft`}

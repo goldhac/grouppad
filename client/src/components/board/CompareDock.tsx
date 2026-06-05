@@ -1,6 +1,7 @@
-import { Sparkles, Swords, X } from 'lucide-react';
+import { Swords, X } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
 import type { CompareController } from '@/hooks/useCompare';
 
 /** Floating action dock shown on the board when one or more cards are ticked. */
@@ -17,7 +18,7 @@ export function CompareDock({ compare }: { compare: CompareController }) {
           <Icon icon={Swords} className="ico" /> 1v1
         </button>
         <button className="btn btn-primary btn-sm" disabled={count < 2 || compare.running} onClick={() => void compare.runSelected('multi')}>
-          <Icon icon={Sparkles} className="ico" /> {compare.running ? 'Analyzing…' : 'Compare'}
+          <ScoutMark className="ico" /> {compare.running ? 'Thinking…' : `Ask ${AI_NAME}`}
         </button>
         <button className="btn btn-ghost btn-sm" onClick={clearSelection} aria-label="Clear selection">
           <Icon icon={X} className="ico" />

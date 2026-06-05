@@ -9,6 +9,8 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  /** Platform super-admin (by email) — gets the admin dashboard without a key. */
+  isSuperAdmin?: boolean;
 }
 
 export interface Trip {

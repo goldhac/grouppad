@@ -41,7 +41,7 @@ export function ItinerarySection() {
           <span className="inline-flex items-center gap-1.5 font-semibold">
             <Map className="h-4 w-4" /> Trip itinerary
           </span>
-          <span className="text-xs text-muted">Posted by the organizer — feeds the AI comparison</span>
+          <span className="text-xs text-muted">Posted by the organizer — feeds Scout’s compare</span>
           <button
             className="ml-auto inline-flex items-center gap-1 text-sm text-link hover:underline"
             onClick={() => setExpanded((v) => !v)}

@@ -9,7 +9,7 @@ const CARDS = [
   { icon: Link2, step: 'Step 1', h: 'Browse & add any rental', p: 'Paste an Airbnb, VRBO, or Booking link — or let GroupPad pull fresh homes for your dates. Each is priced and placed automatically.' },
   { icon: ThumbsUp, step: 'Step 2', h: 'Vote in the open', p: 'Public thumbs, not secret hearts. Any home that reaches net +1 rises into the group’s shortlist on its own.' },
   { icon: Users, step: 'The signature', h: 'The per-person number', p: 'Every home shows the real all-in cost split across your group — the figure people actually argue about — recomputed live as the group changes.' },
-  { icon: BadgeCheck, step: 'The decision', h: 'Compare with AI & lock the pick', p: 'Down to two? AI weighs price, distance, and your must-haves and calls a winner. The organizer makes one pick official for everyone.', gold: true },
+  { icon: BadgeCheck, step: 'The decision', h: 'Compare with Scout & lock the pick', p: 'Down to two? Scout weighs price, distance, and your must-haves and calls a winner. The organizer makes one pick official for everyone.', gold: true },
 ];
 
 const FAQ = [

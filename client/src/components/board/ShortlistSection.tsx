@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { Sparkles, Swords, Heart, Lightbulb, AlertCircle } from 'lucide-react';
+import { Swords, Heart, Lightbulb, AlertCircle } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
 import { Card } from '@/components/Card';
 import { Markdown } from '@/components/Markdown';
 import { netVotes, mansionScore, fmt } from '@/lib/utils';
@@ -57,10 +58,10 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
         {/* ── Sticky AI compare panel ─────────────────────────────────────── */}
         <div className="ai-panel">
           <div className="ai-head">
-            <div className="spark"><Icon icon={Sparkles} className="ico" /></div>
+            <div className="spark"><ScoutMark className="ico" /></div>
             <div>
-              <div className="at">Compare with AI</div>
-              <div className="as">Ranks the shortlist against your caveats</div>
+              <div className="at">{AI_NAME}</div>
+              <div className="as">Your group’s AI — ranks the shortlist against your caveats</div>
             </div>
           </div>
           <div className="ai-body">
@@ -88,13 +89,13 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
             ) : (
               <div className="insights">
                 <div className="ih"><Icon icon={Lightbulb} className="ico" /> Group insight</div>
-                <p>Run an analysis and the AI weighs every finalist against your budget, distances, and caveats — then explains the call.</p>
+                <p>Ask {AI_NAME} and it weighs every finalist against your budget, distances, and caveats — then explains the call.</p>
               </div>
             )}
 
             <div className="flex flex-wrap gap-2">
               <button className="btn btn-primary btn-sm" disabled={compare.running} onClick={() => void compare.runWhole(shortlist)}>
-                <Icon icon={Sparkles} className="ico" /> {compare.running ? 'Analyzing…' : `Analyze ${shortlist.length}`}
+                <ScoutMark className="ico" /> {compare.running ? 'Thinking…' : `Ask ${AI_NAME} (${shortlist.length})`}
               </button>
               <button className="btn btn-ghost btn-sm" disabled={selCount !== 2 || compare.running} onClick={() => void compare.runSelected('1v1')}>
                 <Icon icon={Swords} className="ico" /> 1v1

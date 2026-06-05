@@ -166,9 +166,9 @@ export const api = {
     }),
 
   // ── Platform super-admin (usage meter only) ────────────────────────────────
-  adminVerify: (adminKey: string) => request<{ ok: true }>('/api/admin/verify', { adminKey }),
-  adminUsage: (adminKey: string) => request<AdminUsage>('/api/admin/usage', { adminKey }),
-  adminTrips: (adminKey: string) => request<{ trips: AdminTripRow[] }>('/api/admin/trips', { adminKey }),
-  adminRunPipeline: (adminKey: string) =>
+  adminVerify: (adminKey?: string) => request<{ ok: true }>('/api/admin/verify', { adminKey }),
+  adminUsage: (adminKey?: string) => request<AdminUsage>('/api/admin/usage', { adminKey }),
+  adminTrips: (adminKey?: string) => request<{ trips: AdminTripRow[] }>('/api/admin/trips', { adminKey }),
+  adminRunPipeline: (adminKey?: string) =>
     request<{ ok: true; message: string }>('/api/admin/run-pipeline', { method: 'POST', adminKey }),
 };

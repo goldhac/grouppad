@@ -17,6 +17,16 @@ if (!process.env.ADMIN_KEY) {
   console.warn('[admin] ADMIN_KEY not set — generated a random ephemeral key. Set ADMIN_KEY to enable admin features.');
 }
 
+// Platform super-admins by email — these accounts get the admin dashboard without
+// needing the key (just by being signed in). Configurable via SUPER_ADMIN_EMAILS.
+const SUPER_ADMIN_EMAILS = new Set(
+  (process.env.SUPER_ADMIN_EMAILS || 'gold.nwobu@gmail.com,akporkofi11@gmail.com')
+    .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
+);
+function isSuperAdmin(user) {
+  return !!user && SUPER_ADMIN_EMAILS.has(String(user.email || '').toLowerCase());
+}
+
 // Mutable data (votes/likes, member submissions, pipeline DB) lives in a
 // persistent volume so it survives deploys/restarts. Static base data
 // (listings.json, seed snapshot) stays bundled in the image.
@@ -876,8 +886,9 @@ async function assertSafeUrl(rawUrl) {
 // Header-only (never the query string) so the key can't leak into access logs.
 function requireAdmin(req, res, next) {
   const key = req.headers['x-admin-key'] || '';
-  if (!key || key !== ADMIN_KEY) return res.status(401).json({ error: 'Wrong admin key' });
-  next();
+  if (key && key === ADMIN_KEY) return next();
+  if (isSuperAdmin(req.user)) return next();   // signed-in platform admin — no key needed
+  return res.status(401).json({ error: 'Admin access required' });
 }
 
 // ── URL parsing ───────────────────────────────────────────────────────────────
@@ -1613,7 +1624,7 @@ async function scrapeListingDetails(cleanUrl, parsed) {
 // ── Auth: passwordless magic-link ───────────────────────────────────────────────
 // Who am I? (null when signed out) — the client bootstraps from this.
 app.get('/api/auth/me', (req, res) => {
-  res.json({ user: req.user ? { id: req.user.id, email: req.user.email, name: req.user.name } : null });
+  res.json({ user: req.user ? { id: req.user.id, email: req.user.email, name: req.user.name, isSuperAdmin: isSuperAdmin(req.user) } : null });
 });
 
 // Request a sign-in link. Always responds ok (never reveals whether the email
@@ -1656,7 +1667,7 @@ app.patch('/api/auth/me', requireAuth, (req, res) => {
   if (!name) return res.status(400).json({ error: 'Name cannot be empty.' });
   const users = loadUsers();
   if (users[req.user.id]) { users[req.user.id].name = name; saveUsers(users); }
-  res.json({ user: { id: req.user.id, email: req.user.email, name } });
+  res.json({ user: { id: req.user.id, email: req.user.email, name, isSuperAdmin: isSuperAdmin(req.user) } });
 });
 
 app.post('/api/auth/logout', (req, res) => {

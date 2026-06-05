@@ -51,7 +51,7 @@ export function TermsView() {
           'Trip organizers can manage their trip, including removing listings and members and deleting the trip. Deleting a trip removes its board and data for everyone and can’t be undone.',
         ]},
         { h: 'AI features', body: [
-          'GroupPad uses AI (Google’s Gemini) to compare homes and summarize trade-offs. AI output is a helpful opinion, not advice — it can be wrong or incomplete. Use your own judgment before deciding.',
+          'Scout, GroupPad’s AI assistant (powered by Google’s Gemini), compares homes and summarize trade-offs. AI output is a helpful opinion, not advice — it can be wrong or incomplete. Use your own judgment before deciding.',
         ]},
         { h: 'Acceptable use', body: [
           'Don’t abuse, overload, scrape, or try to break the service, and don’t use it to violate the terms of the listing sites we link to. We may suspend accounts that do.',
@@ -80,7 +80,7 @@ export function PrivacyView() {
           'To run your trip board — show your group the listings, votes, and decisions; tie your votes to you across devices; and email you trip updates if you’ve opted in. We use aggregate, non-personal usage figures to keep the service healthy.',
         ]},
         { h: 'Third parties we rely on', body: [
-          'Google (sign-in), Resend (transactional email like sign-in links and digests), Apify and Firecrawl (fetching public listing details and prices), and Google Gemini (the AI compare feature). These providers process only what’s needed for their function. We don’t sell or rent your personal data to anyone.',
+          'Google (sign-in), Resend (transactional email like sign-in links and digests), Apify and Firecrawl (fetching public listing details and prices), and Google Gemini (which powers Scout, the AI compare feature). These providers process only what’s needed for their function. We don’t sell or rent your personal data to anyone.',
         ]},
         { h: 'Email', body: [
           'We send sign-in links and, if you opt in, trip recap and “big moment” emails. Every email has a one-click unsubscribe, and you can change your preferences anytime from the account menu.',

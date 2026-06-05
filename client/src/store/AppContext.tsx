@@ -561,8 +561,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const runPipeline = useCallback(async () => {
     const key = adminKey;
-    if (!key) return;
-    try { toast((await api.adminRunPipeline(key)).message || 'Pipeline started.', 'success'); }
+    if (!key && !userRef.current?.isSuperAdmin) return; // need a key or a super-admin session
+    try { toast((await api.adminRunPipeline(key || undefined)).message || 'Pipeline started.', 'success'); }
     catch (e) { toast(e instanceof Error ? e.message : 'Could not start pipeline.', 'error'); }
   }, [adminKey, toast]);
 

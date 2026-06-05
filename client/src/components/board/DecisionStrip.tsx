@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { Vote, Trophy, Sparkles, Lock } from 'lucide-react';
+import { Vote, Trophy, Lock } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { fmt } from '@/lib/utils';
 import type { Listing } from '@/types';
@@ -92,7 +93,7 @@ export function DecisionStrip({
           <Icon icon={Trophy} className="ico" /> Leaderboard
         </button>
         <button className="btn btn-primary btn-sm" onClick={onCompare}>
-          <Icon icon={Sparkles} className="ico" /> Compare with AI
+          <ScoutMark className="ico" /> Ask {AI_NAME}
         </button>
       </div>
     </div>

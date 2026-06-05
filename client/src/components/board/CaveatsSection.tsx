@@ -33,7 +33,7 @@ export function CaveatsSection() {
           </span>
           <span className="rounded-full bg-panel-2 px-1.5 text-[11px] text-muted">{caveats.length}</span>
           <span className="hidden text-xs text-muted sm:inline">
-            Drop your must-haves & dealbreakers — they feed the AI ranking
+            Drop your must-haves & dealbreakers — they feed Scout’s ranking
           </span>
         </button>
 

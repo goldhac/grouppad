@@ -146,7 +146,7 @@ export function CoreLoopDemo() {
             </div>
           </div>
           <div className="dm-verdict">
-            <span className="vh"><Icon icon={Sparkles} size="sm" className="ico" /> AI verdict</span> <b>Huge 7BR Pad</b> wins — $53/person cheaper, 20 min closer to downtown, and the only one with a pool <i>and</i> Superhost.
+            <span className="vh"><Icon icon={Sparkles} size="sm" className="ico" /> Scout’s verdict</span> <b>Huge 7BR Pad</b> wins — $53/person cheaper, 20 min closer to downtown, and the only one with a pool <i>and</i> Superhost.
           </div>
         </section>
 

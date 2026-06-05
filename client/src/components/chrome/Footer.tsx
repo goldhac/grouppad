@@ -12,7 +12,7 @@ export function Footer() {
             <PeakLogo withWord />
           </Link>
           <p className="mt-2 max-w-xs text-sm text-muted">
-            Plan a group trip together — browse rentals, vote, compare with AI, and lock the winner
+            Plan a group trip together — browse rentals, vote, ask Scout, and lock the winner
             without the endless group chat.
           </p>
         </div>
