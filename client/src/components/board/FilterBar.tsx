@@ -1,5 +1,6 @@
+import { Check } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
-import { Slider } from '@/components/ui/Slider';
+import { Icon } from '@/components/ui/Icon';
 import { fmt } from '@/lib/utils';
 
 export interface Filters {
@@ -8,6 +9,13 @@ export interface Filters {
   parking: boolean;
   manual: boolean;
 }
+
+const CHIPS: { key: keyof Filters; label: string }[] = [
+  { key: 'under', label: 'Under budget only' },
+  { key: 'pool', label: 'Pool required' },
+  { key: 'parking', label: 'Parking required' },
+  { key: 'manual', label: 'Include “check manually”' },
+];
 
 export function FilterBar({
   filters,
@@ -26,41 +34,37 @@ export function FilterBar({
   const toggle = (k: keyof Filters) => setFilters({ ...filters, [k]: !filters[k] });
 
   return (
-    <div className="sticky top-[42px] z-20 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-panel/95 px-4 py-2.5 text-[13px] backdrop-blur sm:px-8">
-      <Check label="Under budget only" checked={filters.under} onChange={() => toggle('under')} />
-      <Check label="Pool required" checked={filters.pool} onChange={() => toggle('pool')} />
-      <Check label="Parking required" checked={filters.parking} onChange={() => toggle('parking')} />
-      <Check label='Include "check manually"' checked={filters.manual} onChange={() => toggle('manual')} />
+    <div className="b-filter">
+      {CHIPS.map((c) => (
+        <label key={c.key} className={`chip-filter${filters[c.key] ? ' on' : ''}`}>
+          <input
+            type="checkbox"
+            checked={filters[c.key]}
+            onChange={() => toggle(c.key)}
+            style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
+          />
+          <span className="box"><Icon icon={Check} className="ico" /></span>
+          {c.label}
+        </label>
+      ))}
 
-      <span className="hidden h-4 w-px bg-border sm:block" />
-
-      <div className="flex items-center gap-2">
-        <span className="text-muted">Split:</span>
-        <Slider
+      <div className="split">
+        <span className="lab">Split</span>
+        <input
+          type="range"
           min={2}
           max={30}
           step={1}
-          value={[split]}
-          onValueChange={(v) => setSplit(v[0])}
-          className="w-32"
+          value={split}
+          onChange={(e) => setSplit(Number(e.target.value))}
+          aria-label="Split between this many people"
         />
-        <span className="whitespace-nowrap text-muted">
-          {split} people · {perPersonAvg != null ? `${fmt(perPersonAvg)}/ea` : '—'}
+        <span className="val tnum">
+          {split} people{perPersonAvg != null ? ` · ${fmt(perPersonAvg)}/ea` : ''}
         </span>
       </div>
 
-      <span className="ml-auto text-muted">
-        {shown} of {total} listings
-      </span>
+      <span className="count tnum">{shown} of {total}</span>
     </div>
-  );
-}
-
-function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
-  return (
-    <label className="inline-flex cursor-pointer items-center gap-1.5 text-text">
-      <input type="checkbox" checked={checked} onChange={onChange} className="h-3.5 w-3.5 accent-[var(--accent)]" />
-      {label}
-    </label>
   );
 }

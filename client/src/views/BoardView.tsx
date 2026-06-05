@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, LayoutGrid, Heart, Trophy, MessagesSquare, Plus } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { Card } from '@/components/Card';
+import { Icon } from '@/components/ui/Icon';
 import { BoardHeader } from '@/components/chrome/BoardHeader';
+import { DecisionStrip } from '@/components/board/DecisionStrip';
 import { FilterBar, type Filters } from '@/components/board/FilterBar';
-import { SubmitBar } from '@/components/board/SubmitBar';
 import { SearchPanel } from '@/components/board/SearchPanel';
 import { ItinerarySection } from '@/components/board/ItinerarySection';
 import { DecisionSection } from '@/components/board/DecisionSection';
@@ -18,27 +19,69 @@ import { CompareDock } from '@/components/board/CompareDock';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { Button } from '@/components/ui/Button';
 
+type Tab = 'all' | 'shortlist' | 'decision' | 'discussion';
+
+/** Paste-a-URL add toolbar (the masthead's Add-listing row). */
+function AddToolbar({ onFindMore }: { onFindMore: () => void }) {
+  const { submitListing, requireSignIn, isOwner, toast } = useApp();
+  const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function add() {
+    if (!url.trim()) return;
+    if (!requireSignIn('add a home')) return;
+    setBusy(true);
+    try {
+      await submitListing(url.trim());
+      setUrl('');
+      toast('Added — it rises into the Shortlist at net +1.', 'success');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not add that link.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="b-toolbar">
+      <div className="add">
+        <input
+          className="field"
+          placeholder="Paste an Airbnb, VRBO, or Booking link to add a home…"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+        />
+        <button className="btn btn-primary" onClick={add} disabled={busy}>
+          <Icon icon={Plus} className="ico" /> {busy ? 'Adding…' : 'Add'}
+        </button>
+      </div>
+      <span className="spacer" />
+      {isOwner && (
+        <button className="btn btn-ghost btn-sm" onClick={onFindMore}>Find more</button>
+      )}
+    </div>
+  );
+}
+
 export function BoardView() {
-  const { listings, shortlistIds, split, trip, user, requireSignIn, joinTrip, detailId, openDetail, closeDetail, findListing } = useApp();
+  const {
+    listings, caveats, shortlistIds, split, trip, user,
+    requireSignIn, joinTrip, detailId, openDetail, closeDetail, findListing, isOwner,
+  } = useApp();
   const compare = useCompare();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<Tab>('all');
+  const searchRef = useRef<HTMLDivElement>(null);
 
-  // Deep-link the listing detail: ?listing=<id> ⇄ the DetailModal. Opening a card
-  // pushes the param (so Back closes the modal); closing removes it. Works for
-  // read-only visitors and direct-pasted links. The board stays mounted under the
-  // overlay, so scroll position is preserved across open/close.
+  // ── Deep-link the detail modal (?listing=<id> ⇄ DetailModal) ──────────────
   const linkParam = searchParams.get('listing');
   const prevDetail = useRef<string | null>(null);
-  // URL → modal. Re-runs when the trip data loads (findListing identity changes),
-  // so a directly-pasted ?listing= link opens once its listing is available.
-  // When the param disappears (Back button) while the modal is open, close it.
   useEffect(() => {
     if (linkParam && linkParam !== detailId && findListing(linkParam)) openDetail(linkParam);
     else if (!linkParam && detailId) closeDetail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkParam, findListing]);
-  // modal → URL. Push the param when opening (so Back closes the modal); remove it
-  // only when the user actually closes (detailId went set→null), never on mount.
   useEffect(() => {
     const cur = searchParams.get('listing');
     if (detailId) {
@@ -55,12 +98,8 @@ export function BoardView() {
     prevDetail.current = detailId;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailId]);
-  const [filters, setFilters] = useState<Filters>({
-    under: false,
-    pool: false,
-    parking: false,
-    manual: true,
-  });
+
+  const [filters, setFilters] = useState<Filters>({ under: false, pool: false, parking: false, manual: true });
 
   const mainGrid = useMemo(
     () =>
@@ -82,62 +121,98 @@ export function BoardView() {
 
   const showJoin = trip && !trip.isMember && !trip.isOwner;
 
-  return (
-    <div className="pb-20">
-      <BoardHeader />
+  const goFindMore = () => {
+    setTab('all');
+    requestAnimationFrame(() => searchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+  };
 
-      {showJoin && (
-        <div className="border-b border-border bg-accent/5 px-4 py-2.5 sm:px-8">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 text-sm">
-            <UserPlus className="h-4 w-4 text-accent" />
-            <span className="text-muted">You're viewing as a guest. Join to vote, add homes, and comment.</span>
+  const TABS: { key: Tab; label: string; icon: typeof LayoutGrid; pip?: number }[] = [
+    { key: 'all', label: 'All homes', icon: LayoutGrid, pip: listings.length },
+    { key: 'shortlist', label: 'Shortlist', icon: Heart, pip: shortlistIds.size },
+    { key: 'decision', label: 'Decision', icon: Trophy },
+    { key: 'discussion', label: 'Discussion', icon: MessagesSquare, pip: caveats.length },
+  ];
+
+  return (
+    <div className="board">
+      {/* ── Sticky masthead ───────────────────────────────────────────────── */}
+      <div className="b-stick" style={{ top: 56 }}>
+        <BoardHeader onFindMore={goFindMore} />
+
+        {showJoin && (
+          <div className="join-banner">
+            <Icon icon={UserPlus} className="ico" />
+            <span>You’re viewing as a guest. <b>Sign in to join</b> — vote, add homes, and comment.</span>
             <Button
               variant="primary"
               size="sm"
-              className="ml-auto"
-              onClick={() => {
-                if (requireSignIn('join this trip') && trip) void joinTrip(trip.id);
-              }}
+              onClick={() => { if (requireSignIn('join this trip') && trip) void joinTrip(trip.id); }}
             >
               {user ? 'Join this trip' : 'Sign in to join'}
             </Button>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="mx-auto max-w-7xl">
-        <FilterBar
-          filters={filters}
-          setFilters={setFilters}
-          shown={mainGrid.length}
-          total={listings.length}
-          perPersonAvg={perPersonAvg}
-        />
-        <SubmitBar />
-        <SearchPanel />
-        <ItinerarySection />
-        <DecisionSection />
-        <ShortlistSection compare={compare} />
-        <SubmittedSection />
-        <CaveatsSection />
+        <DecisionStrip onLeaderboard={() => setTab('decision')} onCompare={() => setTab('shortlist')} />
+        <AddToolbar onFindMore={goFindMore} />
+        <FilterBar filters={filters} setFilters={setFilters} shown={mainGrid.length} total={listings.length} perPersonAvg={perPersonAvg} />
 
-        <section className="px-4 py-3 sm:px-8">
-          {mainGrid.length === 0 ? (
-            <p className="py-8 text-center text-muted">
-              {listings.length === 0
-                ? 'No homes yet — add the rentals your group is considering with “Add a listing.”'
-                : 'No listings match these filters.'}
-            </p>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {mainGrid.map((l) => (
-                <Card key={l.id} listing={l} />
-              ))}
+        <div className="tabbar" role="tablist">
+          {TABS.map((t) => (
+            <div
+              key={t.key}
+              role="tab"
+              aria-selected={tab === t.key}
+              tabIndex={0}
+              className={`tab${tab === t.key ? ' on' : ''}`}
+              onClick={() => setTab(t.key)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setTab(t.key)}
+            >
+              <Icon icon={t.icon} className="ico" /> {t.label}
+              {t.pip != null && <span className="pip tnum">{t.pip}</span>}
             </div>
-          )}
-        </section>
+          ))}
+        </div>
+      </div>
 
-        <PipelineSection filters={filters} />
+      {/* ── Active tab panel ──────────────────────────────────────────────── */}
+      <div className="tab-panel gp-panel" key={tab}>
+        {tab === 'all' && (
+          <>
+            {isOwner && <div ref={searchRef}><SearchPanel /></div>}
+            <section>
+              <div className="row-head">
+                <span className="ttl">All homes</span>
+                <span className="cnt tnum">{mainGrid.length}</span>
+                <span className="sub">curated · filtered</span>
+              </div>
+              {mainGrid.length === 0 ? (
+                <p className="py-8 text-center text-text-muted">
+                  {listings.length === 0
+                    ? 'No homes yet — paste a rental link above to add the homes your group is considering.'
+                    : 'No homes match these filters.'}
+                </p>
+              ) : (
+                <div className="b-grid">
+                  {mainGrid.map((l) => <Card key={l.id} listing={l} />)}
+                </div>
+              )}
+            </section>
+            <SubmittedSection />
+            <PipelineSection filters={filters} />
+          </>
+        )}
+
+        {tab === 'shortlist' && <ShortlistSection compare={compare} />}
+
+        {tab === 'decision' && <DecisionSection />}
+
+        {tab === 'discussion' && (
+          <div className="discussion-grid">
+            <CaveatsSection />
+            <ItinerarySection />
+          </div>
+        )}
       </div>
 
       <CompareDock compare={compare} />
