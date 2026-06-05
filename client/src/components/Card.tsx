@@ -1,7 +1,7 @@
-import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Plane, FerrisWheel, Pin, BadgeCheck, Clapperboard } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Plane, FerrisWheel, Lock, Clapperboard } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
-import { Badge, BudgetBadge } from '@/components/ui/Badge';
 import { Carousel } from '@/components/Carousel';
+import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
 import { amenityLabel, fmt, fmtMins, tallyVotes } from '@/lib/utils';
 import type { Listing } from '@/types';
@@ -14,10 +14,13 @@ interface CardProps {
 
 const INTERACTIVE = 'a, button, input, label, [role="checkbox"]';
 
-/** Distance-chip icon chosen by reference-point kind (not the stored emoji). */
+const BUDGET_LABEL: Record<string, string> = {
+  under: 'under budget', marginal: 'marginal', over: 'over budget', unknown: 'price TBD',
+};
+
 function DistIcon({ kind }: { kind?: string }) {
-  const Icon = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
-  return <Icon className="h-3 w-3" aria-hidden />;
+  const I = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
+  return <Icon icon={I} className="ico" />;
 }
 
 export function Card({ listing: l, isSubmitted = false, isPipeline = false }: CardProps) {
@@ -30,8 +33,9 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
   const hasTour = toursMap[l.id]?.status === 'ready' && (toursMap[l.id]?.clips.some((c) => c.videoUrl) ?? false);
 
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
-  const finalCount = final.counts[l.id] ?? 0;
+  const net = tally.up - tally.down;
   const isMyPick = final.myPick === l.id;
+  const finalCount = final.counts[l.id] ?? 0;
   const isDecision = final.decision?.listing_id === l.id;
   const isSelected = selected.has(l.id);
   const budget = trip?.budget ?? 7000;
@@ -43,241 +47,159 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
     openDetail(l.id);
   };
 
-  const highlights = (l.amenities ?? [])
-    .filter((a) => /guest favorite|superhost|washer|dryer/i.test(a))
-    .slice(0, 3);
+  // primary badge (rank / source provenance)
+  const primaryBadge = isPipeline ? (
+    <span className="badge badge-live"><span className="dot" /> live</span>
+  ) : isSubmitted ? (
+    <span className="badge badge-community">community</span>
+  ) : l.rank != null && l.rank <= 3 ? (
+    <span className="badge badge-rank"><Icon icon={Star} className="ico" /> Rank {l.rank}</span>
+  ) : l.rank != null ? (
+    <span className="badge badge-rank-soft">Rank {l.rank}</span>
+  ) : (
+    <span className="badge">{l.source}</span>
+  );
 
   return (
     <article
       onClick={onCardClick}
       className={cn(
-        'group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-panel transition-colors hover:border-[#384152]',
-        isDecision ? 'border-accent ring-1 ring-accent' : 'border-border',
-        isSubmitted && 'border-link/40',
-        isPipeline && 'border-accent/30',
-        isSelected && 'ring-2 ring-link',
+        'card',
+        isDecision && 'is-official',
+        isSelected && 'is-selected',
+        (isSubmitted || isPipeline) && 'is-community',
       )}
     >
-      {isDecision && (
-        <div className="absolute left-0 top-0 z-10 inline-flex items-center gap-1 rounded-br-lg bg-accent px-2 py-1 text-[11px] font-bold text-[#06210f]">
-          <BadgeCheck className="h-3.5 w-3.5" aria-hidden /> Official pick
-        </div>
-      )}
+      <Carousel photos={l.photos} alt={l.name}>
+        {isDecision && (
+          <span className="corner"><Icon icon={Lock} className="ico" /> Official pick</span>
+        )}
+        <button
+          type="button"
+          className={cn('star-btn', isMyPick && 'on')}
+          aria-label={isMyPick ? 'Your top choice' : 'Make this your top choice'}
+          title={isMyPick ? 'Your top choice' : 'Top choice'}
+          onClick={(e) => { e.stopPropagation(); if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }}
+        >
+          <Icon icon={Star} className="ico" />
+        </button>
+      </Carousel>
 
-      {hasTour && (
-        <div className="absolute right-0 top-0 z-10 inline-flex items-center gap-1 rounded-bl-lg bg-black/70 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur">
-          <Clapperboard className="h-3.5 w-3.5" aria-hidden /> Tour
-        </div>
-      )}
-
-      <Carousel photos={l.photos} alt={l.name} />
-
-      <div className="flex flex-1 flex-col gap-2 p-3.5">
-        {/* Rank + budget row */}
-        <div className="flex items-center justify-between gap-2">
-          <Badge className={cn(isPipeline && 'border-accent/40 text-accent', isSubmitted && 'border-link/40 text-link')}>
-            {isPipeline
-              ? 'live'
-              : isSubmitted
-                ? 'community submission'
-                : l.rank != null && l.rank <= 3
-                  ? `★ Rank ${l.rank}`
-                  : l.rank != null
-                    ? `Rank ${l.rank}`
-                    : l.source}
-          </Badge>
-          <BudgetBadge tier={l.budget} />
+      <div className="body">
+        <div className="badge-row">
+          {primaryBadge}
+          <span className={`badge badge-${l.budget ?? 'unknown'}`}>{BUDGET_LABEL[l.budget ?? 'unknown']}</span>
         </div>
 
-        {/* Name + location */}
-        <h2 className="text-[15px] font-semibold leading-snug">{l.name}</h2>
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted">
-          <span className="rounded bg-panel-2 px-1.5 py-0.5">{l.source}</span>
+        <div className="title">{l.name}</div>
+
+        <div className="meta">
+          <span className="tag-source">{l.source}</span>
           {l.area && <span>{l.area}</span>}
+          {hasTour && (
+            <span className="inline-flex items-center gap-1 text-accent-text">
+              <Icon icon={Clapperboard} className="ico" /> Tour
+            </span>
+          )}
         </div>
+
         {l.distances?.length ? (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="dist-row">
             {l.distances.map((d, i) => (
-              <span
-                key={i}
-                title={d.label}
-                className="inline-flex items-center gap-1 rounded-full border border-border bg-panel-2 px-2 py-0.5 text-[10.5px] text-muted"
-              >
+              <span key={i} className="pill-dist" title={d.label}>
                 <DistIcon kind={d.kind} />
-                <span className="font-medium text-text">{d.mi} mi</span>
-                <span className="opacity-50">·</span>
-                <span>{fmtMins(d.min)}</span>
+                <span className="mi tnum">{d.mi} mi</span>
+                <span className="sep">·</span>
+                <span className="tnum">{fmtMins(d.min)}</span>
               </span>
             ))}
           </div>
         ) : l.distance_mi != null ? (
-          <div className="text-[11px] text-muted">
-            <MapPin className="mr-0.5 inline h-3 w-3" />
-            {l.distance_mi} mi to downtown
+          <div className="dist-row">
+            <span className="pill-dist"><Icon icon={MapPin} className="ico" /> <span className="mi tnum">{l.distance_mi} mi</span> <span className="sep">·</span> downtown</span>
           </div>
         ) : null}
 
-        {/* Specs */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[13px] text-text">
+        <div className="specs">
           {l.bd != null && <span>{l.bd} bd</span>}
+          {l.bd != null && l.ba != null && <span className="dot-sep">·</span>}
           {l.ba != null && <span>{l.ba} ba</span>}
+          {l.sleeps != null && <span className="dot-sep">·</span>}
           {l.sleeps != null && <span>sleeps {l.sleeps}</span>}
         </div>
 
-        {/* Amenities */}
-        <div className="flex flex-wrap gap-1.5 text-[11px]">
+        <div className="amen-row">
           <AmenityChip k="pool" v={l.pool} />
           {l.hot_tub === 'yes' && <AmenityChip k="hot tub" v="yes" />}
           <AmenityChip k="parking" v={l.parking} />
-          {highlights.map((a) => (
-            <span key={a} className="rounded-full border border-warn/30 bg-warn/10 px-2 py-0.5 text-warn">
-              ★ {a}
-            </span>
-          ))}
         </div>
 
-        {/* Reviews */}
-        <div className="text-xs text-muted">
-          {l.rating != null
-            ? `${l.rating}★ (${l.reviews ?? 0} reviews)${l.superhost ? ' · Superhost' : ''}`
-            : l.reviews
-              ? `${l.reviews} reviews`
-              : 'no rating yet'}
+        <div className="reviews">
+          {l.rating != null ? (
+            <><Icon icon={Star} className="ico" /> {l.rating} <span style={{ color: 'var(--text-muted)' }}>({l.reviews ?? 0} review{l.reviews === 1 ? '' : 's'}){l.superhost ? ' · Superhost' : ''}</span></>
+          ) : l.reviews ? (
+            <>{l.reviews} reviews</>
+          ) : (
+            <span style={{ color: 'var(--text-muted)' }}>no rating yet</span>
+          )}
         </div>
 
-        {/* Review peek — only once reviews have been fetched/cached for this home */}
         {rev && (rev.pos.length > 0 || rev.neg.length > 0) && (
-          <div className="space-y-1">
-            {rev.pos[0] && (
-              <p className="line-clamp-2 text-xs italic text-muted">“{rev.pos[0].text}”</p>
-            )}
-            <div className="flex items-center gap-3 text-[11px]">
-              <span className="inline-flex items-center gap-1 text-accent">
-                <ThumbsUp className="h-3 w-3" /> {rev.pos.length}
-              </span>
-              <span className="inline-flex items-center gap-1 text-warn">
-                <ThumbsDown className="h-3 w-3" /> {rev.neg.length}
-              </span>
-              <button onClick={() => openDetail(l.id)} className="text-link hover:underline">
-                read reviews
-              </button>
-            </div>
+          <div className="flex flex-col gap-1">
+            {rev.pos[0] && <p className="line-clamp-2 text-[12.5px] italic text-text-muted">“{rev.pos[0].text}”</p>}
+            <button onClick={(e) => { e.stopPropagation(); openDetail(l.id); }} className="self-start text-[11.5px] font-semibold text-link hover:underline">read reviews</button>
           </div>
         )}
 
-        {/* Price */}
-        <div className="mt-auto flex items-baseline justify-between gap-2 pt-1">
-          <span className="text-lg font-bold">{fmt(l.est_5n)}</span>
-          <span className="text-[11px] text-muted">est all-in · 5 nights</span>
-        </div>
-        <div className="text-[11px] text-muted">
-          {l.displayed_5n != null
-            ? `displayed: ${fmt(l.displayed_5n)} for 5 nights · 4-night est: ${fmt(l.est_4n)}`
-            : 'price on inquiry'}
+        <div className="divider" />
+
+        <div className="price">
+          <span className="amt tnum">{fmt(l.est_5n)}</span>
+          <span className="cap">
+            est all-in · 5 nights
+            {l.displayed_5n != null && <><br />displayed {fmt(l.displayed_5n)}</>}
+          </span>
         </div>
 
-        {/* Per person */}
         {pp != null && (
-          <div className={cn('text-xs font-medium', ppOver ? 'text-danger' : 'text-accent')}>
-            {fmt(pp)} per person · split {split} ways
-          </div>
+          <span className={cn('perperson', ppOver ? 'bad' : 'ok')}>
+            {fmt(pp)} / person · split {split}
+          </span>
         )}
 
-        {l.note && <p className="text-xs leading-relaxed text-muted">{l.note}</p>}
-        {isSubmitted && l.submitted_by && (
-          <p className="text-[11px] text-link">
-            Submitted by {l.submitted_by}
-            {l.submitted_at ? ` · ${l.submitted_at}` : ''}
-          </p>
-        )}
-
-        {/* Compare select */}
-        <label className="flex items-center gap-2 text-xs text-muted" onClick={(e) => e.stopPropagation()}>
-          <input
-            type="checkbox"
-            checked={isSelected}
-            onChange={() => toggleSelect(l.id)}
-            className="h-3.5 w-3.5 accent-[var(--link)]"
-          />
-          compare
-        </label>
-
-        {/* Actions */}
-        <div className="flex items-center justify-between gap-2 border-t border-border pt-2.5">
-          <a
-            href={l.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-xs font-medium text-link hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {l.check_manual ? 'Check manually' : `View on ${l.source}`} <ExternalLink className="h-3 w-3" />
+        <div className="compare-line">
+          <a href={l.url} target="_blank" rel="noopener noreferrer" className="source-link" onClick={(e) => e.stopPropagation()}>
+            {l.check_manual ? 'Check manually' : `View on ${l.source}`} <Icon icon={ExternalLink} className="ico" />
           </a>
-
-          <div className="flex items-center gap-1">
-            <VoteBtn
-              dir="up"
-              count={tally.up}
-              active={tally.mine === 'up'}
-              onClick={() => void castVote(l.id, 'up')}
-            />
-            <VoteBtn
-              dir="down"
-              count={tally.down}
-              active={tally.mine === 'down'}
-              onClick={() => void castVote(l.id, 'down')}
-            />
+          <div className="votebar" onClick={(e) => e.stopPropagation()}>
+            <button className={cn('vote up', tally.mine === 'up' && 'on')} aria-label="Like" onClick={() => void castVote(l.id, 'up')}>
+              <Icon icon={ThumbsUp} className="ico" /> {tally.up}
+            </button>
+            <span className={cn('net', net > 0 && 'pos', net < 0 && 'neg')}>{net > 0 ? `+${net}` : net}</span>
+            <button className={cn('vote down', tally.mine === 'down' && 'on')} aria-label="Dislike" onClick={() => void castVote(l.id, 'down')}>
+              <Icon icon={ThumbsDown} className="ico" /> {tally.down}
+            </button>
           </div>
         </div>
 
-        {/* Final pick + official */}
-        <div className="flex items-center justify-between gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id);
-            }}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
-              isMyPick
-                ? 'border-warn bg-warn/15 text-warn'
-                : 'border-border text-muted hover:text-text',
-            )}
-          >
-            <Star className={cn('h-3.5 w-3.5', isMyPick && 'fill-warn')} />
-            {isMyPick ? 'My pick' : 'Top choice'}
-            {finalCount > 0 && (
-              <span className="ml-0.5 rounded-full bg-panel-2 px-1.5 text-[10px]">{finalCount}</span>
-            )}
-          </button>
-
+        <div className="compare-line">
+          <label className="flex items-center gap-2 text-[12.5px] text-text-muted" onClick={(e) => e.stopPropagation()}>
+            <input type="checkbox" className="cbx" checked={isSelected} onChange={() => toggleSelect(l.id)} style={{ accentColor: 'var(--accent)' }} />
+            Compare{finalCount > 0 ? ` · ${finalCount} top` : ''}
+          </label>
           {isOwner && (
             <button
-              onClick={(e) => {
-                e.stopPropagation();
-                void setDecision(isDecision ? null : l.id);
-              }}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
-                isDecision ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted hover:text-text',
-              )}
+              className="source-link"
+              onClick={(e) => { e.stopPropagation(); void setDecision(isDecision ? null : l.id); }}
             >
-              <Pin className="h-3.5 w-3.5" />
-              {isDecision ? 'Unlock' : 'Make official'}
+              <Icon icon={Lock} className="ico" /> {isDecision ? 'Unlock' : 'Make official'}
             </button>
           )}
         </div>
 
-        {/* Admin delete */}
         {isOwner && !isPipeline && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm('Remove this listing?')) void deleteListing(l.id, isSubmitted);
-            }}
-            className="inline-flex items-center gap-1 self-start text-[11px] text-danger hover:underline"
-          >
-            <Trash2 className="h-3 w-3" /> Delete
+          <button className="del" onClick={(e) => { e.stopPropagation(); if (confirm('Remove this listing?')) void deleteListing(l.id, isSubmitted); }}>
+            <Icon icon={Trash2} className="ico" /> Delete
           </button>
         )}
       </div>
@@ -287,49 +209,13 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false }: Ca
 
 function AmenityChip({ k, v }: { k: string; v: Listing['pool'] }) {
   const a = amenityLabel(k, v);
+  const tone =
+    a.state === 'yes' ? { color: 'var(--under)', background: 'var(--under-bg)' }
+      : a.state === 'no' ? { color: 'var(--over)', background: 'var(--over-bg)' }
+        : { color: 'var(--text-muted)', background: 'var(--surface-sunken)' };
   return (
-    <span
-      className={cn(
-        'rounded-full px-2 py-0.5',
-        a.state === 'yes' && 'bg-accent/10 text-accent',
-        a.state === 'no' && 'bg-danger/10 text-danger',
-        a.state === 'unknown' && 'bg-panel-2 text-muted',
-      )}
-    >
+    <span style={{ ...tone, fontSize: 11.5, fontWeight: 600, padding: '2px 9px', borderRadius: 'var(--r-pill)' }}>
       {a.text}
     </span>
-  );
-}
-
-function VoteBtn({
-  dir,
-  count,
-  active,
-  onClick,
-}: {
-  dir: 'up' | 'down';
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const Icon = dir === 'up' ? ThumbsUp : ThumbsDown;
-  return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      aria-label={dir === 'up' ? 'Like' : 'Dislike'}
-      className={cn(
-        'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors',
-        active
-          ? dir === 'up'
-            ? 'border-accent bg-accent/15 text-accent'
-            : 'border-danger bg-danger/15 text-danger'
-          : 'border-border text-muted hover:text-text',
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" /> {count}
-    </button>
   );
 }

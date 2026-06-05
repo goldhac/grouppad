@@ -1,73 +1,52 @@
 import { useState } from 'react';
-import { ChevronLeft, ChevronRight, ImageOff } from 'lucide-react';
-import { cn } from '@/lib/cn';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Icon } from '@/components/ui/Icon';
+import { SafeImg } from '@/components/ui/SafeImg';
 
-/** Photo carousel with prev/next + dots. Stops click propagation so it doesn't
- *  trigger the card's open-detail handler. */
-export function Carousel({ photos, alt }: { photos: string[] | undefined; alt: string }) {
+/** v2 card photo block: image + prev/next + dot indicators. Renders inside the
+ *  `.card .photo` element; overlays (corner / star) are passed as children and
+ *  positioned absolutely by the card CSS. Stops propagation so the carousel
+ *  controls don't trigger the card's open-detail handler. */
+export function Carousel({
+  photos,
+  alt,
+  children,
+}: {
+  photos: string[] | undefined;
+  alt: string;
+  children?: React.ReactNode;
+}) {
   const [idx, setIdx] = useState(0);
-  const list = photos && photos.length > 0 ? photos : null;
-
-  if (!list) {
-    return (
-      <div className="flex aspect-[3/2] w-full items-center justify-center bg-panel-2 text-muted">
-        <ImageOff className="h-8 w-8 opacity-50" />
-        <span className="ml-2 text-xs">no image</span>
-      </div>
-    );
-  }
-
+  const list = photos && photos.length > 0 ? photos : [''];
   const go = (n: number) => setIdx((n + list.length) % list.length);
 
   return (
-    <div className="group relative aspect-[3/2] w-full overflow-hidden bg-panel-2">
-      <img
-        src={list[idx]}
-        alt={alt}
-        loading="lazy"
-        className="h-full w-full object-cover"
-        draggable={false}
-      />
+    <div className="photo">
+      <SafeImg src={list[idx]} alt={alt} loading="lazy" />
       {list.length > 1 && (
         <>
           <button
+            type="button"
             aria-label="Previous photo"
-            className="absolute left-1.5 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              go(idx - 1);
-            }}
+            className="carousel-btn l"
+            onClick={(e) => { e.stopPropagation(); go(idx - 1); }}
           >
-            <ChevronLeft className="h-5 w-5" />
+            <Icon icon={ChevronLeft} className="ico" />
           </button>
           <button
+            type="button"
             aria-label="Next photo"
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              go(idx + 1);
-            }}
+            className="carousel-btn r"
+            onClick={(e) => { e.stopPropagation(); go(idx + 1); }}
           >
-            <ChevronRight className="h-5 w-5" />
+            <Icon icon={ChevronRight} className="ico" />
           </button>
-          <div className="absolute bottom-1.5 left-1/2 flex -translate-x-1/2 gap-1">
-            {list.map((_, i) => (
-              <button
-                key={i}
-                aria-label={`Photo ${i + 1}`}
-                className={cn(
-                  'h-1.5 rounded-full transition-all',
-                  i === idx ? 'w-4 bg-white' : 'w-1.5 bg-white/50',
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  go(i);
-                }}
-              />
-            ))}
+          <div className="dots">
+            {list.map((_, i) => <i key={i} className={i === idx ? 'act' : ''} />)}
           </div>
         </>
       )}
+      {children}
     </div>
   );
 }
