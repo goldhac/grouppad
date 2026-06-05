@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GroupPad — Pick one rental, together</title>
-    <meta name="description" content="One shared board for your group to browse vacation rentals, vote, compare with AI, and lock in the place everyone's happy with." />
+    <meta name="description" content="One shared board for your group to browse vacation rentals, vote, see the real per-person cost, compare with AI, and lock in the place everyone's happy with." />
+    <link rel="canonical" href="https://goldhac.com/" />
     <meta name="theme-color" content="#FFFDF8" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#15201E" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -37,17 +38,43 @@
     <meta property="og:site_name" content="GroupPad" />
     <meta property="og:title" content="GroupPad — Pick one rental, together" />
     <meta property="og:description" content="One shared board for your group to browse rentals, vote, compare with AI, and lock in the winner." />
-    <meta property="og:url" content="https://exquisite-inspiration-production-7511.up.railway.app/" />
-    <meta property="og:image" content="https://exquisite-inspiration-production-7511.up.railway.app/og.png" />
+    <meta property="og:url" content="https://goldhac.com/" />
+    <meta property="og:image" content="https://goldhac.com/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="GroupPad — pick one vacation rental, together" />
+    <meta property="og:locale" content="en_US" />
 
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="GroupPad — Pick one rental, together" />
     <meta name="twitter:description" content="One shared board for your group to browse rentals, vote, compare with AI, and lock in the winner." />
-    <meta name="twitter:image" content="https://exquisite-inspiration-production-7511.up.railway.app/og.png" />
+    <meta name="twitter:image" content="https://goldhac.com/og.png" />
+    <meta name="twitter:image:alt" content="GroupPad — pick one vacation rental, together" />
+
+    <!-- Structured data: the product + the site -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebApplication",
+          "name": "GroupPad",
+          "url": "https://goldhac.com/",
+          "applicationCategory": "TravelApplication",
+          "operatingSystem": "Web",
+          "description": "One shared board for your group to browse vacation rentals, vote, see the real per-person cost, compare with AI, and lock in one place to book together.",
+          "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+        },
+        {
+          "@type": "WebSite",
+          "name": "GroupPad",
+          "url": "https://goldhac.com/",
+          "publisher": { "@type": "Organization", "name": "GroupPad", "url": "https://goldhac.com/" }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

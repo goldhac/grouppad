@@ -1,0 +1,5 @@
+# GroupPad — https://goldhac.com
+User-agent: *
+Allow: /
+
+Sitemap: https://goldhac.com/sitemap.xml
