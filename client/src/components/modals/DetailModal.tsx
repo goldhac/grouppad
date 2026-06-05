@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
-import { ThumbsUp, ThumbsDown, Star, ExternalLink, MapPin, Plane, FerrisWheel, Pin, BadgeCheck, Link2, Clapperboard, Sparkles } from 'lucide-react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import {
+  ThumbsUp, ThumbsDown, Star, ExternalLink, MapPin, Plane, FerrisWheel, Lock, Link2,
+  Clapperboard, Sparkles, X, Bed, Bath, Users, Navigation, Check,
+} from 'lucide-react';
 import { useApp } from '@/store/AppContext';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/Dialog';
-import { BudgetBadge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { Icon } from '@/components/ui/Icon';
+import { SafeImg } from '@/components/ui/SafeImg';
 import { cn } from '@/lib/cn';
-import { amenityLabel, fmt, fmtMins, tallyVotes } from '@/lib/utils';
+import { fmt, fmtMins, tallyVotes } from '@/lib/utils';
 import type { ReviewSnippet, ListingTour } from '@/types';
 
-/** Plays a listing's walkthrough clips back-to-back as one tour. */
+type DTab = 'overview' | 'reviews' | 'tour';
+
 function TourPlayer({ tour }: { tour: ListingTour }) {
   const clips = tour.clips.filter((c) => c.videoUrl);
   const [idx, setIdx] = useState(0);
@@ -16,31 +20,18 @@ function TourPlayer({ tour }: { tour: ListingTour }) {
   if (!clips.length) return null;
   const clip = clips[Math.min(idx, clips.length - 1)];
   return (
-    <div className="space-y-2">
-      <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold">
-        <Clapperboard className="h-4 w-4" /> Walkthrough tour
-      </h3>
+    <div className="flex flex-col gap-2">
       <video
         key={clip.videoUrl!}
         src={clip.videoUrl!}
-        className="aspect-video w-full rounded-lg border border-border bg-black"
-        autoPlay
-        muted
-        playsInline
-        controls
+        className="aspect-video w-full rounded-[var(--r-md)] border border-border bg-black"
+        autoPlay muted playsInline controls
         onEnded={() => setIdx((i) => (i < clips.length - 1 ? i + 1 : i))}
       />
       {clips.length > 1 && (
         <div className="flex flex-wrap items-center gap-1.5">
           {clips.map((c, i) => (
-            <button
-              key={i}
-              onClick={() => setIdx(i)}
-              className={cn(
-                'rounded-full border px-2.5 py-1 text-xs transition-colors',
-                i === idx ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted hover:text-text',
-              )}
-            >
+            <button key={i} onClick={() => setIdx(i)} className={cn('chip-amen', i === idx ? 'chip-yes' : '')} style={i !== idx ? { background: 'var(--surface-sunken)', color: 'var(--text-muted)' } : undefined}>
               {c.feature || `Clip ${i + 1}`}
             </button>
           ))}
@@ -51,32 +42,28 @@ function TourPlayer({ tour }: { tour: ListingTour }) {
 }
 
 function DistIcon({ kind }: { kind?: string }) {
-  const Icon = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
-  return <Icon className="h-4 w-4" aria-hidden />;
+  const I = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
+  return <Icon icon={I} className="ico" />;
 }
 
-/** One sentiment column of review snippets in the detail modal. */
 function ReviewList({ title, tone, items }: { title: string; tone: 'pos' | 'neg'; items: ReviewSnippet[] }) {
   return (
     <div>
-      <div className={cn('mb-1.5 inline-flex items-center gap-1 text-xs font-semibold', tone === 'pos' ? 'text-accent' : 'text-warn')}>
-        {tone === 'pos' ? <ThumbsUp className="h-3.5 w-3.5" /> : <ThumbsDown className="h-3.5 w-3.5" />}
-        {title}
+      <div className={cn('mb-2 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide', tone === 'pos' ? 'text-accent-text' : 'text-over')}>
+        <Icon icon={tone === 'pos' ? ThumbsUp : ThumbsDown} className="ico" /> {title}
       </div>
       {items.length === 0 ? (
-        <p className="text-xs text-muted">—</p>
+        <p className="text-xs text-text-muted">—</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="flex flex-col gap-2">
           {items.map((r, i) => (
-            <li key={i} className="rounded-lg border border-border bg-panel-2 p-2.5 text-xs">
-              <div className="mb-1 flex flex-wrap items-center gap-1.5 text-muted">
-                {r.rating != null && (
-                  <span className="inline-flex items-center gap-0.5"><Star className="h-3 w-3 fill-current" />{r.rating}</span>
-                )}
+            <li key={i} className="rounded-[var(--r-md)] border border-border bg-surface-inset p-3 text-[12.5px]">
+              <div className="mb-1 flex flex-wrap items-center gap-1.5 text-text-muted">
+                {r.rating != null && <span className="inline-flex items-center gap-0.5"><Icon icon={Star} className="ico" style={{ fill: 'var(--star)', color: 'var(--star)' }} />{r.rating}</span>}
                 {r.author && <span>· {r.author}</span>}
                 {r.date && <span className="opacity-70">· {r.date}</span>}
               </div>
-              <p className="leading-relaxed text-text">{r.text}</p>
+              <p className="leading-relaxed text-text-2">{r.text}</p>
             </li>
           ))}
         </ul>
@@ -91,33 +78,17 @@ export function DetailModal() {
     user, votes, final, isOwner, castVote, toggleFinalPick, setDecision, requireSignIn,
     reviewsMap, loadReviewsFor, toursMap, generateTour, toast,
   } = useApp();
-  const [tourBusy, setTourBusy] = useState(false);
-
-  async function onGenTour() {
-    if (!l) return;
-    setTourBusy(true);
-    try {
-      await generateTour(l.id);
-      toast('Generating the walkthrough — it’ll appear here shortly.', 'success');
-    } catch (e) {
-      toast(e instanceof Error ? e.message : 'Could not start the tour.', 'error');
-    } finally {
-      setTourBusy(false);
-    }
-  }
 
   const l = detailId ? findListing(detailId) : undefined;
+  const [tab, setTab] = useState<DTab>('overview');
+  const [tourBusy, setTourBusy] = useState(false);
   const [photoIdx, setPhotoIdx] = useState(0);
   const [copied, setCopied] = useState(false);
-  const [refIdx, setRefIdx] = useState(0); // which reference point the map routes to
+  const [refIdx, setRefIdx] = useState(0);
   const [revLoading, setRevLoading] = useState(false);
-  useEffect(() => {
-    setPhotoIdx(0);
-    setRefIdx(0);
-  }, [detailId]);
 
-  // Lazily fetch reviews the first time a listing's detail is opened (members only;
-  // cached after the first fetch so it never re-spends).
+  useEffect(() => { setPhotoIdx(0); setRefIdx(0); setTab('overview'); }, [detailId]);
+
   useEffect(() => {
     if (!l || !user || reviewsMap[`${l.source}:${l.id}`]) return;
     let active = true;
@@ -127,307 +98,219 @@ export function DetailModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailId, l?.id, user?.id]);
 
+  async function onGenTour() {
+    if (!l) return;
+    setTourBusy(true);
+    try { await generateTour(l.id); toast('Generating the walkthrough — it’ll appear here shortly.', 'success'); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Could not start the tour.', 'error'); }
+    finally { setTourBusy(false); }
+  }
+
   const copyLink = async () => {
     if (!trip || !l) return;
     const url = `${window.location.origin}/#/t/${trip.id}/board?listing=${encodeURIComponent(l.id)}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* clipboard blocked — ignore */
-    }
+    try { await navigator.clipboard.writeText(url); setCopied(true); window.setTimeout(() => setCopied(false), 1600); } catch { /* ignore */ }
   };
 
-  if (!l) {
-    return (
-      <Dialog open={false} onOpenChange={(o) => !o && closeDetail()}>
-        <span />
-      </Dialog>
-    );
-  }
+  if (!l) return null;
 
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
+  const net = tally.up - tally.down;
   const isMyPick = final.myPick === l.id;
   const isDecision = final.decision?.listing_id === l.id;
   const budget = trip?.budget ?? 7000;
   const photos = l.photos ?? [];
   const pp = l.est_5n ? Math.ceil(l.est_5n / split) : null;
-  const mapQuery = encodeURIComponent(`${l.area ?? ''} ${trip?.destination ?? 'Los Angeles'}`);
-  // Map re-centers on the toggled reference point (downtown by default); the chips
-  // carry the distance + drive time. (Keyless directions embeds no longer render,
-  // so we center on the place via the reliable q= embed.)
   const dists = l.distances ?? [];
   const activeRef = dists[refIdx] ?? null;
+  const mapQuery = encodeURIComponent(`${l.area ?? ''} ${trip?.destination ?? 'Los Angeles'}`);
   const mapSrc = activeRef
     ? `https://www.google.com/maps?q=${encodeURIComponent(`${activeRef.label} ${trip?.destination ?? ''}`.trim())}&z=11&output=embed`
     : `https://www.google.com/maps?q=${mapQuery}&z=11&output=embed`;
 
+  const rev = reviewsMap[`${l.source}:${l.id}`];
+  const tour = toursMap[l.id];
+  const hasTour = tour?.status === 'ready' && tour.clips.some((c) => c.videoUrl);
+  const showTourTab = hasTour || tour?.status === 'generating' || (isOwner && !tour);
+  const budgetLabel: Record<string, string> = { under: 'under budget', marginal: 'marginal', over: 'over budget', unknown: 'price TBD' };
+
+  const TABS: { key: DTab; label: string; n?: number }[] = [
+    { key: 'overview', label: 'Overview' },
+    { key: 'reviews', label: 'Reviews', n: rev?.total },
+    ...(showTourTab ? [{ key: 'tour' as DTab, label: 'Tour' }] : []),
+  ];
+
   return (
-    <Dialog open onOpenChange={(o) => !o && closeDetail()}>
-      <DialogContent width="max-w-2xl">
-        <div className="flex items-start gap-2 pr-8">
-          <DialogTitle className="text-lg font-bold leading-snug">{l.name}</DialogTitle>
-          {isDecision && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent">
-              <BadgeCheck className="h-3.5 w-3.5" aria-hidden /> Official pick
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
-          <span className="rounded bg-panel-2 px-1.5 py-0.5">{l.source}</span>
-          {l.area && <span>{l.area}</span>}
-          {!l.distances?.length && l.distance_mi != null && (
-            <span className="inline-flex items-center gap-0.5">
-              <MapPin className="h-3 w-3" /> {l.distance_mi} mi to downtown
-            </span>
-          )}
-        </div>
-
-        {l.distances?.length ? (
-          <div className="flex flex-wrap gap-2">
-            {l.distances.map((d, i) => (
-              <span
-                key={i}
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-panel-2 px-2.5 py-1.5 text-xs"
-              >
-                <DistIcon kind={d.kind} />
-                <span>
-                  <span className="font-medium text-text">{d.label}</span>
-                  <span className="text-muted"> · {d.mi} mi · {fmtMins(d.min)}</span>
-                </span>
-              </span>
-            ))}
-          </div>
-        ) : null}
-
-        {/* Gallery */}
-        {photos.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <img
-              src={photos[photoIdx]}
-              alt={l.name}
-              className="aspect-[16/10] w-full rounded-lg object-cover"
-            />
-            {photos.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto scrollbar-thin pb-1">
-                {photos.map((p, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPhotoIdx(i)}
-                    className={cn(
-                      'h-14 w-20 shrink-0 overflow-hidden rounded-md border-2',
-                      i === photoIdx ? 'border-accent' : 'border-transparent opacity-70',
-                    )}
-                  >
-                    <img src={p} alt="" className="h-full w-full object-cover" />
+    <DialogPrimitive.Root open onOpenChange={(o) => !o && closeDetail()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-scrim backdrop-blur-sm data-[state=open]:animate-fade-in" />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          className="detail-modal show"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          style={{ display: 'flex' }}
+        >
+          <div className="sheet-card">
+            <div className="detail">
+              {/* Photo + top bar */}
+              <div className="d-photo">
+                <SafeImg src={photos[photoIdx] || ''} alt={l.name} />
+                <div className="d-topbar">
+                  <span className={`badge badge-${l.budget ?? 'unknown'}`}>{budgetLabel[l.budget ?? 'unknown']}</span>
+                  {isDecision && <span className="badge badge-official"><Icon icon={Lock} className="ico" /> Official pick</span>}
+                  <span className="spacer" />
+                  <button className="d-iconbtn" onClick={() => void copyLink()} title="Copy a shareable link" aria-label="Copy link">
+                    <Icon icon={copied ? Check : Link2} className="ico" />
                   </button>
-                ))}
+                  <DialogPrimitive.Close className="d-iconbtn" aria-label="Close"><Icon icon={X} className="ico" /></DialogPrimitive.Close>
+                </div>
               </div>
-            )}
-          </div>
-        )}
 
-        {/* Walkthrough tour — AI clips of the listing's best spaces */}
-        {(() => {
-          const tour = toursMap[l.id];
-          if (tour?.status === 'ready' && tour.clips.some((c) => c.videoUrl)) return <TourPlayer tour={tour} />;
-          if (tour?.status === 'generating') {
-            return (
-              <div className="flex items-center gap-2 rounded-lg border border-border bg-panel-2 p-3 text-sm text-muted">
-                <Sparkles className="h-4 w-4 animate-pulse text-accent" /> Generating a walkthrough of the best spaces… (~a minute)
-              </div>
-            );
-          }
-          if (isOwner && !tour) {
-            return (
-              <Button variant="default" size="sm" disabled={tourBusy} onClick={() => void onGenTour()}>
-                <Clapperboard className="h-4 w-4" /> {tourBusy ? 'Starting…' : 'Generate walkthrough tour'}
-              </Button>
-            );
-          }
-          return null;
-        })()}
+              {photos.length > 1 && (
+                <div className="d-thumbs">
+                  {photos.slice(0, 6).map((p, i) => (
+                    <img key={i} src={p} alt="" className={cn('t', i === photoIdx && 'on')} onClick={() => setPhotoIdx(i)} />
+                  ))}
+                </div>
+              )}
 
-        {/* Specs + reviews */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          {l.bd != null && <span>{l.bd} bd</span>}
-          {l.ba != null && <span>{l.ba} ba</span>}
-          {l.sleeps != null && <span>sleeps {l.sleeps}</span>}
-          <span className="text-muted">
-            {l.rating != null
-              ? `${l.rating}★ (${l.reviews ?? 0} reviews)${l.superhost ? ' · Superhost' : ''}`
-              : 'no rating yet'}
-          </span>
-        </div>
+              <div className="d-body">
+                {/* Persistent header */}
+                <div className="badge-row" style={{ justifyContent: 'flex-start', gap: 8 }}>
+                  {l.rank != null && l.rank <= 3 && <span className="badge badge-rank"><Icon icon={Star} className="ico" /> Rank {l.rank}</span>}
+                  {l.superhost && <span className="badge badge-marginal"><Icon icon={Star} className="ico" /> Superhost</span>}
+                </div>
+                <DialogPrimitive.Title asChild><h3 className="d-title">{l.name}</h3></DialogPrimitive.Title>
+                <div className="d-meta">
+                  <span className="tag-source">{l.source}</span>
+                  {l.area && <span>{l.area}</span>}
+                  {l.rating != null && <span className="inline-flex items-center gap-1"><Icon icon={Star} className="ico" style={{ fill: 'var(--star)', color: 'var(--star)', width: 13, height: 13 }} /> {l.rating} <span className="opacity-70">({l.reviews ?? 0})</span></span>}
+                </div>
+                <div className="d-dist" style={{ gap: 16, fontSize: 13.5, color: 'var(--text-2)' }}>
+                  {l.bd != null && <span className="inline-flex items-center gap-1.5"><Icon icon={Bed} className="ico" /> {l.bd} bd</span>}
+                  {l.ba != null && <span className="inline-flex items-center gap-1.5"><Icon icon={Bath} className="ico" /> {l.ba} ba</span>}
+                  {l.sleeps != null && <span className="inline-flex items-center gap-1.5"><Icon icon={Users} className="ico" /> sleeps {l.sleeps}</span>}
+                </div>
 
-        {/* Price breakdown */}
-        <div className="rounded-lg border border-border bg-panel-2 p-3 text-sm">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-lg font-bold">{fmt(l.est_5n)}</span>
-            <BudgetBadge tier={l.budget} />
-          </div>
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted">
-            <Row label="5-night est all-in" value={fmt(l.est_5n)} />
-            <Row label="Displayed (5n)" value={fmt(l.displayed_5n)} />
-            <Row label="4-night est" value={fmt(l.est_4n)} />
-            {pp != null && (
-              <Row
-                label={`Per person (÷${split})`}
-                value={fmt(pp)}
-                tone={l.est_5n != null && l.est_5n > budget ? 'danger' : 'accent'}
-              />
-            )}
-          </dl>
-        </div>
+                {/* Tabs */}
+                <div className="d-tabs" role="tablist">
+                  {TABS.map((t) => (
+                    <button key={t.key} role="tab" aria-selected={tab === t.key} className={cn('d-tab', tab === t.key && 'on')} onClick={() => setTab(t.key)}>
+                      {t.label}{t.n != null && <span className="pip tnum">{t.n}</span>}
+                    </button>
+                  ))}
+                </div>
 
-        {l.note && <p className="text-sm leading-relaxed text-muted">{l.note}</p>}
+                {/* ── Overview ─────────────────────────────────────────────── */}
+                {tab === 'overview' && (
+                  <>
+                    {l.note && (
+                      <div className="insights">
+                        <div className="ih"><Icon icon={Sparkles} className="ico" /> Why it ranks here</div>
+                        <p>{l.note}</p>
+                      </div>
+                    )}
 
-        {/* Amenities */}
-        {(l.amenities?.length ?? 0) > 0 && (
-          <div className="flex flex-wrap gap-1.5 text-[11px]">
-            {l.amenities!.map((a) => {
-              const am = amenityLabel(a, 'unknown');
-              return (
-                <span key={a} className="rounded-full bg-panel-2 px-2 py-0.5 text-muted">
-                  {am.text.replace('? ', '')}
-                </span>
-              );
-            })}
-          </div>
-        )}
+                    {dists.length > 0 && (
+                      <>
+                        <div className="d-section-h">Getting around</div>
+                        <div className="d-dist">
+                          {dists.map((d, i) => (
+                            <button key={i} onClick={() => setRefIdx(i)} className={cn('pill-dist', i === refIdx && 'on')} style={i === refIdx ? { borderColor: 'var(--accent)', background: 'var(--accent-tint)' } : undefined}>
+                              <DistIcon kind={d.kind} />
+                              <span style={{ fontWeight: 600, color: 'var(--text)' }}>{d.label}</span>
+                              <span className="sep">·</span>
+                              <span className="mi tnum">{d.mi} mi</span>
+                              <span className="sep">·</span>
+                              <span className="tnum">{fmtMins(d.min)}</span>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="d-map">
+                          <iframe key={mapSrc} title={activeRef ? `Map · ${activeRef.label}` : 'Area map'} loading="lazy" referrerPolicy="no-referrer-when-downgrade" src={mapSrc} style={{ width: '100%', height: '100%', border: 0 }} />
+                        </div>
+                      </>
+                    )}
 
-        {/* Guest reviews — lazy-loaded on open, cached, split by star rating */}
-        {(() => {
-          const rev = reviewsMap[`${l.source}:${l.id}`];
-          const supported = /airbnb|vrbo/i.test(String(l.source));
-          if (rev || revLoading) {
-            return (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold">Guest reviews{rev ? ` · ${rev.total}` : ''}</h3>
-                {revLoading && !rev ? (
-                  <p className="text-xs text-muted">Loading reviews…</p>
-                ) : rev && (rev.pos.length > 0 || rev.neg.length > 0) ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <ReviewList title="Loved it" tone="pos" items={rev.pos} />
-                    <ReviewList title="Concerns" tone="neg" items={rev.neg} />
+                    {(l.amenities?.length ?? 0) > 0 && (
+                      <div className="amen-row">
+                        {l.amenities!.slice(0, 12).map((a) => (
+                          <span key={a} className="chip-amen" style={{ background: 'var(--surface-sunken)', color: 'var(--text-2)' }}>{a}</span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="breakdown">
+                      <div className="brow"><span>5-night est all-in</span><span className="v tnum">{fmt(l.est_5n)}</span></div>
+                      {l.displayed_5n != null && <div className="brow"><span>Displayed (5 nights)</span><span className="v tnum">{fmt(l.displayed_5n)}</span></div>}
+                      {l.est_4n != null && <div className="brow"><span>4-night est</span><span className="v tnum">{fmt(l.est_4n)}</span></div>}
+                      {pp != null && (
+                        <div className="brow pp total"><span>Per person · split {split}</span><span className="v tnum" style={l.est_5n != null && l.est_5n > budget ? { color: 'var(--over)' } : undefined}>{fmt(pp)}</span></div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* ── Reviews ──────────────────────────────────────────────── */}
+                {tab === 'reviews' && (
+                  <div>
+                    {revLoading && !rev ? (
+                      <p className="text-sm text-text-muted">Loading guest reviews…</p>
+                    ) : rev && (rev.pos.length > 0 || rev.neg.length > 0) ? (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <ReviewList title="Loved it" tone="pos" items={rev.pos} />
+                        <ReviewList title="Concerns" tone="neg" items={rev.neg} />
+                      </div>
+                    ) : !user ? (
+                      <p className="text-sm text-text-muted">Sign in to load guest reviews for this home.</p>
+                    ) : (
+                      <p className="text-sm text-text-muted">No written reviews available for this home.</p>
+                    )}
                   </div>
-                ) : (
-                  <p className="text-xs text-muted">No written reviews available for this home.</p>
                 )}
+
+                {/* ── Tour ─────────────────────────────────────────────────── */}
+                {tab === 'tour' && (
+                  <div>
+                    {hasTour ? (
+                      <TourPlayer tour={tour!} />
+                    ) : tour?.status === 'generating' ? (
+                      <div className="flex items-center gap-2 rounded-[var(--r-md)] border border-border bg-surface-inset p-3 text-sm text-text-muted">
+                        <Icon icon={Sparkles} className="ico animate-pulse" style={{ color: 'var(--accent-text)' }} /> Generating a walkthrough of the best spaces… (~a minute)
+                      </div>
+                    ) : isOwner ? (
+                      <button className="btn btn-ghost btn-sm" disabled={tourBusy} onClick={() => void onGenTour()}>
+                        <Icon icon={Clapperboard} className="ico" /> {tourBusy ? 'Starting…' : 'Generate walkthrough tour'}
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+
+                {/* Persistent actions */}
+                <div className="d-actions">
+                  <a href={l.url} target="_blank" rel="noopener noreferrer" className="source-link">
+                    {l.check_manual ? 'Check manually' : `View on ${l.source}`} <Icon icon={ExternalLink} className="ico" />
+                  </a>
+                  <span className="spacer" />
+                  <div className="votebar">
+                    <button className={cn('vote up', tally.mine === 'up' && 'on')} aria-label="Like" onClick={() => void castVote(l.id, 'up')}><Icon icon={ThumbsUp} className="ico" /> {tally.up}</button>
+                    <span className={cn('net', net > 0 && 'pos', net < 0 && 'neg', 'tnum')}>{net > 0 ? `+${net}` : net}</span>
+                    <button className={cn('vote down', tally.mine === 'down' && 'on')} aria-label="Dislike" onClick={() => void castVote(l.id, 'down')}><Icon icon={ThumbsDown} className="ico" /> {tally.down}</button>
+                  </div>
+                  <button className={cn('btn btn-sm', isMyPick ? 'btn-primary' : 'btn-ghost')} onClick={() => { if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }}>
+                    <Icon icon={Star} className="ico" style={isMyPick ? { fill: 'currentColor' } : undefined} /> {isMyPick ? 'My pick' : 'Top choice'}
+                  </button>
+                  {isOwner && (
+                    <button className={cn('btn btn-sm', isDecision ? 'btn-primary' : 'btn-ghost')} onClick={() => void setDecision(isDecision ? null : l.id)}>
+                      <Icon icon={Navigation} className="ico" /> {isDecision ? 'Unlock' : 'Make official'}
+                    </button>
+                  )}
+                </div>
               </div>
-            );
-          }
-          if (supported && !user) {
-            return <p className="text-xs text-muted">Sign in to load guest reviews for this home.</p>;
-          }
-          return null;
-        })()}
-
-        {/* Map — routes to a reference point; toggle the 3 (defaults to downtown) */}
-        {dists.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {dists.map((d, i) => (
-              <button
-                key={i}
-                onClick={() => setRefIdx(i)}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors',
-                  i === refIdx
-                    ? 'border-accent bg-accent/15 text-accent'
-                    : 'border-border text-muted hover:text-text',
-                )}
-              >
-                <DistIcon kind={d.kind} />
-                <span className="font-medium">{d.label}</span>
-                <span className="opacity-70">· {d.mi} mi · {fmtMins(d.min)}</span>
-              </button>
-            ))}
+            </div>
           </div>
-        )}
-        <iframe
-          key={mapSrc}
-          title={activeRef ? `Route to ${activeRef.label}` : 'Area map'}
-          className="aspect-[16/7] w-full rounded-lg border border-border"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-          src={mapSrc}
-        />
-
-        {/* Actions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
-          <div className="flex items-center gap-3">
-          <a
-            href={l.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-sm font-medium text-link hover:underline"
-          >
-            {l.check_manual ? 'Check manually' : `View on ${l.source}`} <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          <button
-            onClick={() => void copyLink()}
-            className="inline-flex items-center gap-1 text-sm text-muted hover:text-text"
-            title="Copy a shareable link to this home"
-          >
-            <Link2 className="h-3.5 w-3.5" /> {copied ? 'Copied' : 'Copy link'}
-          </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => void castVote(l.id, 'up')}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-sm',
-                tally.mine === 'up' ? 'border-accent bg-accent/15 text-accent' : 'border-border text-muted hover:text-text',
-              )}
-            >
-              <ThumbsUp className="h-4 w-4" /> {tally.up}
-            </button>
-            <button
-              onClick={() => void castVote(l.id, 'down')}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-sm',
-                tally.mine === 'down' ? 'border-danger bg-danger/15 text-danger' : 'border-border text-muted hover:text-text',
-              )}
-            >
-              <ThumbsDown className="h-4 w-4" /> {tally.down}
-            </button>
-            <button
-              onClick={() => {
-                if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id);
-              }}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-sm',
-                isMyPick ? 'border-warn bg-warn/15 text-warn' : 'border-border text-muted hover:text-text',
-              )}
-            >
-              <Star className={cn('h-4 w-4', isMyPick && 'fill-warn')} /> {isMyPick ? 'My pick' : 'Top choice'}
-            </button>
-            {isOwner && (
-              <Button
-                variant={isDecision ? 'primary' : 'default'}
-                size="sm"
-                onClick={() => void setDecision(isDecision ? null : l.id)}
-              >
-                <Pin className="h-3.5 w-3.5" /> {isDecision ? 'Unlock' : 'Make official'}
-              </Button>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function Row({ label, value, tone }: { label: string; value: string; tone?: 'danger' | 'accent' }) {
-  return (
-    <>
-      <dt>{label}</dt>
-      <dd className={cn('text-right font-medium text-text', tone === 'danger' && 'text-danger', tone === 'accent' && 'text-accent')}>
-        {value}
-      </dd>
-    </>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

@@ -376,6 +376,16 @@ body { background: var(--surface); }
 .detail .d-thumbs .t { width: 64px; height: 46px; border-radius: var(--r-sm); object-fit: cover; border: 1px solid var(--photo-border); cursor: pointer; opacity: 0.7; }
 .detail .d-thumbs .t.on { opacity: 1; outline: 2px solid var(--accent); outline-offset: 1px; }
 
+/* detail body: tabbed sections (Overview / Reviews / Tour) */
+.detail .d-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 2px 0 2px; }
+.detail .d-tab { display: inline-flex; align-items: center; gap: 7px; padding: 9px 4px 11px; margin-right: 14px; font-size: 14px; font-weight: 600; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; background: none; }
+.detail .d-tab:hover { color: var(--text); }
+.detail .d-tab.on { color: var(--text); border-bottom-color: var(--accent); }
+.detail .d-tab .pip { font-size: 11px; font-weight: 700; background: var(--surface-sunken); border: 1px solid var(--border); color: var(--text-2); padding: 0 7px; border-radius: var(--r-pill); }
+.detail .d-tab.on .pip { background: var(--accent-tint); border-color: var(--accent-tint-border); color: var(--accent-text); }
+.detail .d-section-h { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+.detail .d-dist .pill-dist { cursor: pointer; }
+
 /* ---- compare VS modal ---- */
 .compare-modal { position: fixed; z-index: 61; inset: 0; display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px; overflow: auto; pointer-events: none; }
 .compare-modal .cm-card { width: 100%; max-width: 860px; pointer-events: auto; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-pop); overflow: hidden; transform: translateY(14px) scale(0.98); opacity: 0; transition: transform var(--dur-slow) var(--ease-out), opacity var(--dur-slow) var(--ease-out); }

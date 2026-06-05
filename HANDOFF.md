@@ -219,3 +219,10 @@ Three features requested: **① email reminders/alerts, ② review snippets, ③
    landing page"). Build → `cd client && npm run build` → `railway up --service
    exquisite-inspiration --detach` → verify live.
 ```
+
+## Board polish backlog (deferred — do after all screens are v2)
+User-requested, captured 2026-06 during Board increment:
+1. **Masthead density** — collapse the always-on bars into popovers: **Add** (URL field → "+ Add" popover), **Filters** (chip row → "Filters" button → popover; reuse the mobile sheet on desktop). Target masthead = title · slim toolbar (Add · Filters · Split) · tabs.
+2. **Carousel rows open to their own views** — wire Community "See all" + Live "Browse all (63)" to a focused view (All-homes filtered to just that source, or a dedicated sub-view).
+3. **Missing listings** — investigate: 63 live but few shown; confirm grid filters aren't wrongly dropping homes. (Deferred per user.)
+4. **Consistency** — apply the same collapse/popover pattern across all screens once they're v2.
