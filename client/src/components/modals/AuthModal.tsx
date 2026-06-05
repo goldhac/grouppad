@@ -113,7 +113,7 @@ export function AuthModal() {
                 </div>
               </form>
             </div>
-            <p className="au-fine">By continuing you agree to our <a href="#">Terms</a> and <a href="#">Privacy Policy</a>. We’ll never post or email your group without you.</p>
+            <p className="au-fine">By continuing you agree to our <a href="#/terms">Terms</a> and <a href="#/privacy">Privacy Policy</a>. We’ll never post or email your group without you.</p>
           </div>
         </div>
       ) : (

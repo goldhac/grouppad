@@ -24,10 +24,10 @@ export function Footer() {
         <FooterCol title="Resources" links={[
           ['How it works', '/'],
         ]} />
-        <div>
-          <h4 className="text-sm font-semibold">Stay in touch</h4>
-          <p className="mt-2 text-sm text-muted">Built for groups who'd rather be on the trip than in the spreadsheet.</p>
-        </div>
+        <FooterCol title="Legal" links={[
+          ['Privacy', '/privacy'],
+          ['Terms', '/terms'],
+        ]} />
       </div>
 
       <div className="border-t border-border">

@@ -15,6 +15,7 @@ import { BoardView } from '@/views/BoardView';
 import { HelpView } from '@/views/HelpView';
 import { ManageView } from '@/views/ManageView';
 import { AdminView } from '@/views/AdminView';
+import { TermsView, PrivacyView } from '@/views/LegalView';
 
 /** "/" → trips dashboard when signed in, else the product landing page. */
 function RootIndex() {
@@ -49,6 +50,8 @@ export function App() {
           <Route path="/t/:tripId/help" element={<TripGate><HelpView /></TripGate>} />
           <Route path="/t/:tripId/manage" element={<TripGate><ManageView /></TripGate>} />
           <Route path="/admin" element={<AdminView />} />
+          <Route path="/terms" element={<TermsView />} />
+          <Route path="/privacy" element={<PrivacyView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
