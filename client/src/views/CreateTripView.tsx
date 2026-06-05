@@ -32,8 +32,10 @@ export function CreateTripView() {
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  /** Mirrors the prototype validate(): one message, marks the offending segment. */
-  function validate(): boolean {
+  /** Mirrors the prototype validate(): one message, marks the offending segment.
+   *  Returns the offending keys so the caller can act on the *current* result
+   *  (state setters are async, so reading `invalid` right after would be stale). */
+  function validate(): SegKey[] {
     const bad = new Set<SegKey>();
     let text = '';
     if (!form.dest.trim()) { bad.add('dest'); text = 'Add a destination to search.'; }
@@ -46,14 +48,16 @@ export function CreateTripView() {
     setInvalid(bad);
     const ok = bad.size === 0;
     setMsg(ok ? { text: 'Looks good — creating your board…', ok: true } : { text, ok: false });
-    return ok;
+    return [...bad];
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate() || busy) {
-      // focus the first offending field
-      const first = (['dest', 'cin', 'cout', 'guests'] as SegKey[]).find((k) => invalid.has(k));
+    if (busy) return;
+    const bad = validate();
+    if (bad.length > 0) {
+      // Move focus to the first offending segment (WCAG focus-on-error).
+      const first = (['dest', 'cin', 'cout', 'guests'] as SegKey[]).find((k) => bad.includes(k));
       if (first) document.querySelector<HTMLInputElement>(`[data-seg="${first}"] input`)?.focus();
       return;
     }
@@ -122,10 +126,14 @@ export function CreateTripView() {
                 </button>
               </div>
             </div>
-            <div className={`ct-seg-msg${msg?.ok ? ' ok' : ''}`} aria-live="polite">
+            <div
+              className={`ct-seg-msg${msg?.ok ? ' ok' : ''}`}
+              role={msg && !msg.ok ? 'alert' : undefined}
+              aria-live={msg?.ok ? 'polite' : 'assertive'}
+            >
               {msg && (msg.ok
-                ? <><CheckCircle2 className="ico" /> {msg.text}</>
-                : <><AlertCircle className="ico" /> {msg.text}</>)}
+                ? <><CheckCircle2 className="ico" aria-hidden /> {msg.text}</>
+                : <><AlertCircle className="ico" aria-hidden /> {msg.text}</>)}
             </div>
 
             {/* Fine-tune the search — all optional */}
