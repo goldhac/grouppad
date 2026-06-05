@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UserPlus, LayoutGrid, Heart, Trophy, MessagesSquare, Plus } from 'lucide-react';
+import { UserPlus, LayoutGrid, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { Card } from '@/components/Card';
@@ -66,12 +66,13 @@ function AddToolbar({ onFindMore }: { onFindMore: () => void }) {
 
 export function BoardView() {
   const {
-    listings, caveats, shortlistIds, split, trip, user,
+    listings, caveats, shortlistIds, split, setSplit, selected, trip, user,
     requireSignIn, joinTrip, detailId, openDetail, closeDetail, findListing, isOwner,
   } = useApp();
   const compare = useCompare();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>('all');
+  const [sheet, setSheet] = useState<null | 'filters'>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
   // ── Deep-link the detail modal (?listing=<id> ⇄ DetailModal) ──────────────
@@ -157,6 +158,19 @@ export function BoardView() {
         <AddToolbar onFindMore={goFindMore} />
         <FilterBar filters={filters} setFilters={setFilters} shown={mainGrid.length} total={listings.length} perPersonAvg={perPersonAvg} />
 
+        {/* Mobile-only quick filter scroller (container-query gated to ≤860px) */}
+        <div className="m-filterscroll">
+          {MFILTERS.map((c) => (
+            <label key={c.key} className={`chip-filter${filters[c.key] ? ' on' : ''}`}>
+              <input type="checkbox" checked={filters[c.key]} onChange={() => setFilters({ ...filters, [c.key]: !filters[c.key] })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
+              <span className="box"><Icon icon={Check} className="ico" /></span>{c.short}
+            </label>
+          ))}
+          <button className="btn btn-ghost btn-sm m-filterbtn" onClick={() => setSheet('filters')}>
+            <Icon icon={SlidersHorizontal} className="ico" /> Split · {split}
+          </button>
+        </div>
+
         <div className="tabbar" role="tablist">
           {TABS.map((t) => (
             <div
@@ -215,8 +229,69 @@ export function BoardView() {
         )}
       </div>
 
+      {/* ── Mobile bottom action bar (container-query gated to ≤860px) ─────── */}
+      <div className="m-bottombar">
+        <button className="btn btn-ghost btn-sm" onClick={() => { setTab('all'); requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.b-toolbar .add input')?.focus()); }}>
+          <Icon icon={Plus} className="ico" /> Add
+        </button>
+        <button className="btn btn-ghost btn-sm" onClick={() => setSheet('filters')}>
+          <Icon icon={SlidersHorizontal} className="ico" /> Filters
+        </button>
+        {selected.size >= 2 ? (
+          <button className="btn btn-primary btn-sm" onClick={() => void compare.runSelected('multi')}>
+            <Icon icon={Sparkles} className="ico" /> Compare {selected.size}
+          </button>
+        ) : (
+          <button className="btn btn-primary btn-sm" onClick={() => setTab('decision')}>
+            <Icon icon={Trophy} className="ico" /> Decision
+          </button>
+        )}
+      </div>
+
+      {/* ── Mobile filter sheet ───────────────────────────────────────────── */}
+      {sheet === 'filters' && (
+        <>
+          <div className="sheet-scrim" onClick={() => setSheet(null)} />
+          <div className="sheet" role="dialog" aria-label="Filters">
+            <div className="grab" />
+            <div className="sheet-head">
+              <h3>Filters</h3>
+              <button className="btn btn-ghost btn-sm x" onClick={() => setSheet(null)} aria-label="Close"><Icon icon={X} className="ico" /></button>
+            </div>
+            <div className="sheet-sec">
+              <div className="filt-list">
+                {MFILTERS.map((c) => (
+                  <label key={c.key} className={`chip-filter${filters[c.key] ? ' on' : ''}`}>
+                    <input type="checkbox" checked={filters[c.key]} onChange={() => setFilters({ ...filters, [c.key]: !filters[c.key] })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
+                    <span className="box"><Icon icon={Check} className="ico" /></span>{c.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="sheet-sec">
+              <div className="split">
+                <span className="lab">Split</span>
+                <input type="range" min={2} max={30} step={1} value={split} onChange={(e) => setSplit(Number(e.target.value))} aria-label="Split between this many people" />
+                <span className="val tnum">{split} people{perPersonAvg != null ? ` · $${perPersonAvg}/ea` : ''}</span>
+              </div>
+            </div>
+            <div className="filt-foot">
+              <span>Showing <span className="tnum">{mainGrid.length}</span> of <span className="tnum">{listings.length}</span></span>
+              <button className="btn btn-primary btn-sm" onClick={() => setSheet(null)}>Done</button>
+            </div>
+          </div>
+        </>
+      )}
+
       <CompareDock compare={compare} />
       <ComparisonModal compare={compare} />
     </div>
   );
 }
+
+const MFILTERS: { key: keyof Filters; label: string; short: string }[] = [
+  { key: 'under', label: 'Under budget only', short: 'Under budget' },
+  { key: 'pool', label: 'Pool required', short: 'Pool' },
+  { key: 'parking', label: 'Parking required', short: 'Parking' },
+  { key: 'manual', label: 'Include “check manually”', short: 'Manual' },
+];
