@@ -1479,6 +1479,18 @@ async function scrapeListingDetails(cleanUrl, parsed) {
   if (!result.bd)     { const m = desc.match(/(\d+)\s*bed(?:room)?s?/i);   if (m) result.bd     = +m[1]; }
   if (!result.ba)     { const m = desc.match(/(\d+(?:\.\d+)?)\s*bath/i);   if (m) result.ba     = +m[1]; }
   if (!result.sleeps) { const m = desc.match(/sleeps?\s*(\d+)/i);          if (m) result.sleeps = +m[1]; }
+
+  // Guest capacity → sleeps. Airbnb's og:title omits "sleeps" (it lists
+  // bedrooms/beds/baths only), but the page JSON carries the max guest count.
+  // Try the embedded fields first, then human-readable phrasings.
+  if (!result.sleeps) {
+    const capM =
+      html.match(/"personCapacity"\s*:\s*(\d+)/i) ||
+      html.match(/"guestLabel"\s*:\s*"(\d+)\s*guests?"/i) ||
+      html.match(/\b(?:up to|sleeps|accommodates|max(?:imum)?(?:\s+of)?)\s*(\d+)\s*guests?/i) ||
+      html.match(/\b(\d+)\s*guests?\s*max(?:imum)?/i);
+    if (capM) result.sleeps = Math.min(+capM[1], 50) || null;  // guard against junk matches
+  }
   if (result.area === 'Los Angeles area') {
     const m = desc.match(/\bin\s+([A-Z][^,.\n·]+)/);
     if (m) result.area = m[1].trim();
