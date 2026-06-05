@@ -1,7 +1,9 @@
 /* Direction 1 — EDITORIAL & PHOTOGRAPHY-LED. Warm/light-leaning, magazine energy. */
 
 .d1 { background: var(--surface); color: var(--text); font-family: var(--font-sans); overflow-x: hidden; }
-.d1 .wrap { max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+/* horizontal padding ONLY — so sections that also carry .wrap keep their own
+   vertical padding (combining d1-hero/d1-demo-band/d1-cta + wrap on one element) */
+.d1 .wrap { max-width: 1240px; margin: 0 auto; padding-left: 32px; padding-right: 32px; }
 
 /* header */
 .d1-head { position: sticky; top: 0; z-index: 50; background: var(--surface-overlay); backdrop-filter: blur(12px); border-bottom: 1px solid transparent; transition: border-color var(--dur-base); }
@@ -128,7 +130,7 @@
 
 /* ===== production polish ===== */
 /* demo pulled up, sits in its own band right under the hero */
-.d1-demo-band { padding: 30px 0 30px; }
+.d1-demo-band { padding: 64px 0 40px; }
 .d1-demo-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; margin-bottom: 26px; }
 .d1-demo-head .l { max-width: 60ch; }
 .d1-demo-head .try { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--accent-text); background: var(--accent-tint); border: 1px solid var(--accent-tint-border); border-radius: var(--r-pill); padding: 8px 14px; }
