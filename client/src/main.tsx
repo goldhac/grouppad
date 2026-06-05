@@ -4,6 +4,9 @@ import { HashRouter } from 'react-router-dom';
 import './index.css';
 import './ds2/tokens.css';
 import './ds2/components.css';
+import './ds2/patterns.css';
+import './ds2/landing.css';
+import './ds2/demo-panel.css';
 import { App } from './App';
 import { AppProvider } from './store/AppContext';
 
