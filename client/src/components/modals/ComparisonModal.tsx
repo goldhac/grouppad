@@ -1,97 +1,106 @@
-import { MapPin, Swords } from 'lucide-react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { MapPin, Swords, Sparkles, X, Lightbulb } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/Dialog';
+import { Icon } from '@/components/ui/Icon';
+import { SafeImg } from '@/components/ui/SafeImg';
 import { Markdown } from '@/components/Markdown';
-import { BudgetBadge } from '@/components/ui/Badge';
 import { fmt } from '@/lib/utils';
 import { cn } from '@/lib/cn';
 import type { CompareController } from '@/hooks/useCompare';
 import type { Listing } from '@/types';
 
+const BUDGET_LABEL: Record<string, string> = { under: 'under budget', marginal: 'marginal', over: 'over budget', unknown: 'price TBD' };
+
 /** Head-to-head / multi comparison overlay: the picked homes as columns with a
- *  VS divider on top, the AI analysis below. Dismisses (and clears selection)
- *  when the user is done. */
+ *  VS badge (1v1), the AI verdict below. Dismisses + clears selection when done. */
 export function ComparisonModal({ compare }: { compare: CompareController }) {
-  const { split } = useApp();
+  const { split, trip } = useApp();
   const items = compare.comparedListings;
-  const open = !!items && (compare.running || !!compare.result);
+  const open = !!items && (compare.running || !!compare.result || !!compare.error);
   const is1v1 = compare.resultMode === '1v1' && items?.length === 2;
+  const budget = trip?.budget ?? 7000;
+
+  if (!open || !items) return null;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && compare.dismissResult()}>
-      <DialogContent width="max-w-3xl">
-        <DialogTitle className="flex items-center gap-1.5 text-base font-bold">
-          {is1v1 ? <><Swords className="h-4 w-4" aria-hidden /> Head-to-head</> : `Comparing ${items?.length ?? 0} homes`}
-        </DialogTitle>
+    <DialogPrimitive.Root open onOpenChange={(o) => !o && compare.dismissResult()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-[60] bg-scrim backdrop-blur-sm data-[state=open]:animate-fade-in" />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className="compare-modal show"
+          style={{ display: 'flex' }}
+          onClick={(e) => { if (e.target === e.currentTarget) compare.dismissResult(); }}
+        >
+          <div className="cm-card">
+            <div className="cm-head">
+              <span className="spark"><Icon icon={is1v1 ? Swords : Sparkles} className="ico" /></span>
+              <DialogPrimitive.Title asChild><h3>{is1v1 ? 'Head-to-head' : `Comparing ${items.length} homes`}</h3></DialogPrimitive.Title>
+              <DialogPrimitive.Close className="btn btn-ghost btn-sm x" aria-label="Close"><Icon icon={X} className="ico" /></DialogPrimitive.Close>
+            </div>
 
-        {/* Columns with VS */}
-        {items && (
-          <div
-            className={cn(
-              'grid items-stretch gap-3',
-              is1v1 ? 'grid-cols-[1fr_auto_1fr]' : 'grid-cols-2 sm:grid-cols-3',
-            )}
-          >
-            {is1v1 ? (
-              <>
-                <CompareColumn listing={items[0]} split={split} />
-                <div className="flex items-center justify-center">
-                  <span className="rounded-full border border-border bg-panel-2 px-3 py-1 text-sm font-bold text-muted">
-                    VS
-                  </span>
+            <div className="cm-body">
+              {is1v1 ? (
+                <div className="vs-wrap">
+                  <Col l={items[0]} split={split} budget={budget} />
+                  <span className="vs-badge">VS</span>
+                  <Col l={items[1]} split={split} budget={budget} />
                 </div>
-                <CompareColumn listing={items[1]} split={split} />
-              </>
-            ) : (
-              items.map((l) => <CompareColumn key={l.id} listing={l} split={split} />)
-            )}
-          </div>
-        )}
+              ) : (
+                <div className="vs-wrap" style={{ gridTemplateColumns: `repeat(${Math.min(items.length, 3)}, 1fr)` }}>
+                  {items.map((l) => <Col key={l.id} l={l} split={split} budget={budget} />)}
+                </div>
+              )}
 
-        {/* Analysis */}
-        <div className="border-t border-border pt-3">
-          {compare.running ? (
-            <p className="py-4 text-center text-sm text-muted">Analyzing with Gemini…</p>
-          ) : compare.result ? (
-            <Markdown text={compare.result} />
-          ) : null}
-          {compare.error && <p className="text-sm text-danger">{compare.error}</p>}
-        </div>
-      </DialogContent>
-    </Dialog>
+              {compare.running ? (
+                <div className="cm-verdict"><div className="vh"><Icon icon={Sparkles} className="ico" /> Analyzing</div>Weighing price, distance, and your caveats with Gemini…</div>
+              ) : compare.result ? (
+                <div className="cm-verdict">
+                  <div className="vh"><Icon icon={Lightbulb} className="ico" /> AI verdict</div>
+                  <Markdown text={compare.result} />
+                </div>
+              ) : compare.error ? (
+                <div className="cm-verdict" style={{ background: 'var(--over-bg)', borderColor: 'var(--over-border)' }}>
+                  <div className="vh" style={{ color: 'var(--over)' }}><Icon icon={Sparkles} className="ico" /> Couldn’t compare</div>
+                  {compare.error}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 
-function CompareColumn({ listing: l, split }: { listing: Listing; split: number }) {
-  const photo = l.photos?.[0];
+function Col({ l, split, budget }: { l: Listing; split: number; budget: number }) {
   const pp = l.est_5n ? Math.ceil(l.est_5n / split) : null;
+  const ppOver = l.est_5n != null && l.est_5n > budget;
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-panel-2">
-      {photo ? (
-        <img src={photo} alt={l.name} className="aspect-[3/2] w-full object-cover" loading="lazy" />
-      ) : (
-        <div className="aspect-[3/2] w-full bg-panel" />
-      )}
-      <div className="flex flex-1 flex-col gap-1.5 p-3">
-        <h3 className="line-clamp-2 text-sm font-semibold leading-snug">{l.name}</h3>
-        <div className="flex flex-wrap items-center gap-x-2 text-[11px] text-muted">
-          <span className="rounded bg-panel px-1.5 py-0.5">{l.source}</span>
-          {l.distance_mi != null && (
-            <span className="inline-flex items-center gap-0.5">
-              <MapPin className="h-3 w-3" /> {l.distance_mi} mi
-            </span>
-          )}
+    <div className="vs-col">
+      <div className="ph"><SafeImg src={l.photos?.[0] || ''} alt={l.name} loading="lazy" /></div>
+      <div className="vbody">
+        <div className="vtitle">{l.name}</div>
+        <div className="vmeta">
+          <span className="tag-source">{l.source}</span>
+          {l.area && <span>{l.area}</span>}
+          {l.distance_mi != null && <span className="inline-flex items-center gap-1"><Icon icon={MapPin} className="ico" style={{ width: 12, height: 12 }} /> {l.distance_mi} mi</span>}
         </div>
-        <div className="flex flex-wrap gap-x-2 text-[12px] text-text">
+        <div className="specs">
           {l.bd != null && <span>{l.bd} bd</span>}
+          {l.ba != null && <span>{l.ba} ba</span>}
           {l.sleeps != null && <span>sleeps {l.sleeps}</span>}
-          {l.rating != null && <span className="text-muted">{l.rating}★</span>}
         </div>
-        <div className="mt-auto flex items-baseline justify-between gap-1 pt-1">
-          <span className="text-base font-bold">{fmt(l.est_5n)}</span>
-          <BudgetBadge tier={l.budget} />
+        <div className="vprice">
+          <span className="amt tnum">{fmt(l.est_5n)}</span>
+          <span className={`badge badge-${l.budget ?? 'unknown'}`}>{BUDGET_LABEL[l.budget ?? 'unknown']}</span>
         </div>
-        {pp != null && <span className="text-[11px] text-accent">{fmt(pp)}/person</span>}
+        {pp != null && (
+          <span className={cn('perperson tnum', ppOver ? 'bad' : 'ok')} style={ppOver ? { color: 'var(--over)', background: 'var(--over-bg)' } : undefined}>
+            {fmt(pp)} / person
+          </span>
+        )}
       </div>
     </div>
   );
