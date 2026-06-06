@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Swords, Heart, Lightbulb, AlertCircle, ChevronDown } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
@@ -24,6 +24,19 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
     if (!insights?.ids) return false;
     return [...insights.ids].sort().join(',') !== [...shortlistIds].sort().join(',');
   }, [insights, shortlistIds]);
+
+  // Open (and scroll to) the analysis whenever a fresh result lands — otherwise
+  // "Ask Scout" appears to do nothing (the result drops into a closed drawer).
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+  const analysisRef = useRef<HTMLDetailsElement>(null);
+  const prevAnalysis = useRef(insights?.analysis);
+  useEffect(() => {
+    if (insights?.analysis && insights.analysis !== prevAnalysis.current) {
+      setAnalysisOpen(true);
+      requestAnimationFrame(() => analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }));
+    }
+    prevAnalysis.current = insights?.analysis;
+  }, [insights?.analysis]);
 
   const ppBudget = trip?.budget && trip.adults ? Math.round(trip.budget / trip.adults) : null;
   const crit = [
@@ -92,7 +105,7 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
 
       {/* ── Scout's full analysis (expandable) ────────────────────────────── */}
       {insights?.analysis && (
-        <details className="scout-analysis">
+        <details className="scout-analysis" ref={analysisRef} open={analysisOpen} onToggle={(e) => setAnalysisOpen(e.currentTarget.open)}>
           <summary>
             <Icon icon={Lightbulb} className="ico" /> {AI_NAME}’s full analysis — top picks, comparison table & red flags
             {stale && <span className="sa-stale"><Icon icon={AlertCircle} className="ico" /> re-analyze to refresh</span>}
