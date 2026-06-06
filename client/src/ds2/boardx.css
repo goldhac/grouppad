@@ -100,6 +100,10 @@
 .btn.btn-icon { padding-left: 0; padding-right: 0; width: 36px; min-width: 36px; justify-content: center; gap: 0; }
 .btn.btn-icon .ico { margin: 0; }
 
+/* ── row-head right cluster (See all + view toggle) ─────────────────────── */
+.row-head .rh-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.row-head .rh-right .view-toggle { margin-left: 0; }
+
 /* ── tabs + toolbar share one row ───────────────────────────────────────── */
 .b-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); padding-right: 18px; }
 .b-controls .tabbar { border-top: 0; }

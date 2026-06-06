@@ -2,12 +2,16 @@ import { useMemo, useState } from 'react';
 import { Radio, ChevronRight, ChevronDown } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Card } from '@/components/Card';
+import { BoardTable } from '@/components/board/BoardTable';
 import { Icon } from '@/components/ui/Icon';
 import { mansionScore } from '@/lib/utils';
 import type { Filters } from '@/components/board/FilterBar';
 
-/** Live listings — a tinted carousel row; "See all" expands to a full grid. */
-export function PipelineSection({ filters }: { filters: Filters }) {
+const CAP = 8;
+
+/** Live listings — same card as the board; a "See all" cap, and it follows the
+ *  grid/list view toggle. */
+export function PipelineSection({ filters, view = 'grid' }: { filters: Filters; view?: 'grid' | 'list' }) {
   const { pipeline, shortlistIds } = useApp();
   const [open, setOpen] = useState(false);
 
@@ -32,7 +36,7 @@ export function PipelineSection({ filters }: { filters: Filters }) {
         <span className="cnt tnum">{items.length}</span>
         <span className="sub">auto-scraped from VRBO &amp; Airbnb · refreshed every 3 days</span>
         <span className="spacer" />
-        {items.length > 3 && (
+        {items.length > CAP && (
           <button className="seeall" onClick={() => setOpen((v) => !v)}>
             {open ? <>Show less <Icon icon={ChevronDown} className="ico" /></> : <>See all {items.length} <Icon icon={ChevronRight} className="ico" /></>}
           </button>
@@ -40,10 +44,10 @@ export function PipelineSection({ filters }: { filters: Filters }) {
       </div>
       {items.length === 0 ? (
         <p className="px-1 py-2 text-[13px] text-text-muted">No live listings match these filters.</p>
-      ) : open ? (
-        <div className="b-grid">{items.map((l) => <Card key={l.id} listing={l} isPipeline />)}</div>
+      ) : view === 'list' ? (
+        <BoardTable homes={open ? items : items.slice(0, CAP)} />
       ) : (
-        <div className="h-scroll">{items.map((l) => <Card key={l.id} listing={l} isPipeline compact />)}</div>
+        <div className="b-grid">{(open ? items : items.slice(0, CAP)).map((l) => <Card key={l.id} listing={l} isPipeline />)}</div>
       )}
     </section>
   );

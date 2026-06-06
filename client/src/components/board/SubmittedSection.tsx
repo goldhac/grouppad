@@ -2,11 +2,15 @@ import { useMemo, useState } from 'react';
 import { Users, ChevronRight, ChevronDown } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Card } from '@/components/Card';
+import { BoardTable } from '@/components/board/BoardTable';
 import { Icon } from '@/components/ui/Icon';
 import { netVotes, mansionScore } from '@/lib/utils';
 
-/** Community submissions — a tinted carousel row; "See all" expands to a full grid. */
-export function SubmittedSection() {
+const CAP = 8;
+
+/** Community submissions — same card as the board; a "See all" cap, and it
+ *  follows the grid/list view toggle. */
+export function SubmittedSection({ view = 'grid' }: { view?: 'grid' | 'list' }) {
   const { submitted, shortlistIds, votes } = useApp();
   const [open, setOpen] = useState(false);
 
@@ -19,6 +23,7 @@ export function SubmittedSection() {
   );
 
   if (items.length === 0) return null;
+  const shown = open ? items : items.slice(0, CAP);
 
   return (
     <section className="row-tint community">
@@ -27,17 +32,16 @@ export function SubmittedSection() {
         <span className="ttl">Community submissions</span>
         <span className="cnt tnum">{items.length}</span>
         <span className="sub">member-added · not yet liked</span>
-        <span className="spacer" />
-        {items.length > 3 && (
-          <button className="seeall" onClick={() => setOpen((v) => !v)}>
+        {items.length > CAP && (
+          <button className="seeall" style={{ marginLeft: 'auto' }} onClick={() => setOpen((v) => !v)}>
             {open ? <>Show less <Icon icon={ChevronDown} className="ico" /></> : <>See all {items.length} <Icon icon={ChevronRight} className="ico" /></>}
           </button>
         )}
       </div>
-      {open ? (
-        <div className="b-grid">{items.map((l) => <Card key={l.id} listing={l} isSubmitted />)}</div>
+      {view === 'list' ? (
+        <BoardTable homes={shown} />
       ) : (
-        <div className="h-scroll">{items.map((l) => <Card key={l.id} listing={l} isSubmitted compact />)}</div>
+        <div className="b-grid">{shown.map((l) => <Card key={l.id} listing={l} isSubmitted />)}</div>
       )}
     </section>
   );

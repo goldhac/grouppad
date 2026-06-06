@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw, Bookmark } from 'lucide-react';
+import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw, Bookmark, ChevronRight, ChevronDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
@@ -108,6 +108,7 @@ export function BoardView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [topAll, setTopAll] = useState(false);
   const [sheet, setSheet] = useState<null | 'filters'>(null);
 
   // ── Deep-link the detail modal (?listing=<id> ⇄ DetailModal) ──────────────
@@ -151,6 +152,7 @@ export function BoardView() {
       }),
     [listings, shortlistIds, filters],
   );
+  const topHomes = topAll ? mainGrid : mainGrid.slice(0, 10);
 
   const perPersonAvg = useMemo(() => {
     const first = listings.find((l) => (l.budget === 'under' || l.budget === 'marginal') && l.est_5n);
@@ -232,14 +234,21 @@ export function BoardView() {
             <section>
               <div className="row-head">
                 <span className="ttl">Top recommended</span>
-                <span className="cnt tnum">{mainGrid.length}</span>
+                <span className="cnt tnum">{topHomes.length}</span>
                 <span className="sub">ranked for your group · filtered</span>
-                {mainGrid.length > 0 && (
-                  <div className="view-toggle" role="group" aria-label="View">
-                    <button className={`vt${view === 'grid' ? ' on' : ''}`} onClick={() => setView('grid')} aria-pressed={view === 'grid'} aria-label="Grid view" title="Grid"><Icon icon={LayoutGrid} className="ico" /></button>
-                    <button className={`vt${view === 'list' ? ' on' : ''}`} onClick={() => setView('list')} aria-pressed={view === 'list'} aria-label="List view" title="List"><Icon icon={Rows3} className="ico" /></button>
-                  </div>
-                )}
+                <div className="rh-right">
+                  {mainGrid.length > 10 && (
+                    <button className="seeall" onClick={() => setTopAll((v) => !v)}>
+                      {topAll ? <>Show top 10 <Icon icon={ChevronDown} className="ico" /></> : <>See all {mainGrid.length} <Icon icon={ChevronRight} className="ico" /></>}
+                    </button>
+                  )}
+                  {mainGrid.length > 0 && (
+                    <div className="view-toggle" role="group" aria-label="View">
+                      <button className={`vt${view === 'grid' ? ' on' : ''}`} onClick={() => setView('grid')} aria-pressed={view === 'grid'} aria-label="Grid view" title="Grid"><Icon icon={LayoutGrid} className="ico" /></button>
+                      <button className={`vt${view === 'list' ? ' on' : ''}`} onClick={() => setView('list')} aria-pressed={view === 'list'} aria-label="List view" title="List"><Icon icon={Rows3} className="ico" /></button>
+                    </div>
+                  )}
+                </div>
               </div>
               {mainGrid.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -251,15 +260,15 @@ export function BoardView() {
                   </p>
                 </div>
               ) : view === 'list' ? (
-                <BoardTable homes={mainGrid} />
+                <BoardTable homes={topHomes} />
               ) : (
                 <div className="b-grid">
-                  {mainGrid.map((l) => <Card key={l.id} listing={l} />)}
+                  {topHomes.map((l) => <Card key={l.id} listing={l} />)}
                 </div>
               )}
             </section>
-            <SubmittedSection />
-            <PipelineSection filters={filters} />
+            <SubmittedSection view={view} />
+            <PipelineSection filters={filters} view={view} />
           </>
         )}
 
