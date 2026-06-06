@@ -114,6 +114,14 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total, onTour }: { onOp
   );
 }
 
+const DEFAULT_FILTERS: Filters = { under: false, pool: false, parking: false, manual: true };
+const FILTERS_KEY = (id?: string) => `gp_filters_${id || 'default'}`;
+function readFilters(id?: string): Filters {
+  if (!id) return DEFAULT_FILTERS;
+  try { const raw = localStorage.getItem(FILTERS_KEY(id)); return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : DEFAULT_FILTERS; }
+  catch { return DEFAULT_FILTERS; }
+}
+
 export function BoardView() {
   const {
     listings, caveats, shortlistIds, favoriteIds, split, setSplit, selected, trip, user,
@@ -152,7 +160,16 @@ export function BoardView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailId]);
 
-  const [filters, setFilters] = useState<Filters>({ under: false, pool: false, parking: false, manual: true });
+  // Filters persist per-trip — they stay locked in across refreshes/reloads
+  // until the user changes them.
+  const [filters, setFilters] = useState<Filters>(() => readFilters(trip?.id));
+  const filtersTripRef = useRef(trip?.id);
+  useEffect(() => {
+    if (filtersTripRef.current !== trip?.id) { filtersTripRef.current = trip?.id; setFilters(readFilters(trip?.id)); }
+  }, [trip?.id]);
+  useEffect(() => {
+    if (trip?.id) { try { localStorage.setItem(FILTERS_KEY(trip.id), JSON.stringify(filters)); } catch { /* ignore */ } }
+  }, [filters, trip?.id]);
   // count of *active* filters (manual defaults on, so a bare board reads 0)
   const activeFilterCount = (filters.under ? 1 : 0) + (filters.pool ? 1 : 0) + (filters.parking ? 1 : 0) + (filters.manual ? 0 : 1);
 
