@@ -58,3 +58,48 @@
 @media (prefers-reduced-motion: no-preference) {
   .card.rose { animation: gp-rise-in 1s var(--ease-settle) both; }
 }
+
+/* ── Upvote burst — a ring + 6 radiating sparks on a new like ──────────────── */
+.votebar .vote.up { position: relative; overflow: visible; }
+.vote-burst { position: absolute; left: 17px; top: 50%; width: 0; height: 0; pointer-events: none; z-index: 2; }
+.vote-burst i { position: absolute; left: -2.5px; top: -2.5px; width: 5px; height: 5px; border-radius: 50%; background: var(--up, var(--accent-text)); opacity: 0; }
+.vote-burst i:nth-child(1) { --a: 0deg; }
+.vote-burst i:nth-child(2) { --a: 60deg; }
+.vote-burst i:nth-child(3) { --a: 120deg; }
+.vote-burst i:nth-child(4) { --a: 180deg; }
+.vote-burst i:nth-child(5) { --a: 240deg; }
+.vote-burst i:nth-child(6) { --a: 300deg; }
+@media (prefers-reduced-motion: no-preference) {
+  .vote-burst::before {
+    content: ''; position: absolute; left: -9px; top: -9px; width: 18px; height: 18px;
+    border-radius: 50%; border: 2px solid var(--up, var(--accent-text));
+    animation: vb-ring 460ms var(--ease-out) forwards;
+  }
+  .vote-burst i { animation: vb-dot 520ms var(--ease-out) forwards; }
+}
+@keyframes vb-ring { 0% { transform: scale(0.3); opacity: 0.9; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes vb-dot  { 0% { transform: rotate(var(--a)) translateY(0) scale(1); opacity: 1; } 100% { transform: rotate(var(--a)) translateY(-15px) scale(0.2); opacity: 0; } }
+
+/* ── VS comparison: clash entrance + Scout's-pick reveal ───────────────────── */
+.vs-col { position: relative; }
+/* gold sheen sweep across the winning column when the verdict lands */
+.vs-col.win::before {
+  content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--gold-dot) 38%, transparent) 50%, transparent 70%);
+  opacity: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .compare-modal.show .vs-1v1 > .vs-col:first-of-type { animation: vs-in-left var(--dur-slow) var(--ease-out) both; }
+  .compare-modal.show .vs-1v1 > .vs-col:last-of-type  { animation: vs-in-right var(--dur-slow) var(--ease-out) both; }
+  .compare-modal.show .vs-1v1 .vs-badge { animation: vs-badge-pop 480ms var(--ease-settle) 140ms both; }
+  .compare-modal.show .vs-multi > .vs-col { animation: gp-rise var(--dur-slow) var(--ease-out) both; }
+  .compare-modal.show .vs-multi > .vs-col:nth-child(2) { animation-delay: 60ms; }
+  .compare-modal.show .vs-multi > .vs-col:nth-child(3) { animation-delay: 120ms; }
+  .vs-col.win::before { animation: vs-sheen 900ms var(--ease-out) 80ms 1; }
+  .vs-col.win .win-flag { animation: vs-flag-pop 460ms var(--ease-settle) both; }
+}
+@keyframes vs-in-left  { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
+@keyframes vs-in-right { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }
+@keyframes vs-badge-pop { 0% { transform: translate(-50%, -50%) scale(0); } 62% { transform: translate(-50%, -50%) scale(1.16); } 100% { transform: translate(-50%, -50%) scale(1); } }
+@keyframes vs-sheen { 0% { opacity: 0; transform: translateX(-30%); } 30% { opacity: 1; } 100% { opacity: 0; transform: translateX(30%); } }
+@keyframes vs-flag-pop { 0% { opacity: 0; transform: translateY(4px) scale(0.85); } 60% { transform: translateY(0) scale(1.06); } 100% { opacity: 1; transform: none; } }

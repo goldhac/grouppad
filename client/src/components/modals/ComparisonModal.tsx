@@ -1,5 +1,6 @@
+import { useMemo } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { MapPin, Swords, X } from 'lucide-react';
+import { MapPin, Swords, X, BadgeCheck } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
@@ -21,6 +22,27 @@ export function ComparisonModal({ compare }: { compare: CompareController }) {
   const open = !!items && (compare.running || !!compare.result || !!compare.error);
   const is1v1 = compare.resultMode === '1v1' && items?.length === 2;
   const budget = trip?.budget ?? 7000;
+
+  // Surface Scout's pick: prefer the first **bolded** name in the verdict
+  // (Scout leads with the winner), fall back to the earliest-mentioned name.
+  const winnerId = useMemo(() => {
+    if (!items || !compare.result || compare.running) return null;
+    const txt = compare.result.toLowerCase();
+    const bold = compare.result.match(/\*\*(.+?)\*\*/)?.[1]?.toLowerCase().trim();
+    if (bold) {
+      const hit = items.find((l) => {
+        const n = l.name.toLowerCase();
+        return n.includes(bold) || bold.includes(n.split(/\s+/).slice(0, 2).join(' '));
+      });
+      if (hit) return hit.id;
+    }
+    let best: string | null = null, bestAt = Infinity;
+    for (const l of items) {
+      const at = txt.indexOf(l.name.toLowerCase());
+      if (at >= 0 && at < bestAt) { bestAt = at; best = l.id; }
+    }
+    return best;
+  }, [items, compare.result, compare.running]);
 
   if (!open || !items) return null;
 
@@ -44,14 +66,14 @@ export function ComparisonModal({ compare }: { compare: CompareController }) {
 
             <div className="cm-body">
               {is1v1 ? (
-                <div className="vs-wrap">
-                  <Col l={items[0]} split={split} budget={budget} />
+                <div className="vs-wrap vs-1v1">
+                  <Col l={items[0]} split={split} budget={budget} win={winnerId === items[0].id} />
                   <span className="vs-badge">VS</span>
-                  <Col l={items[1]} split={split} budget={budget} />
+                  <Col l={items[1]} split={split} budget={budget} win={winnerId === items[1].id} />
                 </div>
               ) : (
-                <div className="vs-wrap" style={{ gridTemplateColumns: `repeat(${Math.min(items.length, 3)}, 1fr)` }}>
-                  {items.map((l) => <Col key={l.id} l={l} split={split} budget={budget} />)}
+                <div className="vs-wrap vs-multi" style={{ gridTemplateColumns: `repeat(${Math.min(items.length, 3)}, 1fr)` }}>
+                  {items.map((l) => <Col key={l.id} l={l} split={split} budget={budget} win={winnerId === l.id} />)}
                 </div>
               )}
 
@@ -76,13 +98,14 @@ export function ComparisonModal({ compare }: { compare: CompareController }) {
   );
 }
 
-function Col({ l, split, budget }: { l: Listing; split: number; budget: number }) {
+function Col({ l, split, budget, win = false }: { l: Listing; split: number; budget: number; win?: boolean }) {
   const pp = l.est_5n ? Math.ceil(l.est_5n / split) : null;
   const ppOver = l.est_5n != null && l.est_5n > budget;
   return (
-    <div className="vs-col">
+    <div className={cn('vs-col', win && 'win')}>
       <div className="ph"><SafeImg src={l.photos?.[0] || ''} alt={l.name} loading="lazy" /></div>
       <div className="vbody">
+        {win && <span className="win-flag"><Icon icon={BadgeCheck} className="ico" /> {AI_NAME}’s pick</span>}
         <div className="vtitle">{l.name}</div>
         <div className="vmeta">
           <span className="tag-source">{l.source}</span>

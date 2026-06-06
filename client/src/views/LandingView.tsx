@@ -7,6 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { ScoutMark } from '@/components/ui/ScoutMark';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { CoreLoopDemo } from '@/views/landing/CoreLoopDemo';
+import { MoneyCount } from '@/components/ui/MoneyCount';
 import { useScrollReveal } from '@/lib/useScrollReveal';
 
 const IMG = (id: string) => `https://images.unsplash.com/photo-${id}?w=1100&q=80&auto=format&fit=crop`;
@@ -78,7 +79,7 @@ export function LandingView() {
             <div className="s">Sleeps 24 · pool · 15 min to DTLA</div>
           </div>
           <div className="pricepill tnum">
-            $5,022 all-in <span className="pp">· $359 / person</span>
+            <MoneyCount value={5022} /> all-in <span className="pp">· <MoneyCount value={359} /> / person</span>
           </div>
         </div>
       </section>
@@ -117,7 +118,7 @@ export function LandingView() {
           title="Every home, priced per head."
           body="No more mental math in the group chat. GroupPad shows the all-in total and what each person actually pays — recomputed live as your group size changes."
           media={<SafeImg src={IMG('1600566753086-00f18fb6b3ea')} alt="A bright, spacious group rental interior" />}
-          float={<div className="float pp"><div className="lbl">Per person</div><div className="v tnum">$359</div></div>}
+          float={<div className="float pp"><div className="lbl">Per person</div><div className="v tnum"><MoneyCount value={359} /></div></div>}
         />
         <FeaturePair
           flip

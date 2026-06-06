@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Plane, FerrisWheel, Lock, Users, Check, X, Sparkles, Clapperboard, Quote } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Carousel } from '@/components/Carousel';
@@ -40,6 +41,26 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
   const hasTour = toursMap[l.id]?.status === 'ready' && (toursMap[l.id]?.clips.some((c) => c.videoUrl) ?? false);
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
   const net = tally.up - tally.down;
+
+  // ── Signature beats ───────────────────────────────────────────────────────
+  // "Rose into the shortlist": the instant a home crosses net +1 it lifts.
+  const [rose, setRose] = useState(false);
+  const prevNet = useRef(net);
+  useEffect(() => {
+    if (prevNet.current < 1 && net >= 1) {
+      setRose(true);
+      const t = setTimeout(() => setRose(false), 1000);
+      prevNet.current = net;
+      return () => clearTimeout(t);
+    }
+    prevNet.current = net;
+  }, [net]);
+  // Upvote burst — a little ring/spark pop when you add a like.
+  const [burst, setBurst] = useState(0);
+  const onUpvote = () => {
+    if (tally.mine !== 'up') setBurst((b) => b + 1);
+    void castVote(l.id, 'up');
+  };
   const isMyPick = final.myPick === l.id;
   const isDecision = final.decision?.listing_id === l.id;
   const isSelected = selected.has(l.id);
@@ -87,8 +108,9 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
 
   const votebar = (
     <div className="votebar" onClick={(e) => e.stopPropagation()}>
-      <button className={cn('vote up', tally.mine === 'up' && 'on')} aria-label="Like" onClick={() => void castVote(l.id, 'up')}>
+      <button className={cn('vote up', tally.mine === 'up' && 'on')} aria-label="Like" onClick={onUpvote}>
         <Icon icon={ThumbsUp} className="ico" /> {tally.up}
+        {burst > 0 && <span key={burst} className="vote-burst" aria-hidden><i /><i /><i /><i /><i /><i /></span>}
       </button>
       <span className={cn('net', net > 0 && 'pos', net < 0 && 'neg', 'tnum')}>{net > 0 ? `+${net}` : net}</span>
       <button className={cn('vote down', tally.mine === 'down' && 'on')} aria-label="Dislike" onClick={() => void castVote(l.id, 'down')}>
@@ -107,7 +129,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
   if (compact) {
     return (
       <article
-        className={cn('card', isDecision && 'is-official', isSelected && 'is-selected', (isSubmitted || isPipeline) && 'is-community')}
+        className={cn('card', isDecision && 'is-official', isSelected && 'is-selected', rose && 'rose', (isSubmitted || isPipeline) && 'is-community')}
         role="button" tabIndex={0} onClick={onCardClick} onKeyDown={onCardKey}
       >
         {photo}
@@ -146,7 +168,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
   // ── Full card (All-homes / Shortlist grids) ───────────────────────────────
   return (
     <article
-      className={cn('card', isDecision && 'is-official', isSelected && 'is-selected')}
+      className={cn('card', isDecision && 'is-official', isSelected && 'is-selected', rose && 'rose')}
       role="button" tabIndex={0} onClick={onCardClick} onKeyDown={onCardKey}
     >
       {photo}

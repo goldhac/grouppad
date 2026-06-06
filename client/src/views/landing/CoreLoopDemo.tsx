@@ -5,6 +5,7 @@ import {
 import { Icon } from '@/components/ui/Icon';
 import { ScoutMark } from '@/components/ui/ScoutMark';
 import { SafeImg } from '@/components/ui/SafeImg';
+import { SealMark } from '@/components/ui/SealMark';
 import { cn } from '@/lib/cn';
 
 const DUR = 3200;
@@ -159,7 +160,7 @@ export function CoreLoopDemo() {
         {/* 4 — LOCK */}
         <section className={cn('dm-scene', scene === 3 && 'on')} data-scene="3">
           <div className="dm-lock">
-            <div className="dm-seal"><Icon icon={BadgeCheck} size="lg" className="ico" /><span className="dm-golddot" /></div>
+            <SealMark size={72} play={scene === 3} className="dm-seal-lottie" />
             <div className="official-banner">
               <div className="seal"><Icon icon={BadgeCheck} size="md" className="ico" /></div>
               <div className="ob-body">
