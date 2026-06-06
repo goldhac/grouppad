@@ -256,9 +256,10 @@
 .m-only { display: none; }
 .m-filterscroll { display: none; }
 
-/* Filters dialog — centered modal on desktop (a bottom sheet on mobile, below) */
-.sheet-scrim { position: fixed; inset: 0; z-index: 90; background: var(--scrim); display: flex; align-items: flex-start; justify-content: center; padding: 76px 20px 24px; }
-.sheet { width: 100%; max-width: 440px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-pop); padding: 18px 20px 20px; max-height: 80vh; overflow: auto; }
+/* Filters dialog — centered modal on desktop (a bottom sheet on mobile, below).
+   Scrim + sheet are SIBLINGS in the DOM, so the sheet is positioned itself. */
+.sheet-scrim { position: fixed; inset: 0; z-index: 90; background: var(--scrim); }
+.sheet { position: fixed; top: 76px; left: 50%; transform: translateX(-50%); z-index: 91; width: calc(100% - 40px); max-width: 440px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-pop); padding: 18px 20px 20px; max-height: 80vh; overflow: auto; }
 .sheet .grab { display: none; }
 .sheet .sheet-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .sheet .sheet-head h3 { font-size: 18px; font-weight: 700; }

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X } from 'lucide-react';
+import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw } from 'lucide-react';
+import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { Card } from '@/components/Card';
-import { BoardStats } from '@/components/board/BoardStats';
 import { BoardTable } from '@/components/board/BoardTable';
 import { EmptyBoardArt } from '@/components/ui/EmptyBoardArt';
 import { Icon } from '@/components/ui/Icon';
@@ -27,10 +27,24 @@ type Tab = 'all' | 'shortlist' | 'decision' | 'discussion';
 /** Paste-a-URL add toolbar — collapsed to a button until you start adding,
  *  to keep the masthead light. */
 function AddToolbar({ onOpenFilters, filterCount, shown, total }: { onOpenFilters: () => void; filterCount: number; shown: number; total: number }) {
-  const { submitListing, requireSignIn, toast } = useApp();
+  const { submitListing, requireSignIn, toast, isOwner, tripId } = useApp();
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [openField, setOpenField] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function refresh() {
+    if (!tripId || refreshing) return;
+    setRefreshing(true);
+    try {
+      await api.refreshListings(tripId);
+      toast('Refreshing listings — fresh homes appear in about a minute.', 'success');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not refresh right now.', 'error');
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function add() {
     if (!url.trim()) return;
@@ -68,6 +82,11 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total }: { onOpenFilter
       ) : (
         <button className="btn btn-ghost btn-sm" onClick={() => setOpenField(true)}>
           <Icon icon={Plus} className="ico" /> Add a home
+        </button>
+      )}
+      {isOwner && (
+        <button className="btn btn-ghost btn-sm" onClick={() => void refresh()} disabled={refreshing} title="Refresh listings — once per cycle; they also auto-refresh every few days">
+          <Icon icon={RotateCw} className="ico" /> {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       )}
       <button className="btn btn-ghost btn-sm filters-btn" onClick={onOpenFilters}>
@@ -207,7 +226,6 @@ export function BoardView() {
       <div className="tab-panel gp-panel" key={tab}>
         {tab === 'all' && (
           <>
-            {listings.length > 0 && <BoardStats homes={mainGrid} />}
             {isOwner && <SearchPanel />}
             <section>
               <div className="row-head">

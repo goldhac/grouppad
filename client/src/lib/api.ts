@@ -115,6 +115,8 @@ export const api = {
     request<NotifPrefs>('/api/me/notifications', { method: 'POST', body: prefs }),
   runSearch: (tripId: string, max = 10) =>
     request<{ ok: true }>(`${t(tripId)}/run-search`, { method: 'POST', body: { max } }),
+  refreshListings: (tripId: string) =>
+    request<{ ok: true }>(`${t(tripId)}/refresh`, { method: 'POST' }),
   searchStatus: (tripId: string) =>
     request<{ searching: boolean; count: number; configured: boolean }>(`${t(tripId)}/search-status`),
 

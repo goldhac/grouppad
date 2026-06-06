@@ -66,6 +66,10 @@
   .bs-tiles { grid-template-columns: repeat(2, 1fr); gap: 16px 12px; }
 }
 
+/* ── icon-only buttons (Manage / Share in the masthead) ─────────────────── */
+.btn.btn-icon { padding-left: 0; padding-right: 0; width: 36px; min-width: 36px; justify-content: center; gap: 0; }
+.btn.btn-icon .ico { margin: 0; }
+
 /* ── tabs + toolbar share one row ───────────────────────────────────────── */
 .b-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); padding-right: 18px; }
 .b-controls .tabbar { border-top: 0; }

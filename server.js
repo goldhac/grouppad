@@ -2780,6 +2780,32 @@ app.post('/api/trips/:tripId/run-search', requireTripOwner, async (req, res) => 
   res.json({ ok: true });
 });
 
+// Manual "refresh listings" — listings auto-refresh every PIPELINE_INTERVAL_DAYS;
+// the organizer gets ONE free manual refresh per that window.
+app.post('/api/trips/:tripId/refresh', requireTripOwner, async (req, res) => {
+  const tripId = req.params.tripId;
+  const now = Date.now();
+  const windowMs = PIPELINE_INTERVAL_DAYS * 24 * 60 * 60 * 1000;
+  const last = req.trip.last_manual_refresh ? Date.parse(req.trip.last_manual_refresh) : 0;
+  if (last && now - last < windowMs) {
+    const days = Math.ceil((last + windowMs - now) / (24 * 60 * 60 * 1000));
+    return res.status(429).json({
+      error: `You've used your manual refresh. Listings auto-refresh every ${PIPELINE_INTERVAL_DAYS} days — next manual refresh in ${days} day${days === 1 ? '' : 's'}.`,
+      nextRefreshAt: new Date(last + windowMs).toISOString(),
+    });
+  }
+  if (!(await apifyGuard('a manual refresh')))
+    return res.status(429).json({ error: 'Rental search is paused — Apify usage is near its monthly limit.' });
+  if (tripId === LA_TRIP_ID) {
+    runPipelineJob().catch((e) => console.error('[refresh] pipeline error:', e && e.message));
+  } else if (!spawnTripSearch(tripId, 10)) {
+    return res.status(400).json({ error: 'Search is not configured (APIFY_TOKEN missing on server).' });
+  }
+  const trips = loadTrips();
+  if (trips[tripId]) { trips[tripId].last_manual_refresh = new Date(now).toISOString(); saveTrips(trips); }
+  res.json({ ok: true });
+});
+
 // Search progress for the board (open — anyone viewing can see "finding rentals").
 app.get('/api/trips/:tripId/search-status', loadTripOr404, (req, res) => {
   const marker = path.join(tripDir(req.params.tripId), '.searching');

@@ -50,16 +50,16 @@ export function BoardHeader() {
       <div className="t-actions">
         {isOwner ? (
           <>
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/t/${trip.id}/manage`)}>
-              <Icon icon={Settings} className="ico" /> Manage
+            <button className="btn btn-ghost btn-sm btn-icon" onClick={() => navigate(`/t/${trip.id}/manage`)} title="Manage trip" aria-label="Manage trip">
+              <Icon icon={Settings} className="ico" />
             </button>
-            <button className="btn btn-primary btn-sm" onClick={share}>
-              <Icon icon={Share2} className="ico" /> Share board
+            <button className="btn btn-primary btn-sm btn-icon" onClick={share} title="Share board" aria-label="Share board">
+              <Icon icon={Share2} className="ico" />
             </button>
           </>
         ) : (
-          <button className="btn btn-primary btn-sm" onClick={share}>
-            <Icon icon={Share2} className="ico" /> Share board
+          <button className="btn btn-primary btn-sm btn-icon" onClick={share} title="Share board" aria-label="Share board">
+            <Icon icon={Share2} className="ico" />
           </button>
         )}
       </div>
