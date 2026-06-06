@@ -65,6 +65,7 @@ export interface TripMember {
   id: string;
   name: string;
   email: string;
+  avatar?: string | null;
   role: 'organizer' | 'member';
   isYou: boolean;
 }

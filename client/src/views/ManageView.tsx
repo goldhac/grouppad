@@ -8,6 +8,7 @@ import {
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/Avatar';
 import type { TripPulse, TripMember } from '@/types';
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -20,12 +21,6 @@ function fmtRange(a?: string | null, b?: string | null) {
   const [yb, mb, db] = b.split('-').map(Number);
   return `${s} – ${ma === mb ? db : `${MON[mb - 1]} ${db}`}, ${yb || ya}`;
 }
-function initials(name?: string) {
-  if (!name) return '?';
-  const p = name.trim().split(/\s+/);
-  return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() || name[0].toUpperCase();
-}
-
 type ConfirmKind = 'reset' | 'close' | 'transfer' | 'remove' | 'delete';
 interface ConfirmState { kind: ConfirmKind; member?: TripMember; }
 
@@ -176,7 +171,7 @@ export function ManageView() {
             <div className="member-list">
               {members.map((m) => (
                 <div className="member-row" key={m.id}>
-                  <span className="av">{initials(m.name)}</span>
+                  <Avatar name={m.name} avatar={m.avatar} size={38} className="av" />
                   <div className="who">
                     <div className="nm">
                       {m.name}

@@ -100,6 +100,13 @@
 .btn.btn-icon { padding-left: 0; padding-right: 0; width: 36px; min-width: 36px; justify-content: center; gap: 0; }
 .btn.btn-icon .ico { margin: 0; }
 
+/* ── Onboarding avatar picker ───────────────────────────────────────────── */
+.obv-avatars { display: grid; place-items: center; height: 100%; width: 100%; }
+.ob-avgrid { display: grid; grid-template-columns: repeat(3, auto); gap: 16px; }
+.ob-avopt { background: none; border: 0; padding: 3px; border-radius: 50%; cursor: pointer; line-height: 0; transition: transform var(--dur-fast) var(--ease-out); }
+.ob-avopt:hover { transform: scale(1.06); }
+.ob-avopt.on { box-shadow: 0 0 0 3px var(--accent); }
+
 /* ── Guided coachmark tour (spotlight + tooltip) ────────────────────────── */
 .tour-root { position: fixed; inset: 0; z-index: 200; pointer-events: none; }
 .tour-scrim-full { position: fixed; inset: 0; background: rgba(11, 13, 16, 0.58); }

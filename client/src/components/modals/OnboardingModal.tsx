@@ -3,7 +3,35 @@ import { Link2, ArrowUp, ThumbsUp, ThumbsDown, Users, ArrowLeft, ArrowRight } fr
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 import { SealMark } from '@/components/ui/SealMark';
+import { Avatar, AVATARS } from '@/components/ui/Avatar';
 import { useFocusTrap } from '@/lib/useFocusTrap';
+
+function AvatarPickArt() {
+  const { user, setAvatar } = useApp();
+  return (
+    <div className="obv obv-avatars">
+      <div className="ob-avgrid">
+        {AVATARS.map((a) => (
+          <button
+            key={a}
+            className={`ob-avopt${user?.avatar === a ? ' on' : ''}`}
+            onClick={() => void setAvatar(a)}
+            aria-label={`Use the ${a} avatar`}
+          >
+            <Avatar avatar={a} size={62} />
+          </button>
+        ))}
+        <button
+          className={`ob-avopt${!user?.avatar ? ' on' : ''}`}
+          onClick={() => void setAvatar(null)}
+          aria-label="Use your initials"
+        >
+          <Avatar name={user?.name} size={62} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function BoardArt() {
   return (
@@ -62,6 +90,7 @@ function LockArt() {
 }
 
 const SLIDES = [
+  { tag: 'Welcome', h: 'Pick your avatar', p: 'Choose a character so your group knows who’s who — or keep your initials. You can change it anytime from your account menu.', v: 'v0', Art: AvatarPickArt },
   { tag: 'Step 1 of 5', h: 'One board for the whole group', p: 'Everyone’s ideas land in one place — no more links lost in the group chat.', v: 'v1', Art: BoardArt },
   { tag: 'Step 2 of 5', h: 'Browse & add any rental', p: 'Paste an Airbnb, VRBO, or Booking link — or let GroupPad pull fresh homes for your dates.', v: 'v2', Art: AddArt },
   { tag: 'Step 3 of 5', h: 'Vote in the open', p: 'Shared thumbs, not secret hearts. Liked homes rise into the group’s shortlist on their own.', v: 'v3', Art: VoteArt },

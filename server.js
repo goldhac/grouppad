@@ -2730,6 +2730,7 @@ app.get('/api/trips/:tripId/members', requireTripOwner, (req, res) => {
       id,
       name: u.name || (u.email ? u.email.split('@')[0] : 'Member'),
       email: u.email || '',
+      avatar: u.avatar || null,
       role: id === trip.owner_id ? 'organizer' : 'member',
       isYou: id === req.user.id,
     };
