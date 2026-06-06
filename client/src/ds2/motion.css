@@ -1,0 +1,60 @@
+/* ============================================================================
+   Motion polish — micro-interactions on the brand motion system.
+   Loaded LAST so it reliably wins the cascade. Everything is gated behind
+   prefers-reduced-motion so it stays still for anyone who opts out.
+   Premium base: small, fast, decelerate. Gold/lock keeps its --ease-settle beat.
+   ============================================================================ */
+@media (prefers-reduced-motion: no-preference) {
+  /* ── Press feedback (squash on active) ──────────────────────────────── */
+  .btn:active:not(:disabled) { transform: scale(0.96); }
+
+  .votebar .vote {
+    transition: background var(--dur-fast) var(--ease-standard),
+                color var(--dur-fast) var(--ease-standard),
+                transform 120ms var(--ease-settle);
+  }
+  .votebar .vote:active { transform: scale(0.84); }
+
+  .chip-filter { transition: all var(--dur-fast) var(--ease-standard); }
+  .chip-filter:active { transform: scale(0.975); }
+
+  .card .star-btn { transition: transform var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-standard); }
+  .card .star-btn:active { transform: scale(0.82); }
+  /* a freshly-set top choice gives the star a little pop */
+  .card .star-btn.on { animation: gp-star-pop var(--dur-base) var(--ease-settle); }
+
+  .cbx .box { transition: transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-standard); }
+  .cbx:active .box { transform: scale(0.88); }
+
+  .pill-dist, .dx-distrow, .seeall { transition: all var(--dur-fast) var(--ease-out); }
+
+  /* ── Staggered reveal for grids/rows (micro-cascade) ────────────────── */
+  .b-grid > .card, .sl-grid > .card, .trips-grid > * { animation: gp-rise var(--dur-slow) var(--ease-out) both; }
+  .b-grid > .card:nth-child(1), .sl-grid > .card:nth-child(1), .trips-grid > *:nth-child(1) { animation-delay: 0ms; }
+  .b-grid > .card:nth-child(2), .sl-grid > .card:nth-child(2), .trips-grid > *:nth-child(2) { animation-delay: 35ms; }
+  .b-grid > .card:nth-child(3), .sl-grid > .card:nth-child(3), .trips-grid > *:nth-child(3) { animation-delay: 70ms; }
+  .b-grid > .card:nth-child(4), .sl-grid > .card:nth-child(4), .trips-grid > *:nth-child(4) { animation-delay: 105ms; }
+  .b-grid > .card:nth-child(5), .sl-grid > .card:nth-child(5) { animation-delay: 140ms; }
+  .b-grid > .card:nth-child(6), .sl-grid > .card:nth-child(6) { animation-delay: 175ms; }
+  /* later cards just appear — keep the total cascade under ~200ms */
+  .b-grid > .card:nth-child(n+7) { animation-delay: 200ms; }
+}
+
+@keyframes gp-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes gp-star-pop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+/* the "rose into the shortlist" beat — fired when a home crosses net +1 */
+@keyframes gp-rise-in {
+  0%   { box-shadow: 0 0 0 0 var(--up-bg); transform: translateY(6px) scale(0.99); }
+  35%  { box-shadow: 0 0 0 4px var(--up-bg); transform: none; }
+  100% { box-shadow: var(--shadow-sm); transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card.rose { animation: gp-rise-in 1s var(--ease-settle) both; }
+}

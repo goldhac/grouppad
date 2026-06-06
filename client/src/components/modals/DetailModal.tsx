@@ -11,7 +11,14 @@ import { Icon } from '@/components/ui/Icon';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { cn } from '@/lib/cn';
 import { fmt, fmtMins, tallyVotes } from '@/lib/utils';
+import { useCountUp } from '@/lib/useCountUp';
 import type { ListingTour } from '@/types';
+
+/** The signature per-person figure — counts up when the modal opens. */
+function PpAmt({ pp }: { pp: number | null }) {
+  const v = useCountUp(pp);
+  return <>{pp != null ? fmt(v) : '—'}</>;
+}
 
 const BUDGET_LABEL: Record<string, string> = { under: 'under budget', marginal: 'marginal', over: 'over budget', unknown: 'price TBD' };
 
@@ -239,7 +246,7 @@ export function DetailModal() {
                         </div>
                         <div className={cn('pp-hero', ppOver && 'over')} style={{ marginTop: 12 }}>
                           <div className="pp-top"><span className="pp-lab">Per person</span><span className="pp-split">split <b className="tnum">{split}</b> ways</span></div>
-                          <div className="pp-amt">{pp != null ? fmt(pp) : '—'} <small>/ person</small></div>
+                          <div className="pp-amt"><PpAmt pp={pp} /> <small>/ person</small></div>
                           <div className="pp-slider">
                             <span className="lab"><Icon icon={Users} className="ico" /> {groupSize} going</span>
                             <input type="range" min={2} max={30} value={split} onChange={(e) => setSplit(Number(e.target.value))} aria-label="Split between this many people" />
