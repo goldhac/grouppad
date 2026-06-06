@@ -3,6 +3,7 @@ import { MapPin, Swords, X } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
+import { ScoutThinking } from '@/components/ui/ScoutThinking';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { Markdown } from '@/components/Markdown';
 import { fmt } from '@/lib/utils';
@@ -55,7 +56,7 @@ export function ComparisonModal({ compare }: { compare: CompareController }) {
               )}
 
               {compare.running ? (
-                <div className="cm-verdict"><div className="vh"><ScoutMark className="ico" /> {AI_NAME} is thinking</div>Weighing price, distance, and your caveats…</div>
+                <div className="cm-verdict"><div className="vh"><ScoutThinking size="sm" /> {AI_NAME} is thinking</div>Weighing price, distance, and your caveats…</div>
               ) : compare.result ? (
                 <div className="cm-verdict">
                   <div className="vh"><ScoutMark className="ico" /> {AI_NAME}’s verdict</div>

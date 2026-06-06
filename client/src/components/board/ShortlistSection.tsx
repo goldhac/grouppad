@@ -3,6 +3,7 @@ import { Swords, Heart, Lightbulb, AlertCircle } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
+import { ScoutThinking } from '@/components/ui/ScoutThinking';
 import { Card } from '@/components/Card';
 import { Markdown } from '@/components/Markdown';
 import { netVotes, mansionScore, fmt } from '@/lib/utils';
@@ -95,7 +96,7 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
 
             <div className="flex flex-wrap gap-2">
               <button className="btn btn-primary btn-sm" disabled={compare.running} onClick={() => void compare.runWhole(shortlist)}>
-                <ScoutMark className="ico" /> {compare.running ? 'Thinking…' : `Ask ${AI_NAME} (${shortlist.length})`}
+                {compare.running ? <ScoutThinking size="sm" /> : <ScoutMark className="ico" />} {compare.running ? 'Thinking…' : `Ask ${AI_NAME} (${shortlist.length})`}
               </button>
               <button className="btn btn-ghost btn-sm" disabled={selCount !== 2 || compare.running} onClick={() => void compare.runSelected('1v1')}>
                 <Icon icon={Swords} className="ico" /> 1v1

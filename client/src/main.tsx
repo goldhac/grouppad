@@ -13,6 +13,7 @@ import './ds2/detail.css';
 import './ds2/manage.css';
 import './ds2/auth.css';
 import './ds2/util.css';
+import './ds2/signature.css';
 import './ds2/motion.css';
 import { App } from './App';
 import { AppProvider } from './store/AppContext';

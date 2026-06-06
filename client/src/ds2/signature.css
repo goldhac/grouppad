@@ -1,0 +1,88 @@
+/* ============================================================================
+   Signature motion — the brand's hero animations, hand-built in SVG/CSS so they
+   follow the ds2 theme tokens (teal accent + cream/charcoal flip) and respect
+   reduced-motion. These replace the Lottie set: same four beats, theme-aware,
+   zero player dependency.
+     1. LockSeal        — the gold "make it official" stamp (one-shot)
+     2. ScoutThinking   — the AI working loop (compass orbit)
+     3. EmptyBoardArt   — the empty All-homes illustration (ambient float)
+     4. Hero accent     — ambient gold-dot motif (in landing.css)
+   Static shapes always render; only the motion is gated.
+   ============================================================================ */
+
+/* ── 1. Lock seal ───────────────────────────────────────────────────────────
+   Premium success pop on the gold/lock beat (--dur-lock 440ms, --ease-settle).
+   Three layers: glow (ambient) → disc (primary) → check + dot + sparks (secondary). */
+.lockseal { display: inline-grid; place-items: center; position: relative; }
+.lockseal svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+.lockseal .ls-glow   { transform-origin: center; opacity: 0; }
+.lockseal .ls-disc   { transform-origin: center; transform: scale(1); }
+.lockseal .ls-ring   { transform-origin: center; }
+.lockseal .ls-check  { stroke-dasharray: 26; stroke-dashoffset: 0; }
+.lockseal .ls-dot    { transform-origin: center; }
+.lockseal .ls-spark  { transform-origin: center; opacity: 0.0; }
+
+/* idle (no-play / reduced motion): everything settled & visible */
+.lockseal .ls-check { stroke-dashoffset: 0; }
+.lockseal .ls-dot   { opacity: 1; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* before the play class lands, hold the pieces hidden so the stamp reads */
+  .lockseal.arm .ls-disc  { transform: scale(0.6); opacity: 0; }
+  .lockseal.arm .ls-check { stroke-dashoffset: 26; }
+  .lockseal.arm .ls-dot   { opacity: 0; }
+
+  .lockseal.play .ls-glow  { animation: ls-glow 720ms var(--ease-out) both; }
+  .lockseal.play .ls-disc  { animation: ls-disc var(--dur-lock, 440ms) var(--ease-settle) both; }
+  .lockseal.play .ls-ring  { animation: ls-ring 760ms var(--ease-out) both; }
+  .lockseal.play .ls-check { animation: ls-check 360ms var(--ease-out) 220ms both; }
+  .lockseal.play .ls-dot   { animation: ls-dot 520ms var(--ease-settle) 300ms both; }
+  .lockseal.play .ls-spark { animation: ls-spark 620ms var(--ease-out) 320ms both; }
+  .lockseal.play .ls-spark:nth-of-type(2) { animation-delay: 360ms; }
+  .lockseal.play .ls-spark:nth-of-type(3) { animation-delay: 400ms; }
+  .lockseal.play .ls-spark:nth-of-type(4) { animation-delay: 340ms; }
+  .lockseal.play .ls-spark:nth-of-type(5) { animation-delay: 420ms; }
+  .lockseal.play .ls-spark:nth-of-type(6) { animation-delay: 380ms; }
+}
+@keyframes ls-glow  { 0% { opacity: 0; transform: scale(0.7); } 40% { opacity: 0.55; } 100% { opacity: 0; transform: scale(1.45); } }
+@keyframes ls-disc  { 0% { transform: scale(0.6); opacity: 0; } 55% { opacity: 1; } 70% { transform: scale(1.06); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes ls-ring  { 0% { transform: scale(0.6); opacity: 0; } 50% { opacity: 1; } 100% { transform: scale(1.18); opacity: 0; } }
+@keyframes ls-check { to { stroke-dashoffset: 0; } }
+@keyframes ls-dot   { 0% { transform: translateY(-9px) scale(0.2); opacity: 0; } 55% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+@keyframes ls-spark { 0% { opacity: 0; transform: scale(0.2) translateY(0); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: scale(1) translateY(-6px); } }
+
+/* ── 2. Scout thinking — AI working loop ────────────────────────────────────
+   Calm continuous orbit (~1.6s, seamless). Compass star breathes; a gold dot
+   circles it. Used wherever Scout is "running". */
+.scout-think { display: inline-grid; place-items: center; position: relative; color: var(--accent-text); }
+.scout-think svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.scout-think .st-star  { transform-origin: center; }
+.scout-think .st-orbit { transform-origin: center; }
+.scout-think .st-trail { opacity: 0.35; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .scout-think .st-star  { animation: st-breathe 1.6s ease-in-out infinite; }
+  .scout-think .st-orbit { animation: st-spin 1.6s linear infinite; }
+}
+@keyframes st-breathe { 0%, 100% { transform: scale(0.9); opacity: 0.85; } 50% { transform: scale(1.08); opacity: 1; } }
+@keyframes st-spin    { to { transform: rotate(360deg); } }
+
+/* inline label variant — used inside buttons / panel heads */
+.scout-think.sz-sm { width: 18px; height: 18px; }
+.scout-think.sz-md { width: 32px; height: 32px; }
+.scout-think.sz-lg { width: 56px; height: 56px; }
+
+/* ── 3. Empty-board illustration ────────────────────────────────────────────
+   Ambient: a soft board frame with two cards gently floating (staggered sine)
+   and a dashed "+" slot beckoning the first add. Theme-aware. */
+.empty-art { width: 168px; height: 120px; display: block; margin: 0 auto; overflow: visible; }
+.empty-art .ea-card { transform-origin: center; }
+.empty-art .ea-plus { transform-origin: center; }
+@media (prefers-reduced-motion: no-preference) {
+  .empty-art .ea-card-1 { animation: ea-float 3.2s ease-in-out infinite; }
+  .empty-art .ea-card-2 { animation: ea-float 3.2s ease-in-out 0.5s infinite; }
+  .empty-art .ea-plus   { animation: ea-pulse 2.4s ease-in-out infinite; }
+}
+@keyframes ea-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes ea-pulse { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.08); opacity: 1; } }

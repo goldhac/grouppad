@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link2, ArrowUp, ThumbsUp, ThumbsDown, Users, BadgeCheck, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Link2, ArrowUp, ThumbsUp, ThumbsDown, Users, ArrowLeft, ArrowRight } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { LockSeal } from '@/components/ui/LockSeal';
 import { useFocusTrap } from '@/lib/useFocusTrap';
 
 function BoardArt() {
@@ -54,7 +55,7 @@ function PpArt() {
 function LockArt() {
   return (
     <div className="obv obv-lock">
-      <div className="seal"><Icon icon={BadgeCheck} className="ico" /><span className="gd" /></div>
+      <LockSeal size={76} play />
       <span className="chip"><span className="gdot" /> Official pick · locked</span>
     </div>
   );

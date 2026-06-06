@@ -1,12 +1,28 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Trophy, Unlock, ExternalLink, Lock, Star, Users } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { LockSeal } from '@/components/ui/LockSeal';
 import { fmt, formatDate } from '@/lib/utils';
 
 export function DecisionSection() {
   const { final, isOwner, findListing, openDetail, setDecision, split, trip } = useApp();
   const decision = final.decision;
+
+  // Fire the seal stamp once, the moment a decision is freshly locked (not on
+  // every render of an already-locked board, and not for an unlock).
+  const [sealPlay, setSealPlay] = useState(false);
+  const prevId = useRef<string | null>(decision?.listing_id ?? null);
+  useEffect(() => {
+    const id = decision?.listing_id ?? null;
+    if (id && id !== prevId.current) {
+      setSealPlay(true);
+      const t = setTimeout(() => setSealPlay(false), 1400);
+      prevId.current = id;
+      return () => clearTimeout(t);
+    }
+    prevId.current = id;
+  }, [decision?.listing_id]);
 
   const entries = useMemo(
     () => Object.entries(final.counts || {}).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 6),
@@ -25,7 +41,7 @@ export function DecisionSection() {
       <div className="flex flex-col gap-5">
         {decision && lockedListing && (
           <div className="official-banner">
-            <div className="seal" aria-hidden><Icon icon={Lock} className="ico" /></div>
+            <LockSeal size={56} play={sealPlay} className="ob-seal" />
             <div className="ob-body">
               <span className="ob-kicker"><span className="gold-dot" /> Official pick · locked {formatDate(decision.locked_at)}</span>
               <div className="ob-title">{lockedListing.name}</div>

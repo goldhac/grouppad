@@ -4,6 +4,7 @@ import { UserPlus, LayoutGrid, Heart, Trophy, MessagesSquare, Plus, SlidersHoriz
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { Card } from '@/components/Card';
+import { EmptyBoardArt } from '@/components/ui/EmptyBoardArt';
 import { Icon } from '@/components/ui/Icon';
 import { BoardHeader } from '@/components/chrome/BoardHeader';
 import { DecisionStrip } from '@/components/board/DecisionStrip';
@@ -212,11 +213,14 @@ export function BoardView() {
                 <span className="sub">curated · filtered</span>
               </div>
               {mainGrid.length === 0 ? (
-                <p className="py-8 text-center text-text-muted">
-                  {listings.length === 0
-                    ? 'No homes yet — paste a rental link above to add the homes your group is considering.'
-                    : 'No homes match these filters.'}
-                </p>
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  {listings.length === 0 && <EmptyBoardArt />}
+                  <p className="text-text-muted">
+                    {listings.length === 0
+                      ? 'No homes yet — paste a rental link above to add the homes your group is considering.'
+                      : 'No homes match these filters.'}
+                  </p>
+                </div>
               ) : (
                 <div className="b-grid">
                   {mainGrid.map((l) => <Card key={l.id} listing={l} />)}
