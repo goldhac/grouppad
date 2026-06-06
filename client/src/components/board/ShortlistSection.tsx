@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Swords, Heart, Lightbulb, AlertCircle } from 'lucide-react';
+import { Swords, Heart, Lightbulb, AlertCircle, ChevronDown } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
@@ -25,7 +25,6 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
     return [...insights.ids].sort().join(',') !== [...shortlistIds].sort().join(',');
   }, [insights, shortlistIds]);
 
-  // Illustrative weighing criteria (what the AI considers).
   const ppBudget = trip?.budget && trip.adults ? Math.round(trip.budget / trip.adults) : null;
   const crit = [
     ppBudget ? `Under ${fmt(ppBudget)} / person` : 'Under budget',
@@ -40,7 +39,7 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
         <Icon icon={Heart} className="ico" />
         <h3 className="font-display text-lg font-semibold">No finalists yet</h3>
         <p className="max-w-sm text-sm text-text-muted">
-          Homes rise here automatically when they reach <b>net +1</b> likes. Like the ones your group is into on the All homes tab.
+          Homes rise here automatically when they reach <b>net +1</b> likes. Like the ones your group is into on the Recommended tab.
         </p>
       </section>
     );
@@ -55,76 +54,64 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
         <span className="sub">liked by the group · ranked by net likes</span>
       </div>
 
-      <div className="shortlist-wrap">
-        {/* ── Sticky AI compare panel ─────────────────────────────────────── */}
-        <div className="ai-panel">
-          <div className="ai-head">
-            <div className="spark"><ScoutMark className="ico" /></div>
-            <div>
-              <div className="at">{AI_NAME}</div>
-              <div className="as">Your group’s AI — ranks the shortlist against your caveats</div>
-            </div>
+      {/* ── Scout banner ──────────────────────────────────────────────────── */}
+      <div className="scout-banner">
+        <div className="sb-head">
+          <div className="sb-mark"><ScoutMark className="ico" /></div>
+          <div className="min-w-0">
+            <div className="sb-t">Ask {AI_NAME} to rank your {shortlist.length} finalists</div>
+            <div className="sb-s">Weighs budget, distance, and your group’s approved criteria — then explains the call.</div>
           </div>
-          <div className="ai-body">
-            <div className="crit">
-              {crit.map((c) => <span key={c} className="c">{c}</span>)}
-            </div>
-
-            <input
-              type="text"
-              value={compare.criteria}
-              onChange={(e) => compare.setCriteria(e.target.value)}
-              placeholder="Add anything else to weigh…"
-              className="field"
-              style={{ fontSize: 13 }}
-            />
-
-            {insights?.analysis ? (
-              <div className="insights">
-                <div className="ih"><Icon icon={Lightbulb} className="ico" /> Group insight</div>
-                <Markdown text={insights.analysis} />
-                {stale && (
-                  <div className="stale"><Icon icon={AlertCircle} className="ico" /> {shortlist.length} homes shortlisted — re-analyze to refresh.</div>
-                )}
-              </div>
-            ) : (
-              <div className="insights">
-                <div className="ih"><Icon icon={Lightbulb} className="ico" /> Group insight</div>
-                <p>Ask {AI_NAME} and it weighs every finalist against your budget, distances, and caveats — then explains the call.</p>
-              </div>
-            )}
-
-            <div className="flex flex-wrap gap-2">
-              <button className="btn btn-primary btn-sm" disabled={compare.running} onClick={() => void compare.runWhole(shortlist)}>
-                {compare.running ? <ScoutThinking size="sm" /> : <ScoutMark className="ico" />} {compare.running ? 'Thinking…' : `Ask ${AI_NAME} (${shortlist.length})`}
-              </button>
-              <button className="btn btn-ghost btn-sm" disabled={selCount !== 2 || compare.running} onClick={() => void compare.runSelected('1v1')}>
+          <div className="sb-cta">
+            <button className="btn btn-primary btn-sm" disabled={compare.running} onClick={() => void compare.runWhole(shortlist)}>
+              {compare.running ? <ScoutThinking size="sm" /> : <ScoutMark className="ico" />} {compare.running ? 'Thinking…' : `Ask ${AI_NAME}`}
+            </button>
+            {selCount === 2 && (
+              <button className="btn btn-ghost btn-sm" disabled={compare.running} onClick={() => void compare.runSelected('1v1')}>
                 <Icon icon={Swords} className="ico" /> 1v1
               </button>
-              {selCount > 0 && (
-                <button className="btn btn-ghost btn-sm" onClick={clearSelection}>Clear ({selCount})</button>
-              )}
-            </div>
-            {selCount >= 2 && (
-              <button className="btn btn-ghost btn-sm" disabled={compare.running} onClick={() => void compare.runSelected('multi')}>
-                Compare {selCount} selected
-              </button>
             )}
-            {compare.error && !compare.comparedListings && <p className="text-sm text-danger">{compare.error}</p>}
+            {selCount > 2 && (
+              <button className="btn btn-ghost btn-sm" disabled={compare.running} onClick={() => void compare.runSelected('multi')}>Compare {selCount}</button>
+            )}
+            {selCount > 0 && <button className="btn btn-ghost btn-sm" onClick={clearSelection}>Clear ({selCount})</button>}
           </div>
         </div>
-
-        {/* ── Finalist grid ───────────────────────────────────────────────── */}
-        <div className="sl-grid">
-          {shortlist.map((l) => (
-            <Card
-              key={l.id}
-              listing={l}
-              isSubmitted={!!l.submitted_by}
-              isPipeline={l.last_seen != null && l.rank == null && !l.submitted_by}
-            />
-          ))}
+        <div className="sb-foot">
+          <div className="sb-crit">{crit.map((c) => <span key={c} className="c">{c}</span>)}</div>
+          <input
+            type="text"
+            value={compare.criteria}
+            onChange={(e) => compare.setCriteria(e.target.value)}
+            placeholder="Add anything else to weigh…"
+            className="field"
+          />
         </div>
+        {compare.error && !compare.comparedListings && <p className="text-sm text-danger">{compare.error}</p>}
+      </div>
+
+      {/* ── Scout's full analysis (expandable) ────────────────────────────── */}
+      {insights?.analysis && (
+        <details className="scout-analysis">
+          <summary>
+            <Icon icon={Lightbulb} className="ico" /> {AI_NAME}’s full analysis — top picks, comparison table & red flags
+            {stale && <span className="sa-stale"><Icon icon={AlertCircle} className="ico" /> re-analyze to refresh</span>}
+            <Icon icon={ChevronDown} className="ico sa-chev" />
+          </summary>
+          <div className="sa-body"><Markdown text={insights.analysis} /></div>
+        </details>
+      )}
+
+      {/* ── Finalist grid (full width) ────────────────────────────────────── */}
+      <div className="b-grid">
+        {shortlist.map((l) => (
+          <Card
+            key={l.id}
+            listing={l}
+            isSubmitted={!!l.submitted_by}
+            isPipeline={l.last_seen != null && l.rank == null && !l.submitted_by}
+          />
+        ))}
       </div>
     </section>
   );
