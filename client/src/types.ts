@@ -9,6 +9,8 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  /** Chosen avatar id (see AVATARS), or null/undefined → initials circle. */
+  avatar?: string | null;
   /** Platform super-admin (by email) — gets the admin dashboard without a key. */
   isSuperAdmin?: boolean;
 }

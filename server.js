@@ -1640,7 +1640,7 @@ async function scrapeListingDetails(cleanUrl, parsed) {
 // ── Auth: passwordless magic-link ───────────────────────────────────────────────
 // Who am I? (null when signed out) — the client bootstraps from this.
 app.get('/api/auth/me', (req, res) => {
-  res.json({ user: req.user ? { id: req.user.id, email: req.user.email, name: req.user.name, isSuperAdmin: isSuperAdmin(req.user) } : null });
+  res.json({ user: req.user ? { id: req.user.id, email: req.user.email, name: req.user.name, avatar: req.user.avatar || null, isSuperAdmin: isSuperAdmin(req.user) } : null });
 });
 
 // Request a sign-in link. Always responds ok (never reveals whether the email
@@ -1679,11 +1679,19 @@ app.get('/api/auth/verify', (req, res) => {
 
 // Update display name.
 app.patch('/api/auth/me', requireAuth, (req, res) => {
-  const name = String((req.body && req.body.name) || '').trim().slice(0, 40);
-  if (!name) return res.status(400).json({ error: 'Name cannot be empty.' });
   const users = loadUsers();
-  if (users[req.user.id]) { users[req.user.id].name = name; saveUsers(users); }
-  res.json({ user: { id: req.user.id, email: req.user.email, name, isSuperAdmin: isSuperAdmin(req.user) } });
+  const u = users[req.user.id];
+  if (!u) return res.status(404).json({ error: 'Account not found.' });
+  if (req.body && typeof req.body.name === 'string') {
+    const name = req.body.name.trim().slice(0, 40);
+    if (!name) return res.status(400).json({ error: 'Name cannot be empty.' });
+    u.name = name;
+  }
+  if (req.body && 'avatar' in req.body) {
+    u.avatar = req.body.avatar == null ? null : String(req.body.avatar).slice(0, 32);
+  }
+  saveUsers(users);
+  res.json({ user: { id: u.id, email: u.email, name: u.name, avatar: u.avatar || null, isSuperAdmin: isSuperAdmin(req.user) } });
 });
 
 app.post('/api/auth/logout', (req, res) => {

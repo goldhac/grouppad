@@ -87,6 +87,8 @@ export const api = {
   logout: () => request<{ ok: true }>('/api/auth/logout', { method: 'POST' }),
   rename: (name: string) =>
     request<{ user: User }>('/api/auth/me', { method: 'PATCH', body: { name } }),
+  setAvatar: (avatar: string | null) =>
+    request<{ user: User }>('/api/auth/me', { method: 'PATCH', body: { avatar } }),
   googleSignInUrl: '/api/auth/google',
 
   // ── Trips (global) ─────────────────────────────────────────────────────────

@@ -89,6 +89,7 @@ interface AppActions {
   // auth
   signOut: () => Promise<void>;
   rename: (name: string) => Promise<void>;
+  setAvatar: (avatar: string | null) => Promise<void>;
   requireSignIn: (action?: string) => boolean;
   openAuth: (reason?: string) => void;
   closeAuth: () => void;
@@ -374,6 +375,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [toast],
   );
 
+  const setAvatar = useCallback(
+    async (avatar: string | null) => {
+      try { const res = await api.setAvatar(avatar); setUser(res.user); }
+      catch (e) { toast(e instanceof Error ? e.message : 'Could not update avatar.', 'error'); }
+    },
+    [toast],
+  );
+
   // ── Trips ────────────────────────────────────────────────────────────────────
   const createTrip = useCallback(async (input: CreateTripInput) => {
     const created = await api.createTrip(input);
@@ -631,7 +640,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       favoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
-      signOut, rename, requireSignIn, openAuth, closeAuth,
+      signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
@@ -643,7 +652,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       favoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
-      signOut, rename, requireSignIn, openAuth, closeAuth,
+      signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,

@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { ChevronDown, Plus, LogOut, LayoutGrid, Check, Bell, Sun, Moon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
+import { Avatar, AVATARS } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { PeakLogo } from '@/components/ui/PeakLogo';
 import { useTheme } from '@/lib/useTheme';
@@ -147,7 +148,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   );
 
 export function Navbar() {
-  const { user, myTrips, trip, isOwner, signOut, openAuth } = useApp();
+  const { user, myTrips, trip, isOwner, signOut, openAuth, setAvatar } = useApp();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -220,9 +221,32 @@ export function Navbar() {
                   <Plus className="h-4 w-4" /> New trip
                 </Button>
               )}
-              <Menu label={<span className="max-w-[120px] truncate">{user.name}</span>}>
+              <Menu label={<span className="flex items-center gap-2 max-w-[150px]"><Avatar name={user.name} avatar={user.avatar} size={24} /><span className="truncate">{user.name}</span></span>}>
                 {(close) => (
                   <>
+                    <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Your avatar</div>
+                    <div className="flex flex-wrap gap-1.5 px-3 pb-2">
+                      {AVATARS.map((a) => (
+                        <button
+                          key={a}
+                          onClick={() => void setAvatar(a)}
+                          className={`rounded-full ${user.avatar === a ? 'ring-2 ring-accent ring-offset-1 ring-offset-panel' : 'opacity-80 hover:opacity-100'}`}
+                          aria-label={`Use ${a} avatar`}
+                          title={a}
+                        >
+                          <Avatar avatar={a} size={32} />
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => void setAvatar(null)}
+                        className={`rounded-full ${!user.avatar ? 'ring-2 ring-accent ring-offset-1 ring-offset-panel' : 'opacity-80 hover:opacity-100'}`}
+                        aria-label="Use your initials"
+                        title="Initials"
+                      >
+                        <Avatar name={user.name} size={32} />
+                      </button>
+                    </div>
+                    <div className="my-1 h-px bg-border" />
                     <MenuItem onClick={() => { close(); navigate('/trips'); }}>
                       <LayoutGrid className="h-4 w-4" /> Your trips
                     </MenuItem>
