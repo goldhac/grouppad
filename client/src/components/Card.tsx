@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, MapPin, Plane, FerrisWheel, Lock, Users, Check, X, Sparkles, Clapperboard, Quote } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, Lock, Users, Check, X, Sparkles, Clapperboard, Quote } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Carousel } from '@/components/Carousel';
 import { Icon } from '@/components/ui/Icon';
 import { cn } from '@/lib/cn';
-import { fmt, fmtMins, tallyVotes } from '@/lib/utils';
+import { fmt, tallyVotes } from '@/lib/utils';
 import type { Listing } from '@/types';
 
 interface CardProps {
@@ -19,11 +19,6 @@ const INTERACTIVE = 'a, button, input, label, [role="checkbox"]';
 const BUDGET_LABEL: Record<string, string> = {
   under: 'under budget', marginal: 'marginal', over: 'over budget', unknown: 'price TBD',
 };
-
-function DistIcon({ kind }: { kind?: string }) {
-  const I = kind === 'airport' ? Plane : kind === 'attraction' ? FerrisWheel : MapPin;
-  return <Icon icon={I} className="ico" />;
-}
 
 function initials(name?: string | null) {
   if (!name) return '?';
@@ -67,9 +62,6 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
   const budget = trip?.budget ?? 7000;
   const pp = l.est_5n ? Math.ceil(l.est_5n / split) : null;
   const ppOver = l.est_5n != null && l.est_5n > budget;
-  // budget pulse — this home's all-in against the group budget (Watermelon-style)
-  const bpPct = l.est_5n != null ? Math.min(100, Math.round((l.est_5n / budget) * 100)) : 0;
-  const bpTone = l.budget ?? (l.est_5n == null ? 'unknown' : l.est_5n <= budget ? 'under' : 'over');
   const isFav = (l.amenities ?? []).some((a) => /guest favorite|superhost/i.test(a)) || l.superhost;
 
   const onCardClick = (e: React.MouseEvent) => {
@@ -183,47 +175,18 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
 
         <h3 className="title">{l.name}</h3>
 
+        {/* one tight meta line — source · area · key specs · rating
+            (distances, full reviews, amenities all live in the detail view) */}
         <div className="meta">
           <span className="tag-source">{l.source}</span>
           {l.area && <span>{l.area}</span>}
-        </div>
-
-        <div className="specs">
-          {l.bd != null && <span>{l.bd} bd</span>}
-          {l.bd != null && l.ba != null && <span className="dot-sep">·</span>}
-          {l.ba != null && <span>{l.ba} ba</span>}
-          {l.sleeps != null && <span className="dot-sep">·</span>}
-          {l.sleeps != null && <span>sleeps {l.sleeps}</span>}
-        </div>
-
-        {l.distances?.length ? (
-          <div className="dist-row">
-            {l.distances.map((d, i) => (
-              <span key={i} className="pill-dist" title={d.label}>
-                <DistIcon kind={d.kind} />
-                <span className="mi tnum">{d.mi} mi</span>
-                <span className="sep">·</span>
-                <span className="tnum">{fmtMins(d.min)}</span>
-              </span>
-            ))}
-          </div>
-        ) : l.distance_mi != null ? (
-          <div className="dist-row">
-            <span className="pill-dist"><Icon icon={MapPin} className="ico" /> <span className="mi tnum">{l.distance_mi} mi</span> <span className="sep">·</span> downtown</span>
-          </div>
-        ) : null}
-
-        <div className="reviews">
-          {l.rating != null ? (
-            <><Icon icon={Star} className="ico" /> {l.rating} <span style={{ color: 'var(--text-muted)' }}>· {l.reviews ?? 0} review{l.reviews === 1 ? '' : 's'}{l.superhost ? ' · Superhost' : ''}</span></>
-          ) : l.reviews ? (
-            <span style={{ color: 'var(--text-muted)' }}>{l.reviews} reviews</span>
-          ) : (
-            <span style={{ color: 'var(--text-muted)' }}>no rating yet</span>
+          {(l.bd != null || l.sleeps != null) && (
+            <span>{[l.bd != null ? `${l.bd} bd` : null, l.sleeps != null ? `sleeps ${l.sleeps}` : null].filter(Boolean).join(' · ')}</span>
           )}
+          {l.rating != null && <span className="rate"><Icon icon={Star} className="ico" /> {l.rating}</span>}
         </div>
 
-        {/* money zone — the cost story grouped into one scannable block */}
+        {/* money zone — all-in + per-person */}
         <div className="card-money">
           <div className="cm-top">
             <div className="price">
@@ -232,17 +195,6 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
             </div>
             {perperson}
           </div>
-          {l.est_5n != null && (
-            <div className="card-budget">
-              <div className={cn('bp-track', `tone-${bpTone}`)}>
-                <div className="bp-fill" style={{ width: `${bpPct}%` }} />
-              </div>
-              <div className="cb-meta">
-                <span className="tnum">{bpPct}% of budget</span>
-                <span className="tnum">{fmt(budget)}</span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* footer action bar */}
