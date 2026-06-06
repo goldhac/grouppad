@@ -21,7 +21,9 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
   const selCount = selected.size;
 
   const stale = useMemo(() => {
-    if (!insights?.ids) return false;
+    if (!insights) return false;
+    if (insights.stale) return true; // approved criteria changed since this ran
+    if (!insights.ids) return false;
     return [...insights.ids].sort().join(',') !== [...shortlistIds].sort().join(',');
   }, [insights, shortlistIds]);
 

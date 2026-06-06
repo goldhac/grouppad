@@ -123,6 +123,12 @@ function saveCaveats(c, tripId) { writeJsonAtomic(tripFile(tripId, 'caveats.json
 // Cached AI shortlist analysis, shared with everyone (one Gemini call per run).
 function loadInsights(tripId)    { return readJson(tripFile(tripId, 'insights.json'), null); }
 function saveInsights(i, tripId) { writeJsonAtomic(tripFile(tripId, 'insights.json'), i); }
+// The group's approved criteria changed → the cached Scout analysis no longer
+// reflects what Scout would weigh. Flag it stale so the board prompts a re-run.
+function markInsightsStale(tripId) {
+  const i = loadInsights(tripId);
+  if (i && !i.stale) { i.stale = true; saveInsights(i, tripId); }
+}
 
 // Final pick: each member's single top choice, plus the organizer-locked decision.
 function loadFinalVotes(tripId)    { return readJson(tripFile(tripId, 'finalvotes.json'), {}); }
@@ -2276,7 +2282,7 @@ const hPostCaveat = (req, res) => {
   list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), user_id: req.user.id, name, text, status, created_at: new Date().toISOString() });
   const trimmed = list.slice(-200); // keep the log bounded
   saveCaveats(trimmed, tripId);
-  if (status === 'approved') logEvent(tripId, 'caveat', `${name}: "${text.slice(0, 100)}"`);
+  if (status === 'approved') { logEvent(tripId, 'caveat', `${name}: "${text.slice(0, 100)}"`); markInsightsStale(tripId); }
   noteJoin(tripId, req.user);
   res.json(trimmed);
 };
@@ -2293,7 +2299,7 @@ const hApproveCaveat = (req, res) => {
     return { ...c, status: 'approved' };
   });
   saveCaveats(list, tripId);
-  if (approved) logEvent(tripId, 'caveat', `${approved.name}: "${String(approved.text).slice(0, 100)}"`);
+  if (approved) { logEvent(tripId, 'caveat', `${approved.name}: "${String(approved.text).slice(0, 100)}"`); markInsightsStale(tripId); }
   res.json(list);
 };
 app.post('/api/caveats/:id/approve', requireAdmin, hApproveCaveat);
@@ -2301,8 +2307,12 @@ app.post('/api/trips/:tripId/caveats/:id/approve', requireTripOwner, hApproveCav
 
 const hDeleteCaveat = (req, res) => {
   const tripId = req.params.tripId;
-  const updated = loadCaveats(tripId).filter(c => c.id !== req.params.id);
+  const before = loadCaveats(tripId);
+  const removed = before.find((c) => c.id === req.params.id);
+  const updated = before.filter(c => c.id !== req.params.id);
   saveCaveats(updated, tripId);
+  // Removing an *approved* criterion changes Scout's context → stale the cache.
+  if (removed && (removed.status ?? 'approved') === 'approved') markInsightsStale(tripId);
   res.json(updated);
 };
 app.delete('/api/caveats/:id', requireAdmin, hDeleteCaveat);

@@ -191,6 +191,8 @@ export interface Insights {
   analysis: string;
   count?: number;
   ids?: string[];
+  /** Set when the group's approved criteria changed after this was computed. */
+  stale?: boolean;
   created_at: string | null;
 }
 

@@ -536,7 +536,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (cid: string) => {
       const id = tripIdRef.current;
       if (!id) return;
-      try { setCaveats(await api.deleteCaveat(id, cid)); }
+      try { setCaveats(await api.deleteCaveat(id, cid)); setInsights((i) => (i ? { ...i, stale: true } : i)); }
       catch (e) { toast(e instanceof Error ? e.message : 'Could not delete.', 'error'); }
     },
     [toast],
@@ -546,8 +546,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (cid: string) => {
       const id = tripIdRef.current;
       if (!id) return;
-      try { setCaveats(await api.approveCaveat(id, cid)); toast('Criterion approved — Scout will weigh it.', 'success'); }
-      catch (e) { toast(e instanceof Error ? e.message : 'Could not approve.', 'error'); }
+      try {
+        setCaveats(await api.approveCaveat(id, cid));
+        setInsights((i) => (i ? { ...i, stale: true } : i)); // Scout's context changed
+        toast('Criterion approved — re-ask Scout to weigh it.', 'success');
+      } catch (e) { toast(e instanceof Error ? e.message : 'Could not approve.', 'error'); }
     },
     [toast],
   );
