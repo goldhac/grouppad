@@ -1,14 +1,21 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Bookmark } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
+import { ScoutThinking } from '@/components/ui/ScoutThinking';
 import { Card } from '@/components/Card';
+import { Markdown } from '@/components/Markdown';
+import { toInput } from '@/hooks/useCompare';
 
 /** Each member's own saved homes — a personal shortlist, separate from the
- *  group's net-voted Shortlist. Populated by the save (bookmark) button on a
- *  card and in the detail view. */
+ *  group's net-voted Shortlist. Includes a *private* "Ask Scout — for me" that
+ *  ranks only your saved homes through your own lens (not shared, no approval). */
 export function SavedSection() {
-  const { favoriteIds, listings, submitted, pipeline, user, openAuth } = useApp();
+  const { favoriteIds, listings, submitted, pipeline, user, openAuth, runCompare, toast } = useApp();
+  const [crit, setCrit] = useState('');
+  const [running, setRunning] = useState(false);
+  const [verdict, setVerdict] = useState<string | null>(null);
 
   const homes = useMemo(() => {
     const seen = new Set<string>();
@@ -18,6 +25,19 @@ export function SavedSection() {
     }
     return out;
   }, [favoriteIds, listings, submitted, pipeline]);
+
+  async function askForMe() {
+    if (homes.length < 2) { toast('Save at least 2 homes to compare them.', 'error'); return; }
+    setRunning(true);
+    setVerdict(null);
+    try {
+      setVerdict(await runCompare(homes.map(toInput), crit ? `My personal priorities: ${crit}` : ''));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Scout couldn’t compare right now.', 'error');
+    } finally {
+      setRunning(false);
+    }
+  }
 
   if (!user) {
     return (
@@ -30,24 +50,64 @@ export function SavedSection() {
   }
 
   return (
-    <section>
+    <section className="flex flex-col gap-4">
       <div className="row-head">
         <span className="ttl">Saved</span>
         <span className="cnt tnum">{homes.length}</span>
         <span className="sub">your personal shortlist · only you see this</span>
       </div>
+
       {homes.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-12 text-center">
           <Icon icon={Bookmark} className="ico" />
           <p className="text-text-muted">
             Nothing saved yet. Tap the <Icon icon={Bookmark} className="ico inline align-text-bottom" /> on any home to keep
-            it in your own shortlist — handy for tracking your favourites before the group locks one.
+            it here — your own shortlist for tracking favourites before the group locks one.
           </p>
         </div>
       ) : (
-        <div className="b-grid">
-          {homes.map((l) => <Card key={l.id} listing={l} />)}
-        </div>
+        <>
+          {/* Private personal-Scout banner */}
+          <div className="scout-banner">
+            <div className="sb-head">
+              <div className="sb-mark"><ScoutMark className="ico" /></div>
+              <div className="min-w-0">
+                <div className="sb-t">{AI_NAME} — just for you</div>
+                <div className="sb-s">Rank your {homes.length} saved {homes.length === 1 ? 'home' : 'homes'} by what <em>you</em> care about. Private — not shared with the group.</div>
+              </div>
+              <div className="sb-cta">
+                <button className="btn btn-primary btn-sm" disabled={running || homes.length < 2} onClick={() => void askForMe()}>
+                  {running ? <ScoutThinking size="sm" /> : <ScoutMark className="ico" />} {running ? 'Thinking…' : 'Ask Scout — for me'}
+                </button>
+              </div>
+            </div>
+            <div className="sb-foot">
+              <input
+                type="text"
+                value={crit}
+                onChange={(e) => setCrit(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void askForMe()}
+                placeholder="What matters most to you? e.g. quiet, near the beach, big kitchen…"
+                className="field"
+              />
+            </div>
+          </div>
+
+          {verdict && (
+            <div className="scout-analysis" style={{ paddingTop: 0 }}>
+              <div className="sa-body" style={{ borderTop: 0, paddingTop: 14 }}>
+                <div className="mb-1 inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent-text">
+                  <ScoutMark className="ico" /> {AI_NAME}’s pick for you
+                </div>
+                <Markdown text={verdict} />
+              </div>
+            </div>
+          )}
+
+          <div className="b-grid">
+            {homes.map((l) => <Card key={l.id} listing={l} />)}
+          </div>
+        </>
       )}
     </section>
   );

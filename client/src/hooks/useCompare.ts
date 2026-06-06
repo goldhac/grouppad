@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import type { CompareListingInput, Listing } from '@/types';
 
-function toInput(l: Listing): CompareListingInput {
+export function toInput(l: Listing): CompareListingInput {
   return {
     id: l.id,
     name: l.name,
