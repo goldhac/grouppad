@@ -51,6 +51,16 @@
 .card-budget .bp-track { height: 5px; }
 .cb-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.01em; }
 
+/* ── card structure refresh — grouped money zone + bordered footer ──────── */
+.card .card-money { background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 12px; display: flex; flex-direction: column; gap: 9px; }
+.card .card-money .cm-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.card .card-money .price { flex-direction: column; align-items: flex-start; gap: 1px; flex: 0 1 auto; }
+.card .card-money .price .amt { font-size: 21px; line-height: 1.05; }
+.card .card-money .price .cap { text-align: left; line-height: 1.2; }
+.card .card-money .perperson { align-self: center; flex: none; }
+.card .card-money .card-budget { margin-top: 0; }
+.card .card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+
 @media (max-width: 760px) {
   .boardstats { grid-template-columns: 1fr; gap: 15px; padding: 16px; }
   .bs-pulse { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 13px; }

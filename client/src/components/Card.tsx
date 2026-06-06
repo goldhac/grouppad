@@ -223,29 +223,30 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
           )}
         </div>
 
-        <div className="divider" />
-
-        <div className="price">
-          <span className="amt tnum">{fmt(l.est_5n)}</span>
-          <span className="cap">est all-in<br />5 nights</span>
+        {/* money zone — the cost story grouped into one scannable block */}
+        <div className="card-money">
+          <div className="cm-top">
+            <div className="price">
+              <span className="amt tnum">{fmt(l.est_5n)}</span>
+              <span className="cap">est all-in<br />5 nights</span>
+            </div>
+            {perperson}
+          </div>
+          {l.est_5n != null && (
+            <div className="card-budget">
+              <div className={cn('bp-track', `tone-${bpTone}`)}>
+                <div className="bp-fill" style={{ width: `${bpPct}%` }} />
+              </div>
+              <div className="cb-meta">
+                <span className="tnum">{bpPct}% of budget</span>
+                <span className="tnum">{fmt(budget)}</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        {perperson}
-
-        {l.est_5n != null && (
-          <div className="card-budget">
-            <div className={cn('bp-track', `tone-${bpTone}`)}>
-              <div className="bp-fill" style={{ width: `${bpPct}%` }} />
-              <span className="bp-budgetmark" />
-            </div>
-            <div className="cb-meta">
-              <span className="tnum">{bpPct}% of budget</span>
-              <span className="tnum">{fmt(budget)}</span>
-            </div>
-          </div>
-        )}
-
-        <div className="compare-line">
+        {/* footer action bar */}
+        <div className="card-foot">
           {votebar}
           <label className={cn('cbx', isSelected && 'on')} onClick={(e) => e.stopPropagation()}>
             <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(l.id)} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
