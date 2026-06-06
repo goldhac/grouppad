@@ -10,7 +10,7 @@ import { EmptyBoardArt } from '@/components/ui/EmptyBoardArt';
 import { Icon } from '@/components/ui/Icon';
 import { BoardHeader } from '@/components/chrome/BoardHeader';
 import { DecisionStrip } from '@/components/board/DecisionStrip';
-import { FilterBar, type Filters } from '@/components/board/FilterBar';
+import { type Filters } from '@/components/board/FilterBar';
 import { SearchPanel } from '@/components/board/SearchPanel';
 import { ItinerarySection } from '@/components/board/ItinerarySection';
 import { DecisionSection } from '@/components/board/DecisionSection';
@@ -26,8 +26,8 @@ type Tab = 'all' | 'shortlist' | 'decision' | 'discussion';
 
 /** Paste-a-URL add toolbar — collapsed to a button until you start adding,
  *  to keep the masthead light. */
-function AddToolbar({ onFindMore }: { onFindMore: () => void }) {
-  const { submitListing, requireSignIn, isOwner, toast } = useApp();
+function AddToolbar({ onOpenFilters, filterCount, shown, total }: { onOpenFilters: () => void; filterCount: number; shown: number; total: number }) {
+  const { submitListing, requireSignIn, toast } = useApp();
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
   const [openField, setOpenField] = useState(false);
@@ -71,9 +71,11 @@ function AddToolbar({ onFindMore }: { onFindMore: () => void }) {
         </button>
       )}
       <span className="spacer" />
-      {isOwner && (
-        <button className="btn btn-ghost btn-sm" onClick={onFindMore}>Find more</button>
-      )}
+      <button className="btn btn-ghost btn-sm filters-btn" onClick={onOpenFilters}>
+        <Icon icon={SlidersHorizontal} className="ico" /> Filters
+        {filterCount > 0 && <span className="fcount tnum">{filterCount}</span>}
+      </button>
+      <span className="b-count tnum">{shown} of {total}</span>
     </div>
   );
 }
@@ -116,6 +118,8 @@ export function BoardView() {
   }, [detailId]);
 
   const [filters, setFilters] = useState<Filters>({ under: false, pool: false, parking: false, manual: true });
+  // count of *active* filters (manual defaults on, so a bare board reads 0)
+  const activeFilterCount = (filters.under ? 1 : 0) + (filters.pool ? 1 : 0) + (filters.parking ? 1 : 0) + (filters.manual ? 0 : 1);
 
   const mainGrid = useMemo(
     () =>
@@ -170,8 +174,7 @@ export function BoardView() {
         )}
 
         <DecisionStrip onLeaderboard={() => setTab('decision')} onCompare={() => setTab('shortlist')} />
-        <AddToolbar onFindMore={goFindMore} />
-        <FilterBar filters={filters} setFilters={setFilters} shown={mainGrid.length} total={listings.length} perPersonAvg={perPersonAvg} />
+        <AddToolbar onOpenFilters={() => setSheet('filters')} filterCount={activeFilterCount} shown={mainGrid.length} total={listings.length} />
 
         {/* Mobile-only quick filter scroller (container-query gated to ≤860px) */}
         <div className="m-filterscroll">

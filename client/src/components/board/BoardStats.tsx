@@ -18,13 +18,8 @@ export function BoardStats({ homes }: { homes: Listing[] }) {
     const under = homes.filter((h) => h.budget === 'under' || (h.est_5n != null && h.est_5n <= budget)).length;
     const avgAllIn = priced.length ? Math.round(priced.reduce((a, h) => a + (h.est_5n || 0), 0) / priced.length) : null;
     const avgPp = avgAllIn != null ? Math.ceil(avgAllIn / split) : null;
-    const cheapest = priced.length ? Math.min(...priced.map((h) => h.est_5n || Infinity)) : null;
-    return { count: homes.length, under, avgAllIn, avgPp, cheapest };
+    return { count: homes.length, under, avgPp };
   }, [homes, budget, split]);
-
-  // Budget pulse: the average all-in against the group's budget.
-  const pct = s.avgAllIn != null ? Math.min(100, Math.round((s.avgAllIn / budget) * 100)) : 0;
-  const tone = s.avgAllIn == null ? 'unknown' : s.avgAllIn <= budget ? 'under' : s.avgAllIn <= budget * 1.08 ? 'marginal' : 'over';
 
   const tiles = [
     { icon: Home, label: 'Homes in play', value: String(s.count) },
@@ -36,7 +31,6 @@ export function BoardStats({ homes }: { homes: Listing[] }) {
   return (
     <div className="boardstats bx-frame">
       <span className="bx-corner tl" /><span className="bx-corner tr" /><span className="bx-corner bl" /><span className="bx-corner br" />
-
       <div className="bs-tiles">
         {tiles.map((t) => (
           <div className="bs-tile" key={t.label}>
@@ -47,23 +41,6 @@ export function BoardStats({ homes }: { homes: Listing[] }) {
             </div>
           </div>
         ))}
-      </div>
-
-      <div className="bs-pulse">
-        <div className="bs-pulse-head">
-          <span>Average all-in vs budget</span>
-          <span className="tnum">
-            {s.avgAllIn != null ? fmt(s.avgAllIn) : '—'} <i>of {fmt(budget)}</i>
-          </span>
-        </div>
-        <div className={`bp-track tone-${tone}`}>
-          <div className="bp-fill" style={{ width: `${pct}%` }} />
-          <span className="bp-budgetmark" />
-        </div>
-        <div className="bs-pulse-foot">
-          {s.cheapest != null && <span>Cheapest <b className="tnum">{fmt(s.cheapest)}</b></span>}
-          <span className={`bs-tag tone-${tone}`}>{tone === 'under' ? 'On track' : tone === 'marginal' ? 'At the edge' : tone === 'over' ? 'Over budget' : 'Add prices'}</span>
-        </div>
       </div>
     </div>
   );
