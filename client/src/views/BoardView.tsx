@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw, Bookmark, ChevronRight, ChevronDown } from 'lucide-react';
+import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw, Bookmark, ChevronRight, ChevronDown, HelpCircle } from 'lucide-react';
+import { GuidedTour, type TourStep } from '@/components/ui/GuidedTour';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
@@ -25,9 +26,20 @@ import { Button } from '@/components/ui/Button';
 
 type Tab = 'all' | 'shortlist' | 'saved' | 'decision' | 'discussion';
 
+const BOARD_TOUR: TourStep[] = [
+  { target: '.b-controls .tabbar', title: 'Your group’s board', body: 'Everything for this trip — browse, vote, compare, and decide — lives in these tabs.' },
+  { target: '.b-grid article.card .card-money', title: 'The number that ends the debate', body: 'Every home shows the all-in cost and exactly what each person pays.' },
+  { target: '.b-grid article.card .votebar', title: 'Vote in the open', body: 'Thumbs-up the ones you like. At net +1, a home rises into the group’s Shortlist.' },
+  { target: '.b-grid article.card .save-btn', title: 'Save your own picks', body: 'Bookmark homes to your private Saved list — only you see it. Ask Scout to rank just yours.' },
+  { target: '.b-toolbar .filters-btn', title: 'Filter to what fits', body: 'Narrow by budget, pool, or parking. Owners can also refresh the live listings.' },
+  { target: '[data-tab="shortlist"]', title: 'Let Scout decide', body: 'In Shortlist, ask Scout to rank the finalists against your group’s approved criteria.' },
+  { target: '[data-tab="discussion"]', title: 'Tell Scout what matters', body: 'Request a must-have in Discussion — the organizer approves it, then Scout weighs it.' },
+  { target: '[data-tab="decision"]', title: 'Lock the official pick', body: 'Everyone casts one top choice; the organizer seals the winner with the gold lock.' },
+];
+
 /** Paste-a-URL add toolbar — collapsed to a button until you start adding,
  *  to keep the masthead light. */
-function AddToolbar({ onOpenFilters, filterCount, shown, total }: { onOpenFilters: () => void; filterCount: number; shown: number; total: number }) {
+function AddToolbar({ onOpenFilters, filterCount, shown, total, onTour }: { onOpenFilters: () => void; filterCount: number; shown: number; total: number; onTour: () => void }) {
   const { submitListing, requireSignIn, toast, isOwner, tripId } = useApp();
   const [url, setUrl] = useState('');
   const [busy, setBusy] = useState(false);
@@ -94,6 +106,9 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total }: { onOpenFilter
         <Icon icon={SlidersHorizontal} className="ico" /> Filters
         {filterCount > 0 && <span className="fcount tnum">{filterCount}</span>}
       </button>
+      <button className="btn btn-ghost btn-sm btn-icon" onClick={onTour} title="Show me around" aria-label="Show me around">
+        <Icon icon={HelpCircle} className="ico" />
+      </button>
       <span className="b-count tnum">{shown} of {total}</span>
     </div>
   );
@@ -109,6 +124,7 @@ export function BoardView() {
   const [tab, setTab] = useState<Tab>('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [topAll, setTopAll] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [sheet, setSheet] = useState<null | 'filters'>(null);
 
   // ── Deep-link the detail modal (?listing=<id> ⇄ DetailModal) ──────────────
@@ -198,6 +214,7 @@ export function BoardView() {
               <div
                 key={t.key}
                 role="tab"
+                data-tab={t.key}
                 aria-selected={tab === t.key}
                 tabIndex={0}
                 className={`tab${tab === t.key ? ' on' : ''}`}
@@ -209,7 +226,7 @@ export function BoardView() {
               </div>
             ))}
           </div>
-          <AddToolbar onOpenFilters={() => setSheet('filters')} filterCount={activeFilterCount} shown={mainGrid.length} total={listings.length} />
+          <AddToolbar onOpenFilters={() => setSheet('filters')} filterCount={activeFilterCount} shown={mainGrid.length} total={listings.length} onTour={() => { setTab('all'); setTourOpen(true); }} />
         </div>
 
         {/* Mobile-only quick filter scroller (container-query gated to ≤860px) */}
@@ -342,6 +359,7 @@ export function BoardView() {
 
       <CompareDock compare={compare} />
       <ComparisonModal compare={compare} />
+      <GuidedTour steps={BOARD_TOUR} open={tourOpen} onClose={() => setTourOpen(false)} />
     </div>
   );
 }

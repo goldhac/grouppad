@@ -100,6 +100,20 @@
 .btn.btn-icon { padding-left: 0; padding-right: 0; width: 36px; min-width: 36px; justify-content: center; gap: 0; }
 .btn.btn-icon .ico { margin: 0; }
 
+/* ── Guided coachmark tour (spotlight + tooltip) ────────────────────────── */
+.tour-root { position: fixed; inset: 0; z-index: 200; pointer-events: none; }
+.tour-scrim-full { position: fixed; inset: 0; background: rgba(11, 13, 16, 0.58); }
+.tour-spot { position: fixed; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(11, 13, 16, 0.58); outline: 2px solid var(--accent); }
+@media (prefers-reduced-motion: no-preference) { .tour-spot { transition: left 0.3s var(--ease-out), top 0.3s var(--ease-out), width 0.3s var(--ease-out), height 0.3s var(--ease-out); } }
+.tour-tip { position: fixed; width: 340px; max-width: calc(100vw - 24px); background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); padding: 16px 18px; pointer-events: auto; }
+.tour-tip .tt-step { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent-text); }
+.tour-tip .tt-title { font-family: var(--font-display); font-size: 17px; font-weight: 700; margin: 6px 0; color: var(--text); }
+.tour-tip .tt-body { font-size: 14px; line-height: 1.55; color: var(--text-2); margin: 0 0 14px; }
+.tour-tip .tt-foot { display: flex; align-items: center; justify-content: space-between; }
+.tour-tip .tt-skip { background: none; border: 0; color: var(--text-muted); font-size: 13px; cursor: pointer; padding: 0; }
+.tour-tip .tt-skip:hover { color: var(--text); }
+.tour-tip .tt-nav { display: flex; gap: 8px; }
+
 /* ── Shortlist: Scout banner + full-width analysis expander ─────────────── */
 .scout-banner { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 15px 18px; display: flex; flex-direction: column; gap: 13px; box-shadow: var(--shadow-sm); }
 .scout-banner .sb-head { display: flex; align-items: center; gap: 14px; }
