@@ -56,7 +56,7 @@
   100% { box-shadow: var(--shadow-sm); transform: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .card.rose { animation: gp-rise-in 1s var(--ease-settle) both; }
+  .card.rose { animation: gp-rise-in 1.8s var(--ease-settle) both; }
 }
 
 /* ── Upvote burst — a ring + 6 radiating sparks on a new like ──────────────── */
@@ -73,9 +73,9 @@
   .vote-burst::before {
     content: ''; position: absolute; left: -9px; top: -9px; width: 18px; height: 18px;
     border-radius: 50%; border: 2px solid var(--up, var(--accent-text));
-    animation: vb-ring 460ms var(--ease-out) forwards;
+    animation: vb-ring 780ms var(--ease-out) forwards;
   }
-  .vote-burst i { animation: vb-dot 520ms var(--ease-out) forwards; }
+  .vote-burst i { animation: vb-dot 880ms var(--ease-out) forwards; }
 }
 @keyframes vb-ring { 0% { transform: scale(0.3); opacity: 0.9; } 100% { transform: scale(1.9); opacity: 0; } }
 @keyframes vb-dot  { 0% { transform: rotate(var(--a)) translateY(0) scale(1); opacity: 1; } 100% { transform: rotate(var(--a)) translateY(-15px) scale(0.2); opacity: 0; } }
@@ -89,14 +89,14 @@
   opacity: 0;
 }
 @media (prefers-reduced-motion: no-preference) {
-  .compare-modal.show .vs-1v1 > .vs-col:first-of-type { animation: vs-in-left var(--dur-slow) var(--ease-out) both; }
-  .compare-modal.show .vs-1v1 > .vs-col:last-of-type  { animation: vs-in-right var(--dur-slow) var(--ease-out) both; }
-  .compare-modal.show .vs-1v1 .vs-badge { animation: vs-badge-pop 480ms var(--ease-settle) 140ms both; }
-  .compare-modal.show .vs-multi > .vs-col { animation: gp-rise var(--dur-slow) var(--ease-out) both; }
-  .compare-modal.show .vs-multi > .vs-col:nth-child(2) { animation-delay: 60ms; }
-  .compare-modal.show .vs-multi > .vs-col:nth-child(3) { animation-delay: 120ms; }
-  .vs-col.win::before { animation: vs-sheen 900ms var(--ease-out) 80ms 1; }
-  .vs-col.win .win-flag { animation: vs-flag-pop 460ms var(--ease-settle) both; }
+  .compare-modal.show .vs-1v1 > .vs-col:first-of-type { animation: vs-in-left 640ms var(--ease-out) both; }
+  .compare-modal.show .vs-1v1 > .vs-col:last-of-type  { animation: vs-in-right 640ms var(--ease-out) both; }
+  .compare-modal.show .vs-1v1 .vs-badge { animation: vs-badge-pop 720ms var(--ease-settle) 260ms both; }
+  .compare-modal.show .vs-multi > .vs-col { animation: gp-rise 560ms var(--ease-out) both; }
+  .compare-modal.show .vs-multi > .vs-col:nth-child(2) { animation-delay: 110ms; }
+  .compare-modal.show .vs-multi > .vs-col:nth-child(3) { animation-delay: 220ms; }
+  .vs-col.win::before { animation: vs-sheen 1500ms var(--ease-out) 140ms 1; }
+  .vs-col.win .win-flag { animation: vs-flag-pop 700ms var(--ease-settle) both; }
 }
 @keyframes vs-in-left  { from { opacity: 0; transform: translateX(-26px); } to { opacity: 1; transform: none; } }
 @keyframes vs-in-right { from { opacity: 0; transform: translateX(26px); } to { opacity: 1; transform: none; } }

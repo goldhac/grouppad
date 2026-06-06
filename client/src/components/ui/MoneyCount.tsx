@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 /** A money figure that ticks up (ease-out-cubic) the first time it scrolls into
  *  view — for the signature per-person number on the landing page. Honors
  *  reduced-motion (snaps to the value) and only ever animates once. */
-export function MoneyCount({ value, durationMs = 950, className }: { value: number; durationMs?: number; className?: string }) {
+export function MoneyCount({ value, durationMs = 1700, className }: { value: number; durationMs?: number; className?: string }) {
   const ref = useRef<HTMLSpanElement>(null);
   const started = useRef(false);
   const [shown, setShown] = useState(0);

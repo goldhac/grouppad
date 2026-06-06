@@ -8,7 +8,7 @@ import { SafeImg } from '@/components/ui/SafeImg';
 import { SealMark } from '@/components/ui/SealMark';
 import { cn } from '@/lib/cn';
 
-const DUR = 3200;
+const DUR = 4400;
 const SCENES = 4;
 const EST = 5022;
 const IMG = (id: string) => `https://images.unsplash.com/photo-${id}?w=520&q=80&auto=format&fit=crop`;

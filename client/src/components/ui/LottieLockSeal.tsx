@@ -24,7 +24,7 @@ export default function LottieLockSeal({ size = 88, play = false, className = ''
     if (prefersReduced()) return;
     const a = ref.current;
     if (!a) return;
-    if (play) { a.setSpeed(1); a.goToAndPlay(0, true); }
+    if (play) { a.setSpeed(0.55); a.goToAndPlay(0, true); }
     else a.goToAndStop(LAST_FRAME, true);
   }, [play]);
 
