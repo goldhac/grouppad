@@ -537,6 +537,7 @@ function noteJoin(tripId, user) {
   const html = Emails.joined({
     appBase: APP_BASE_URL, tripName: trip.name, who: user.name || 'Someone',
     boardUrl: boardUrl(tripId), unsub: unsubToken(owner.id),
+    memberCount: (getTrip(tripId)?.members || []).length,
   });
   sendEmail(owner.email, `${user.name || 'Someone'} joined ${trip.name}`, html).catch(() => {});
 }
@@ -547,11 +548,23 @@ async function emailDecisionLocked(tripId, listingId, actorId) {
   if (!trip) return;
   const listing = findListingByIdInTrip(tripId, listingId);
   const name = (listing && listing.name) || 'the final pick';
+  // Enrich the "official pick" email with the listing's photo + priced split.
+  const usd = (n) => (n != null ? '$' + Math.round(n).toLocaleString('en-US') : undefined);
+  const split = trip.adults || (trip.members || []).length || 1;
+  const specs = [listing?.bd && `${listing.bd} bed`, listing?.ba && `${listing.ba} bath`, listing?.sleeps && `sleeps ${listing.sleeps}`].filter(Boolean).join(' · ') || undefined;
+  const rich = {
+    photo: listing?.photos?.[0] || undefined,
+    area: listing?.area || undefined,
+    specs,
+    est5n: usd(listing?.est_5n),
+    perPerson: listing?.est_5n != null ? usd(Math.ceil(listing.est_5n / split)) : undefined,
+    organizer: (loadUsers()[actorId] || {}).name || undefined,
+  };
   const recips = tripRecipients(trip).filter((r) => r.prefs.instant && r.id !== actorId);
   for (const r of recips) {
     const html = Emails.decisionLocked({
       appBase: APP_BASE_URL, tripName: trip.name, listingName: name,
-      boardUrl: boardUrl(tripId), unsub: r.unsub,
+      boardUrl: boardUrl(tripId), unsub: r.unsub, ...rich,
     });
     await sendEmail(r.email, `It's official: ${name} — ${trip.name}`, html);
   }
@@ -2644,6 +2657,7 @@ app.post('/api/trips/:tripId/invite', requireTripOwner, async (req, res) => {
   for (const e of emails) {
     const html = Emails.invite({
       appBase: APP_BASE_URL, tripName: trip.name, destination: trip.destination, inviter, link,
+      guests: trip.adults || undefined,
     });
     if (await sendEmail(e, `You're invited: ${trip.name}`, html)) sent++;
   }
