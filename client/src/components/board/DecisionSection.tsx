@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Trophy, Unlock, ExternalLink, Lock, Star, Users } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
-import { LockSeal } from '@/components/ui/LockSeal';
+import { SealMark } from '@/components/ui/SealMark';
 import { fmt, formatDate } from '@/lib/utils';
 
 export function DecisionSection() {
@@ -41,7 +41,7 @@ export function DecisionSection() {
       <div className="flex flex-col gap-5">
         {decision && lockedListing && (
           <div className="official-banner">
-            <LockSeal size={56} play={sealPlay} className="ob-seal" />
+            <SealMark size={56} play={sealPlay} className="ob-seal" />
             <div className="ob-body">
               <span className="ob-kicker"><span className="gold-dot" /> Official pick · locked {formatDate(decision.locked_at)}</span>
               <div className="ob-title">{lockedListing.name}</div>
