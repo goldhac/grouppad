@@ -113,7 +113,10 @@ body { margin: 0; }
 .dm-steps { display: flex; gap: 6px; padding: 12px 15px; border-top: 1px solid var(--border); background: var(--surface-overlay); flex: none; }
 .dm-step { flex: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 3px 0 1px; border: 0; background: none; cursor: pointer; font-family: var(--font-sans); font-size: 12px; font-weight: 600; color: var(--text-muted); }
 .dm-step .dm-sd { width: 100%; height: 3px; border-radius: var(--r-pill); background: var(--border-strong); transform: scaleX(0); transform-origin: left; }
+.dm-step .dm-lab { display: inline-flex; align-items: center; gap: 6px; }
+.dm-step .dm-lab .ico { width: 14px; height: 14px; color: var(--text-muted); flex: none; }
 .dm-step.on { color: var(--text); }
+.dm-step.on .dm-lab .ico, .dm-step.done .dm-lab .ico { color: var(--accent-text); }
 .dm-step.done .dm-sd { transform: scaleX(1); background: var(--accent); }
 .dm-step.on .dm-sd { background: var(--accent); }
 
@@ -121,8 +124,9 @@ body { margin: 0; }
   .demo-panel { --dm-h: 440px; }
   .dm-grid { grid-template-columns: 1fr 1fr; }
   .dm-grid .card:nth-child(n+5) { display: none; }
-  .dm-step { font-size: 0; gap: 0; }
+  .dm-step { font-size: 0; gap: 4px; align-items: center; }
   .dm-step .dm-sd { height: 4px; }
+  .dm-step .dm-lab { gap: 0; justify-content: center; width: 100%; }
 }
 
 /* =====================================================================

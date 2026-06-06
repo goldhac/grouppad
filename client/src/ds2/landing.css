@@ -19,7 +19,20 @@
 /* HERO — editorial split: oversized headline + full-bleed photo */
 .d1-hero { padding: 40px 0 30px; }
 .d1-kicker { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; color: var(--accent-text); }
-.d1-kicker .golddot-motif { width: 9px; height: 9px; }
+.d1-kicker .golddot-motif { position: relative; width: 9px; height: 9px; }
+/* the gold "decision" dot gently pulses a ring — the signature in motion */
+@media (prefers-reduced-motion: no-preference) {
+  .d1-kicker .golddot-motif::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold-dot) 60%, transparent);
+    animation: gp-golddot 2.6s var(--ease-out) infinite;
+  }
+}
+@keyframes gp-golddot {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold-dot) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 7px color-mix(in srgb, var(--gold-dot) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--gold-dot) 0%, transparent); }
+}
 .d1-hero h1 { font-family: var(--font-display); font-size: clamp(48px, 9vw, 116px); font-weight: 800; line-height: 0.93; letter-spacing: -0.04em; margin: 18px 0 0; text-wrap: balance; }
 .d1-hero h1 em { font-style: italic; font-weight: 500; color: var(--accent-text); }
 .d1-hero-sub { display: grid; grid-template-columns: 1.2fr 1fr; gap: 40px; align-items: end; margin-top: 34px; }

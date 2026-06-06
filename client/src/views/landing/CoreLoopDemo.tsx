@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  LayoutGrid, ThumbsUp, ThumbsDown, Star, Users, Swords, Sparkles, BadgeCheck, ArrowUp, Circle,
+  LayoutGrid, ThumbsUp, ThumbsDown, Star, Users, Swords, Sparkles, BadgeCheck, ArrowUp, Circle, Lock,
 } from 'lucide-react';
 import { Icon } from '@/components/ui/Icon';
+import { ScoutMark } from '@/components/ui/ScoutMark';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { cn } from '@/lib/cn';
 
@@ -20,7 +21,12 @@ const BROWSE: Mini[] = [
   { img: '1600047509807-ba8f99d2cdde', name: 'Sunset Strip 6BR', price: '$5,540', pp: '$396', bud: 'under', budLabel: 'under' },
   { img: '1564013799919-ab600027ffc6', name: 'Venice Canal House', price: '$7,140', pp: '$510', bud: 'marginal', budLabel: 'marginal' },
 ];
-const STEPS = ['Browse', 'Vote', 'Compare', 'Lock'];
+const STEPS: { label: string; Mark: (p: { className?: string }) => JSX.Element }[] = [
+  { label: 'Browse', Mark: (p) => <Icon icon={LayoutGrid} {...p} /> },
+  { label: 'Vote', Mark: (p) => <Icon icon={ThumbsUp} {...p} /> },
+  { label: 'Compare', Mark: (p) => <ScoutMark {...p} /> },
+  { label: 'Lock', Mark: (p) => <Icon icon={Lock} {...p} /> },
+];
 
 function MiniCard(o: Mini) {
   return (
@@ -168,9 +174,9 @@ export function CoreLoopDemo() {
       </div>
 
       <div className="dm-steps">
-        {STEPS.map((label, k) => (
+        {STEPS.map((s, k) => (
           <button
-            key={label}
+            key={s.label}
             className={cn('dm-step', k === scene && 'on', k < scene && 'done')}
             onClick={() => setScene(k)}
           >
@@ -178,7 +184,7 @@ export function CoreLoopDemo() {
               className={cn('dm-sd', k === scene && 'fill')}
               style={k === scene ? { animationPlayState: paused ? 'paused' : 'running' } : undefined}
             />
-            {label}
+            <span className="dm-lab"><s.Mark className="ico" /> {s.label}</span>
           </button>
         ))}
       </div>

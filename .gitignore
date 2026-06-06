@@ -28,3 +28,4 @@ data/decision.json
 
 # Imported Claude Design exports (un-ignore if you want it tracked)
 /design-v2/
+.agents/
