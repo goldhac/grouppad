@@ -180,6 +180,7 @@ export interface Caveat {
   user_id: string;
   name: string;
   text: string;
+  status?: 'pending' | 'approved';
   created_at: string;
 }
 

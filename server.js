@@ -2122,7 +2122,7 @@ const hCompare = async (req, res) => {
   // Itinerary comes from the single organizer-posted source, not per-user uploads.
   const itinerary = loadItinerary(tripId).text || '';
   // Fold in member caveats so the AI weighs what the group actually cares about.
-  const caveats = loadCaveats(tripId).slice(-30).map(c => `- ${c.name}: ${c.text}`).join('\n');
+  const caveats = loadCaveats(tripId).filter(c => (c.status ?? 'approved') === 'approved').slice(-30).map(c => `- ${c.name}: ${c.text}`).join('\n');
 
   // Compact each listing to the fields that matter, capped to keep the prompt small.
   const compact = listings.slice(0, 12).map((l, i) => ({
@@ -2261,15 +2261,35 @@ const hPostCaveat = (req, res) => {
   const text = String((req.body && req.body.text) || '').slice(0, 500).trim();
   if (!text) return res.status(400).json({ error: 'Say something first.' });
   const list = loadCaveats(tripId);
-  list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), user_id: req.user.id, name, text, created_at: new Date().toISOString() });
+  // Members submit a *request*; the organizer's own criteria are auto-approved.
+  // Only approved criteria feed Scout's ranking.
+  const trip = getTrip(tripId);
+  const status = trip && trip.owner_id === req.user.id ? 'approved' : 'pending';
+  list.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), user_id: req.user.id, name, text, status, created_at: new Date().toISOString() });
   const trimmed = list.slice(-200); // keep the log bounded
   saveCaveats(trimmed, tripId);
-  logEvent(tripId, 'caveat', `${name}: "${text.slice(0, 100)}"`);
+  if (status === 'approved') logEvent(tripId, 'caveat', `${name}: "${text.slice(0, 100)}"`);
   noteJoin(tripId, req.user);
   res.json(trimmed);
 };
 app.post('/api/caveats', requireAuth, hPostCaveat);
 app.post('/api/trips/:tripId/caveats', requireAuth, loadTripOr404, hPostCaveat);
+
+// Organizer approves a pending criterion request → it starts feeding Scout.
+const hApproveCaveat = (req, res) => {
+  const tripId = req.params.tripId;
+  let approved = null;
+  const list = loadCaveats(tripId).map((c) => {
+    if (c.id !== req.params.id) return c;
+    approved = c;
+    return { ...c, status: 'approved' };
+  });
+  saveCaveats(list, tripId);
+  if (approved) logEvent(tripId, 'caveat', `${approved.name}: "${String(approved.text).slice(0, 100)}"`);
+  res.json(list);
+};
+app.post('/api/caveats/:id/approve', requireAdmin, hApproveCaveat);
+app.post('/api/trips/:tripId/caveats/:id/approve', requireTripOwner, hApproveCaveat);
 
 const hDeleteCaveat = (req, res) => {
   const tripId = req.params.tripId;

@@ -109,6 +109,7 @@ interface AppActions {
   submitListing: (url: string, price?: string) => Promise<Listing>;
   postCaveat: (text: string) => Promise<void>;
   deleteCaveat: (id: string) => Promise<void>;
+  approveCaveat: (id: string) => Promise<void>;
   deleteListing: (id: string, isSubmitted: boolean) => Promise<void>;
   // compare / itinerary
   runCompare: (items: CompareListingInput[], criteria: string, mode?: '1v1') => Promise<string>;
@@ -532,6 +533,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [toast],
   );
 
+  const approveCaveat = useCallback(
+    async (cid: string) => {
+      const id = tripIdRef.current;
+      if (!id) return;
+      try { setCaveats(await api.approveCaveat(id, cid)); toast('Criterion approved — Scout will weigh it.', 'success'); }
+      catch (e) { toast(e instanceof Error ? e.message : 'Could not approve.', 'error'); }
+    },
+    [toast],
+  );
+
   const deleteListing = useCallback(
     async (lid: string, isSubmitted: boolean) => {
       const id = tripIdRef.current;
@@ -622,7 +633,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
-      castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
+      castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, setSplit, toast, dismissToast,
     }),
@@ -634,7 +645,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
-      castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, deleteListing,
+      castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, toast, dismissToast,
     ],

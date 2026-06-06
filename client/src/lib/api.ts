@@ -142,6 +142,8 @@ export const api = {
     request<Caveat[]>(`${t(tripId)}/caveats`, { method: 'POST', body: { text } }),
   deleteCaveat: (tripId: string, id: string) =>
     request<Caveat[]>(`${t(tripId)}/caveats/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  approveCaveat: (tripId: string, id: string) =>
+    request<Caveat[]>(`${t(tripId)}/caveats/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
   insights: (tripId: string) => request<Insights>(`${t(tripId)}/insights`),
   compare: (tripId: string, listings: CompareListingInput[], criteria?: string, mode?: '1v1') =>
     request<{ analysis: string }>(`${t(tripId)}/compare-listings`, {
