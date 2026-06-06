@@ -1,0 +1,5 @@
+# Keep the deploy upload lean — none of this is needed at runtime.
+docs/
+design-v2/
+.agents/
+*.log
