@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Users, Wallet, Home, Settings, Search, Share2 } from 'lucide-react';
+import { Calendar, Users, Wallet, Home, Settings, Share2 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 
@@ -16,7 +16,7 @@ function fmtRange(a?: string | null, b?: string | null): string | null {
 }
 
 /** The trip-title row of the board masthead: identity + key facts + organizer actions. */
-export function BoardHeader({ onFindMore }: { onFindMore?: () => void }) {
+export function BoardHeader() {
   const { trip, listings, isOwner, toast } = useApp();
   const navigate = useNavigate();
   if (!trip) return null;
@@ -53,8 +53,8 @@ export function BoardHeader({ onFindMore }: { onFindMore?: () => void }) {
             <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/t/${trip.id}/manage`)}>
               <Icon icon={Settings} className="ico" /> Manage
             </button>
-            <button className="btn btn-primary btn-sm" onClick={onFindMore}>
-              <Icon icon={Search} className="ico" /> Find more
+            <button className="btn btn-primary btn-sm" onClick={share}>
+              <Icon icon={Share2} className="ico" /> Share board
             </button>
           </>
         ) : (

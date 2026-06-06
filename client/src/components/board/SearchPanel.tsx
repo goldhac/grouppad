@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Search, Loader2, Plus } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
@@ -96,17 +96,6 @@ export function SearchPanel() {
             </p>
           )}
         </div>
-      </div>
-    );
-  }
-
-  // Board has homes + organizer can re-run a fresh search.
-  if (isOwner && configured) {
-    return (
-      <div className="flex items-center gap-2 px-4 pt-1 sm:px-8">
-        <Button variant="ghost" size="sm" onClick={() => void trigger()}>
-          <Plus className="h-3.5 w-3.5" /> Find more rentals
-        </Button>
       </div>
     );
   }

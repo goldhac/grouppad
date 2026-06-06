@@ -66,6 +66,17 @@
   .bs-tiles { grid-template-columns: repeat(2, 1fr); gap: 16px 12px; }
 }
 
+/* ── tabs + toolbar share one row ───────────────────────────────────────── */
+.b-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); padding-right: 18px; }
+.b-controls .tabbar { border-top: 0; }
+.b-controls .b-toolbar { border-top: 0; padding: 8px 0; gap: 9px; }
+.b-controls .b-toolbar .add { flex: 0 1 auto; max-width: 320px; }
+@container bd (max-width: 860px) {
+  .b-controls { flex-wrap: wrap; padding-right: 0; gap: 0; }
+  .b-controls .tabbar { width: 100%; }
+  .b-controls .b-toolbar { display: none; }
+}
+
 /* ── collapsed filters button (replaces the desktop chip row) ───────────── */
 .b-toolbar .filters-btn { display: inline-flex; align-items: center; gap: 6px; }
 .b-toolbar .filters-btn .fcount { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-fg); font-size: 11px; font-weight: 700; line-height: 1; }

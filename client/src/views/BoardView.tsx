@@ -70,7 +70,6 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total }: { onOpenFilter
           <Icon icon={Plus} className="ico" /> Add a home
         </button>
       )}
-      <span className="spacer" />
       <button className="btn btn-ghost btn-sm filters-btn" onClick={onOpenFilters}>
         <Icon icon={SlidersHorizontal} className="ico" /> Filters
         {filterCount > 0 && <span className="fcount tnum">{filterCount}</span>}
@@ -90,7 +89,6 @@ export function BoardView() {
   const [tab, setTab] = useState<Tab>('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [sheet, setSheet] = useState<null | 'filters'>(null);
-  const searchRef = useRef<HTMLDivElement>(null);
 
   // ── Deep-link the detail modal (?listing=<id> ⇄ DetailModal) ──────────────
   const linkParam = searchParams.get('listing');
@@ -141,11 +139,6 @@ export function BoardView() {
 
   const showJoin = trip && !trip.isMember && !trip.isOwner;
 
-  const goFindMore = () => {
-    setTab('all');
-    requestAnimationFrame(() => searchRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
-  };
-
   const TABS: { key: Tab; label: string; icon: typeof LayoutGrid; pip?: number }[] = [
     { key: 'all', label: 'All homes', icon: LayoutGrid, pip: listings.length },
     { key: 'shortlist', label: 'Shortlist', icon: Heart, pip: shortlistIds.size },
@@ -157,7 +150,7 @@ export function BoardView() {
     <div className="board">
       {/* ── Sticky masthead ───────────────────────────────────────────────── */}
       <div className="b-stick" style={{ top: 56 }}>
-        <BoardHeader onFindMore={goFindMore} />
+        <BoardHeader />
 
         {showJoin && (
           <div className="join-banner">
@@ -174,7 +167,27 @@ export function BoardView() {
         )}
 
         <DecisionStrip onLeaderboard={() => setTab('decision')} onCompare={() => setTab('shortlist')} />
-        <AddToolbar onOpenFilters={() => setSheet('filters')} filterCount={activeFilterCount} shown={mainGrid.length} total={listings.length} />
+
+        {/* Tabs + add/filter controls share one row */}
+        <div className="b-controls">
+          <div className="tabbar" role="tablist">
+            {TABS.map((t) => (
+              <div
+                key={t.key}
+                role="tab"
+                aria-selected={tab === t.key}
+                tabIndex={0}
+                className={`tab${tab === t.key ? ' on' : ''}`}
+                onClick={() => setTab(t.key)}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setTab(t.key)}
+              >
+                <Icon icon={t.icon} className="ico" /> {t.label}
+                {t.pip != null && <span className="pip tnum">{t.pip}</span>}
+              </div>
+            ))}
+          </div>
+          <AddToolbar onOpenFilters={() => setSheet('filters')} filterCount={activeFilterCount} shown={mainGrid.length} total={listings.length} />
+        </div>
 
         {/* Mobile-only quick filter scroller (container-query gated to ≤860px) */}
         <div className="m-filterscroll">
@@ -188,23 +201,6 @@ export function BoardView() {
             <Icon icon={SlidersHorizontal} className="ico" /> Split · {split}
           </button>
         </div>
-
-        <div className="tabbar" role="tablist">
-          {TABS.map((t) => (
-            <div
-              key={t.key}
-              role="tab"
-              aria-selected={tab === t.key}
-              tabIndex={0}
-              className={`tab${tab === t.key ? ' on' : ''}`}
-              onClick={() => setTab(t.key)}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setTab(t.key)}
-            >
-              <Icon icon={t.icon} className="ico" /> {t.label}
-              {t.pip != null && <span className="pip tnum">{t.pip}</span>}
-            </div>
-          ))}
-        </div>
       </div>
 
       {/* ── Active tab panel ──────────────────────────────────────────────── */}
@@ -212,7 +208,7 @@ export function BoardView() {
         {tab === 'all' && (
           <>
             {listings.length > 0 && <BoardStats homes={mainGrid} />}
-            {isOwner && <div ref={searchRef}><SearchPanel /></div>}
+            {isOwner && <SearchPanel />}
             <section>
               <div className="row-head">
                 <span className="ttl">All homes</span>

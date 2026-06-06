@@ -255,7 +255,15 @@
    =========================================================================== */
 .m-only { display: none; }
 .m-filterscroll { display: none; }
-.sheet-scrim { display: none; }
+
+/* Filters dialog — centered modal on desktop (a bottom sheet on mobile, below) */
+.sheet-scrim { position: fixed; inset: 0; z-index: 90; background: var(--scrim); display: flex; align-items: flex-start; justify-content: center; padding: 76px 20px 24px; }
+.sheet { width: 100%; max-width: 440px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: var(--shadow-pop); padding: 18px 20px 20px; max-height: 80vh; overflow: auto; }
+.sheet .grab { display: none; }
+.sheet .sheet-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.sheet .sheet-head h3 { font-size: 18px; font-weight: 700; }
+.sheet .sheet-head .x { margin-left: auto; }
+.sheet .sheet-sec + .sheet-sec { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
 
 /* ===========================================================================
    STATE: searching (skeletons) + empty
@@ -323,7 +331,7 @@
   /* bottom sheet (filters / add / itinerary / caveats live here on mobile) */
   .sheet-scrim { display: block; position: absolute; inset: 0; z-index: 40; background: var(--scrim); }
   .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 41; max-height: 86%; overflow: auto; background: var(--surface-raised); border-radius: var(--r-xl) var(--r-xl) 0 0; border-top: 1px solid var(--border); box-shadow: var(--shadow-pop); padding: 8px 16px 22px; }
-  .sheet .grab { width: 38px; height: 4px; border-radius: var(--r-pill); background: var(--border-strong); margin: 6px auto 14px; }
+  .sheet .grab { display: block; width: 38px; height: 4px; border-radius: var(--r-pill); background: var(--border-strong); margin: 6px auto 14px; }
   .sheet .sheet-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
   .sheet .sheet-head h3 { font-size: 18px; font-weight: 700; }
   .sheet .sheet-head .x { margin-left: auto; }
@@ -332,7 +340,7 @@
 
 /* hide mobile-only affordances on desktop explicitly */
 @container bd (min-width: 861px) {
-  .m-bottombar, .sheet, .sheet-scrim, .m-filterscroll { display: none !important; }
+  .m-bottombar, .m-filterscroll { display: none !important; }
 }
 
 /* board-app.css */
