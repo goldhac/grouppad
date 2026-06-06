@@ -4,6 +4,7 @@ import { UserPlus, LayoutGrid, Heart, Trophy, MessagesSquare, Plus, SlidersHoriz
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { Card } from '@/components/Card';
+import { BoardStats } from '@/components/board/BoardStats';
 import { EmptyBoardArt } from '@/components/ui/EmptyBoardArt';
 import { Icon } from '@/components/ui/Icon';
 import { BoardHeader } from '@/components/chrome/BoardHeader';
@@ -205,6 +206,7 @@ export function BoardView() {
       <div className="tab-panel gp-panel" key={tab}>
         {tab === 'all' && (
           <>
+            {listings.length > 0 && <BoardStats homes={mainGrid} />}
             {isOwner && <div ref={searchRef}><SearchPanel /></div>}
             <section>
               <div className="row-head">

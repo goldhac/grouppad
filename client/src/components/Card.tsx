@@ -67,6 +67,9 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
   const budget = trip?.budget ?? 7000;
   const pp = l.est_5n ? Math.ceil(l.est_5n / split) : null;
   const ppOver = l.est_5n != null && l.est_5n > budget;
+  // budget pulse — this home's all-in against the group budget (Watermelon-style)
+  const bpPct = l.est_5n != null ? Math.min(100, Math.round((l.est_5n / budget) * 100)) : 0;
+  const bpTone = l.budget ?? (l.est_5n == null ? 'unknown' : l.est_5n <= budget ? 'under' : 'over');
   const isFav = (l.amenities ?? []).some((a) => /guest favorite|superhost/i.test(a)) || l.superhost;
 
   const onCardClick = (e: React.MouseEvent) => {
@@ -228,6 +231,19 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
         </div>
 
         {perperson}
+
+        {l.est_5n != null && (
+          <div className="card-budget">
+            <div className={cn('bp-track', `tone-${bpTone}`)}>
+              <div className="bp-fill" style={{ width: `${bpPct}%` }} />
+              <span className="bp-budgetmark" />
+            </div>
+            <div className="cb-meta">
+              <span className="tnum">{bpPct}% of budget</span>
+              <span className="tnum">{fmt(budget)}</span>
+            </div>
+          </div>
+        )}
 
         <div className="compare-line">
           {votebar}

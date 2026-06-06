@@ -9,6 +9,7 @@ import './ds2/landing.css';
 import './ds2/demo-panel.css';
 import './ds2/trips.css';
 import './ds2/board.css';
+import './ds2/boardx.css';
 import './ds2/detail.css';
 import './ds2/manage.css';
 import './ds2/auth.css';
