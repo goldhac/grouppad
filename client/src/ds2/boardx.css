@@ -50,6 +50,25 @@
 .card-budget .bp-track { height: 5px; }
 .cb-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.01em; }
 
+/* ── borderless, image-forward grid card (VRBO-style frame, our content) ── */
+.card.card-bare { background: transparent; border: 0; box-shadow: none; overflow: visible; transition: transform var(--dur-base) var(--ease-out); }
+.card.card-bare .card-photowrap { position: relative; }
+.card.card-bare .photo { border-radius: var(--r-lg); overflow: hidden; }
+.card.card-bare .body { padding: 12px 2px 0; background: transparent; gap: 7px; }
+.card.card-bare .title { margin-top: 0; }
+.card.card-bare .card-money { background: transparent; border: 0; padding: 0; margin-top: 1px; }
+.card.card-bare .card-foot { border-top: 0; padding-top: 8px; margin-top: 1px; }
+.card.card-bare:hover { transform: translateY(-3px); }
+@media (prefers-reduced-motion: reduce) { .card.card-bare:hover { transform: none; } }
+
+/* rank / budget badges overlaid on the photo (top-left); star is top-right */
+.card-badges { position: absolute; top: 10px; left: 10px; display: flex; flex-wrap: wrap; gap: 6px; z-index: 2; max-width: calc(100% - 60px); }
+.card-badges .badge { box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3); }
+
+/* official / selected state rings the photo (there's no card border to tint) */
+.card.card-bare.is-selected .photo { box-shadow: 0 0 0 2px var(--accent); }
+.card.card-bare.is-official .photo { box-shadow: 0 0 0 2px var(--gold-dot); }
+
 /* ── trimmed card: tiny inline rating in the meta line ──────────────────── */
 .card .meta .rate { display: inline-flex; align-items: center; gap: 3px; color: var(--text-2); font-weight: 600; }
 .card .meta .rate .ico { width: 12px; height: 12px; color: var(--star); }

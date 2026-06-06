@@ -163,16 +163,17 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
   // ── Full card (All-homes / Shortlist grids) ───────────────────────────────
   return (
     <article
-      className={cn('card', isDecision && 'is-official', isSelected && 'is-selected', rose && 'rose')}
+      className={cn('card card-bare', isDecision && 'is-official', isSelected && 'is-selected', rose && 'rose')}
       role="button" tabIndex={0} onClick={onCardClick} onKeyDown={onCardKey}
     >
-      {photo}
-      <div className="body">
-        <div className="badge-row">
+      <div className="card-photowrap">
+        {photo}
+        <div className="card-badges">
           {primaryBadge}
           <span className={`badge badge-${l.budget ?? 'unknown'}`}>{BUDGET_LABEL[l.budget ?? 'unknown']}</span>
         </div>
-
+      </div>
+      <div className="body">
         <h3 className="title">{l.name}</h3>
 
         {/* one tight meta line — source · area · key specs · rating
