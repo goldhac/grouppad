@@ -239,21 +239,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSelected(new Set());
     setFavoriteIds(new Set()); favRef.current = new Set();
     try {
-      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, favRes, revRes, tourRes] =
-        await Promise.all([
-          api.getTrip(id),
-          api.listings(id),
-          api.votes(id),
-          api.submitted(id),
-          api.pipeline(id),
-          api.itinerary(id),
-          api.caveats(id),
-          api.insights(id),
-          api.final(id),
-          api.favorites(id).catch(() => ({ ids: [] as string[] })),
-          api.reviews(id).catch(() => ({})),
-          api.tours(id).catch(() => ({})),
-        ]);
+      const loadAll = () => Promise.all([
+        api.getTrip(id),
+        api.listings(id),
+        api.votes(id),
+        api.submitted(id),
+        api.pipeline(id),
+        api.itinerary(id),
+        api.caveats(id),
+        api.insights(id),
+        api.final(id),
+        api.favorites(id).catch(() => ({ ids: [] as string[] })),
+        api.reviews(id).catch(() => ({})),
+        api.tours(id).catch(() => ({})),
+      ]);
+      // One-shot retry: 404/403 are definitive, but a transient blip (network /
+      // 5xx) shouldn't dead-end on "Could not load this trip" — retry once.
+      let bundle;
+      try {
+        bundle = await loadAll();
+      } catch (e) {
+        if (e instanceof ApiError && (e.status === 404 || e.status === 403)) throw e;
+        await new Promise((r) => setTimeout(r, 700));
+        if (token !== loadTokenRef.current) return;
+        bundle = await loadAll();
+      }
+      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, favRes, revRes, tourRes] = bundle;
       if (token !== loadTokenRef.current) return; // a newer enterTrip superseded us
       setTrip(tripView);
       setListings(listRes.listings);
