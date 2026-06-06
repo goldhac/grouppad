@@ -4,7 +4,7 @@ import {
   ThumbsUp, ThumbsDown, Star, ExternalLink, MapPin, Plane, FerrisWheel, Link2, X,
   ChevronLeft, ChevronRight, Maximize2, Navigation, Wallet, Users, BedDouble, Bath,
   ListChecks, Sparkles, Waves, SquareParking, Wifi, Utensils, Wind, WashingMachine,
-  Award, BadgeCheck, GitCompare, Lock, HelpCircle, Check, Clapperboard,
+  Award, BadgeCheck, GitCompare, Lock, HelpCircle, Check, Clapperboard, Bookmark,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
@@ -50,7 +50,7 @@ function TourPlayer({ tour }: { tour: ListingTour }) {
 export function DetailModal() {
   const {
     detailId, closeDetail, findListing, trip, split, setSplit,
-    user, votes, final, isOwner, selected, castVote, toggleFinalPick, setDecision, toggleSelect, requireSignIn,
+    user, votes, final, isOwner, selected, favoriteIds, castVote, toggleFinalPick, toggleFavorite, setDecision, toggleSelect, requireSignIn,
     reviewsMap, loadReviewsFor, toursMap, generateTour, toast,
   } = useApp();
 
@@ -85,6 +85,7 @@ export function DetailModal() {
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
   const net = tally.up - tally.down;
   const isMyPick = final.myPick === l.id;
+  const isSaved = favoriteIds.has(l.id);
   const isDecision = final.decision?.listing_id === l.id;
   const isSelected = selected.has(l.id);
   const budget = trip?.budget ?? 7000;
@@ -315,6 +316,9 @@ export function DetailModal() {
                       {votebar}
                       <button className="btn btn-ghost btn-sm" onClick={() => { if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }} style={isMyPick ? { borderColor: 'var(--star-border)', background: 'var(--star-bg)', color: 'var(--star-strong)' } : undefined}>
                         <Icon icon={Star} className="ico" style={isMyPick ? { fill: 'currentColor' } : undefined} /> {isMyPick ? 'My top choice' : 'Top choice'}
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => void toggleFavorite(l.id)} style={isSaved ? { borderColor: 'var(--accent)', background: 'var(--accent-tint)', color: 'var(--accent-text)' } : undefined}>
+                        <Icon icon={Bookmark} className="ico" style={isSaved ? { fill: 'currentColor' } : undefined} /> {isSaved ? 'Saved' : 'Save'}
                       </button>
                       <button className="btn btn-ghost btn-sm" onClick={() => toggleSelect(l.id)} style={isSelected ? { borderColor: 'var(--accent)', background: 'var(--accent-tint)', color: 'var(--accent-text)' } : undefined}>
                         <Icon icon={GitCompare} className="ico" /> {isSelected ? 'Comparing' : 'Compare'}

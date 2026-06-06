@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw } from 'lucide-react';
+import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw, Bookmark } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
@@ -15,6 +15,7 @@ import { SearchPanel } from '@/components/board/SearchPanel';
 import { ItinerarySection } from '@/components/board/ItinerarySection';
 import { DecisionSection } from '@/components/board/DecisionSection';
 import { ShortlistSection } from '@/components/board/ShortlistSection';
+import { SavedSection } from '@/components/board/SavedSection';
 import { SubmittedSection } from '@/components/board/SubmittedSection';
 import { CaveatsSection } from '@/components/board/CaveatsSection';
 import { PipelineSection } from '@/components/board/PipelineSection';
@@ -22,7 +23,7 @@ import { CompareDock } from '@/components/board/CompareDock';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { Button } from '@/components/ui/Button';
 
-type Tab = 'all' | 'shortlist' | 'decision' | 'discussion';
+type Tab = 'all' | 'shortlist' | 'saved' | 'decision' | 'discussion';
 
 /** Paste-a-URL add toolbar — collapsed to a button until you start adding,
  *  to keep the masthead light. */
@@ -100,7 +101,7 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total }: { onOpenFilter
 
 export function BoardView() {
   const {
-    listings, caveats, shortlistIds, split, setSplit, selected, trip, user,
+    listings, caveats, shortlistIds, favoriteIds, split, setSplit, selected, trip, user,
     requireSignIn, joinTrip, detailId, openDetail, closeDetail, findListing, isOwner,
   } = useApp();
   const compare = useCompare();
@@ -159,8 +160,9 @@ export function BoardView() {
   const showJoin = trip && !trip.isMember && !trip.isOwner;
 
   const TABS: { key: Tab; label: string; icon: typeof LayoutGrid; pip?: number }[] = [
-    { key: 'all', label: 'All homes', icon: LayoutGrid, pip: listings.length },
+    { key: 'all', label: 'Recommended', icon: LayoutGrid, pip: listings.length },
     { key: 'shortlist', label: 'Shortlist', icon: Heart, pip: shortlistIds.size },
+    { key: 'saved', label: 'Saved', icon: Bookmark, pip: favoriteIds.size },
     { key: 'decision', label: 'Decision', icon: Trophy },
     { key: 'discussion', label: 'Discussion', icon: MessagesSquare, pip: caveats.length },
   ];
@@ -229,9 +231,9 @@ export function BoardView() {
             {isOwner && <SearchPanel />}
             <section>
               <div className="row-head">
-                <span className="ttl">All homes</span>
+                <span className="ttl">Top recommended</span>
                 <span className="cnt tnum">{mainGrid.length}</span>
-                <span className="sub">curated · filtered</span>
+                <span className="sub">ranked for your group · filtered</span>
                 {mainGrid.length > 0 && (
                   <div className="view-toggle" role="group" aria-label="View">
                     <button className={`vt${view === 'grid' ? ' on' : ''}`} onClick={() => setView('grid')} aria-pressed={view === 'grid'} aria-label="Grid view" title="Grid"><Icon icon={LayoutGrid} className="ico" /></button>
@@ -262,6 +264,8 @@ export function BoardView() {
         )}
 
         {tab === 'shortlist' && <ShortlistSection compare={compare} />}
+
+        {tab === 'saved' && <SavedSection />}
 
         {tab === 'decision' && <DecisionSection />}
 

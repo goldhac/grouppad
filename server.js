@@ -127,6 +127,9 @@ function saveInsights(i, tripId) { writeJsonAtomic(tripFile(tripId, 'insights.js
 // Final pick: each member's single top choice, plus the organizer-locked decision.
 function loadFinalVotes(tripId)    { return readJson(tripFile(tripId, 'finalvotes.json'), {}); }
 function saveFinalVotes(v, tripId) { writeJsonAtomic(tripFile(tripId, 'finalvotes.json'), v); }
+// Personal saved/favourite homes — per user, per trip ({ [userId]: listingId[] }).
+function loadFavorites(tripId)     { return readJson(tripFile(tripId, 'favorites.json'), {}); }
+function saveFavorites(f, tripId)  { writeJsonAtomic(tripFile(tripId, 'favorites.json'), f); }
 function loadDecision(tripId)    { return readJson(tripFile(tripId, 'decision.json'), null); }
 function saveDecision(d, tripId) { writeJsonAtomic(tripFile(tripId, 'decision.json'), d); }
 
@@ -2323,6 +2326,31 @@ const hFinalVote = (req, res) => {
 };
 app.post('/api/final-vote', requireAuth, hFinalVote);
 app.post('/api/trips/:tripId/final-vote', requireAuth, loadTripOr404, hFinalVote);
+
+// ── Personal saved homes (each member's own shortlist) ──────────────────────────
+const hGetFavorites = (req, res) => {
+  const favs = loadFavorites(req.params.tripId);
+  res.json({ ids: (req.user && favs[req.user.id]) || [] });
+};
+app.get('/api/favorites', requireAuth, hGetFavorites);
+app.get('/api/trips/:tripId/favorites', requireAuth, loadTripOr404, hGetFavorites);
+
+const hToggleFavorite = (req, res) => {
+  const tripId = req.params.tripId;
+  const id = String((req.body && req.body.listing_id) || '').slice(0, 80);
+  if (!id) return res.status(400).json({ error: 'listing_id required' });
+  const favs = loadFavorites(tripId);
+  const set = new Set(favs[req.user.id] || []);
+  const on = req.body && req.body.on;
+  if (on === false) set.delete(id);
+  else if (on === true) set.add(id);
+  else set.has(id) ? set.delete(id) : set.add(id);
+  favs[req.user.id] = [...set];
+  saveFavorites(favs, tripId);
+  res.json({ ids: favs[req.user.id] });
+};
+app.post('/api/favorites', requireAuth, hToggleFavorite);
+app.post('/api/trips/:tripId/favorites', requireAuth, loadTripOr404, hToggleFavorite);
 
 const hDecision = (req, res) => {
   const tripId = req.params.tripId;

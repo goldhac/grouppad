@@ -161,6 +161,9 @@ export const api = {
   final: (tripId: string) => request<FinalState>(`${t(tripId)}/final`),
   finalVote: (tripId: string, listing_id: string | null) =>
     request<FinalState>(`${t(tripId)}/final-vote`, { method: 'POST', body: { listing_id } }),
+  favorites: (tripId: string) => request<{ ids: string[] }>(`${t(tripId)}/favorites`),
+  toggleFavorite: (tripId: string, listing_id: string, on?: boolean) =>
+    request<{ ids: string[] }>(`${t(tripId)}/favorites`, { method: 'POST', body: { listing_id, on } }),
   decision: (tripId: string, listing_id: string | null) =>
     request<{ decision: FinalState['decision'] }>(`${t(tripId)}/decision`, {
       method: 'POST',

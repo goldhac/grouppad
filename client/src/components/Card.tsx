@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, Lock, Users, Check, X, Sparkles, Clapperboard, Quote } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, Lock, Users, Check, X, Sparkles, Clapperboard, Quote, Bookmark } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Carousel } from '@/components/Carousel';
 import { Icon } from '@/components/ui/Icon';
@@ -28,9 +28,10 @@ function initials(name?: string | null) {
 
 export function Card({ listing: l, isSubmitted = false, isPipeline = false, compact = false }: CardProps) {
   const {
-    user, votes, final, isOwner, split, trip, selected, reviewsMap, toursMap,
-    castVote, toggleFinalPick, setDecision, deleteListing, toggleSelect, openDetail, requireSignIn,
+    user, votes, final, isOwner, split, trip, selected, reviewsMap, toursMap, favoriteIds,
+    castVote, toggleFinalPick, toggleFavorite, setDecision, deleteListing, toggleSelect, openDetail, requireSignIn,
   } = useApp();
+  const isSaved = favoriteIds.has(l.id);
 
   const rev = reviewsMap[`${l.source}:${l.id}`];
   const hasTour = toursMap[l.id]?.status === 'ready' && (toursMap[l.id]?.clips.some((c) => c.videoUrl) ?? false);
@@ -89,6 +90,16 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
     <Carousel photos={l.photos} alt={l.name}>
       {isDecision && <span className="corner"><Icon icon={Lock} className="ico" /> Official pick</span>}
       {hasTour && <span className="tourflag"><Icon icon={Clapperboard} className="ico" /> Tour</span>}
+      <button
+        type="button"
+        className={cn('save-btn', isSaved && 'on')}
+        aria-label={isSaved ? 'Saved to your shortlist' : 'Save to your shortlist'}
+        title={isSaved ? 'Saved — in your shortlist' : 'Save to your shortlist'}
+        aria-pressed={isSaved}
+        onClick={(e) => { e.stopPropagation(); void toggleFavorite(l.id); }}
+      >
+        <Icon icon={Bookmark} className="ico" />
+      </button>
       <button
         type="button"
         className={cn('star-btn', isMyPick && 'on')}

@@ -102,6 +102,8 @@ interface AppActions {
   // votes / picks
   castVote: (listingId: string, dir: VoteDir) => Promise<void>;
   toggleFinalPick: (listingId: string) => Promise<void>;
+  favoriteIds: ReadonlySet<string>;
+  toggleFavorite: (listingId: string) => Promise<void>;
   setDecision: (listingId: string | null) => Promise<void>;
   // submissions / caveats
   submitListing: (url: string, price?: string) => Promise<Listing>;
@@ -155,6 +157,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [caveats, setCaveats] = useState<Caveat[]>([]);
   const [insights, setInsights] = useState<Insights | null>(null);
   const [final, setFinal] = useState<FinalState>(EMPTY_FINAL);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const favRef = useRef<Set<string>>(new Set());
   const [reviewsMap, setReviewsMap] = useState<Record<string, ListingReviews>>({});
   const [toursMap, setToursMap] = useState<Record<string, ListingTour>>({});
 
@@ -231,8 +235,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTripLoading(true);
     setTripError(null);
     setSelected(new Set());
+    setFavoriteIds(new Set()); favRef.current = new Set();
     try {
-      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, revRes, tourRes] =
+      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, favRes, revRes, tourRes] =
         await Promise.all([
           api.getTrip(id),
           api.listings(id),
@@ -243,6 +248,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           api.caveats(id),
           api.insights(id),
           api.final(id),
+          api.favorites(id).catch(() => ({ ids: [] as string[] })),
           api.reviews(id).catch(() => ({})),
           api.tours(id).catch(() => ({})),
         ]);
@@ -256,6 +262,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setCaveats(cavRes);
       setInsights(insRes.analysis ? insRes : null);
       setFinal(finalRes);
+      { const fset = new Set(favRes.ids); setFavoriteIds(fset); favRef.current = fset; }
       setReviewsMap(revRes);
       setToursMap(tourRes as Record<string, ListingTour>);
     } catch (e) {
@@ -456,6 +463,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [requireSignIn, openAuth, toast],
   );
 
+  const toggleFavorite = useCallback(
+    async (listingId: string) => {
+      const id = tripIdRef.current;
+      if (!id || !requireSignIn('save this home')) return;
+      const cur = favRef.current;
+      const on = !cur.has(listingId);
+      const next = new Set(cur);
+      on ? next.add(listingId) : next.delete(listingId);
+      favRef.current = next; setFavoriteIds(next); // optimistic
+      try {
+        const res = await api.toggleFavorite(id, listingId, on);
+        const set = new Set(res.ids); favRef.current = set; setFavoriteIds(set);
+      } catch (e) {
+        favRef.current = cur; setFavoriteIds(cur); // revert
+        if (e instanceof ApiError && e.status === 401) { setUser(null); openAuth('save this home'); }
+        else toast(e instanceof Error ? e.message : 'Could not save this home.', 'error');
+      }
+    },
+    [requireSignIn, openAuth, toast],
+  );
+
   const setDecision = useCallback(
     async (listingId: string | null) => {
       const id = tripIdRef.current;
@@ -590,6 +618,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
+      favoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
@@ -601,6 +630,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
+      favoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,

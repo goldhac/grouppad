@@ -69,6 +69,13 @@
 .card.card-bare.is-selected .photo { box-shadow: 0 0 0 2px var(--accent); }
 .card.card-bare.is-official .photo { box-shadow: 0 0 0 2px var(--gold-dot); }
 
+/* ── personal "save to my shortlist" button (left of the top-choice star) ── */
+.card .save-btn { position: absolute; top: 10px; right: 52px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-overlay); backdrop-filter: blur(6px); border: 1px solid var(--photo-border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); box-shadow: var(--shadow-sm); transition: transform var(--dur-fast) var(--ease-out); }
+.card .save-btn .ico { width: var(--icon-md); height: var(--icon-md); }
+.card .save-btn:hover { transform: scale(1.08); }
+.card .save-btn.on { color: var(--accent-text); }
+.card .save-btn.on .ico { fill: var(--accent-text); }
+
 /* ── trimmed card: tiny inline rating in the meta line ──────────────────── */
 .card .meta .rate { display: inline-flex; align-items: center; gap: 3px; color: var(--text-2); font-weight: 600; }
 .card .meta .rate .ico { width: 12px; height: 12px; color: var(--star); }
