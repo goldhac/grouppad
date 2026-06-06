@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UserPlus, LayoutGrid, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X } from 'lucide-react';
+import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { Card } from '@/components/Card';
 import { BoardStats } from '@/components/board/BoardStats';
+import { BoardTable } from '@/components/board/BoardTable';
 import { EmptyBoardArt } from '@/components/ui/EmptyBoardArt';
 import { Icon } from '@/components/ui/Icon';
 import { BoardHeader } from '@/components/chrome/BoardHeader';
@@ -85,6 +86,7 @@ export function BoardView() {
   const compare = useCompare();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>('all');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
   const [sheet, setSheet] = useState<null | 'filters'>(null);
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -213,6 +215,12 @@ export function BoardView() {
                 <span className="ttl">All homes</span>
                 <span className="cnt tnum">{mainGrid.length}</span>
                 <span className="sub">curated · filtered</span>
+                {mainGrid.length > 0 && (
+                  <div className="view-toggle" role="group" aria-label="View">
+                    <button className={`vt${view === 'grid' ? ' on' : ''}`} onClick={() => setView('grid')} aria-pressed={view === 'grid'} aria-label="Grid view" title="Grid"><Icon icon={LayoutGrid} className="ico" /></button>
+                    <button className={`vt${view === 'list' ? ' on' : ''}`} onClick={() => setView('list')} aria-pressed={view === 'list'} aria-label="List view" title="List"><Icon icon={Rows3} className="ico" /></button>
+                  </div>
+                )}
               </div>
               {mainGrid.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-8 text-center">
@@ -223,6 +231,8 @@ export function BoardView() {
                       : 'No homes match these filters.'}
                   </p>
                 </div>
+              ) : view === 'list' ? (
+                <BoardTable homes={mainGrid} />
               ) : (
                 <div className="b-grid">
                   {mainGrid.map((l) => <Card key={l.id} listing={l} />)}
