@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright-core');
 
-const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+const CHROME = process.env.GP_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const BASE = 'http://localhost:3000';
 const TRIP = 'la-birthday-2026';
 const OUT = path.join(__dirname, '..', 'docs', 'screenshots');
@@ -61,6 +61,7 @@ async function shot(page, name, { full = false } = {}) {
 
   // ── Signed-in (owner) context ───────────────────────────────────────
   const ctx = await browser.newContext({ viewport, deviceScaleFactor: dsf });
+  await ctx.addInitScript(() => localStorage.setItem('gp_onboarded', '1')); // don't let the tour overlay block clicks
   if (SID) await ctx.addCookies([{ name: 'gp_session', value: SID, domain: 'localhost', path: '/', sameSite: 'Lax' }]);
   const p = await ctx.newPage();
 
@@ -78,23 +79,28 @@ async function shot(page, name, { full = false } = {}) {
   await shot(p, '06-board-top.png');
   await shot(p, '07-board-full.png', { full: true });
 
-  // Detail modal — click a card's title
+  // Board tabs (redesigned): Shortlist, Saved, Discussion
+  try { await p.getByRole('tab', { name: /Shortlist/ }).click({ timeout: 4000 }); await sleep(2000); await shot(p, '07b-shortlist.png', { full: true }); } catch (e) { console.log('shortlist:', e.message); }
+  try { await p.getByRole('tab', { name: /Saved/ }).click({ timeout: 4000 }); await sleep(1500); await shot(p, '07c-saved.png', { full: true }); } catch (e) { console.log('saved:', e.message); }
+  try { await p.getByRole('tab', { name: /Discussion/ }).click({ timeout: 4000 }); await sleep(1200); await shot(p, '07d-discussion.png', { full: true }); } catch (e) { console.log('discussion:', e.message); }
+  try { await p.getByRole('tab', { name: /Recommended/ }).click({ timeout: 3000 }); await sleep(800); } catch { /* back to grid */ }
+
+  // Detail modal — click the first card
   try {
-    await p.locator('article h2').first().click({ timeout: 4000 });
-    await sleep(1500);
+    await p.locator('.b-grid article.card').first().click({ timeout: 5000 });
+    await sleep(1800);
     await shot(p, '08-detail-modal.png');
     await p.keyboard.press('Escape');
-    await sleep(500);
+    await sleep(600);
   } catch (e) { console.log('detail:', e.message); }
 
-  // Comparison VS modal — tick 2 compare checkboxes, run 1v1
+  // Comparison VS modal — tick 2 Compare checkboxes, run 1v1
   try {
-    const boxes = p.locator('article label:has-text("compare") input[type="checkbox"]');
-    await boxes.nth(0).check({ timeout: 4000 });
-    await boxes.nth(1).check({ timeout: 4000 });
+    await p.locator('.b-grid article.card .cbx').nth(0).click({ timeout: 4000 });
+    await p.locator('.b-grid article.card .cbx').nth(1).click({ timeout: 4000 });
     await sleep(600);
     await p.getByRole('button', { name: /1v1/ }).first().click({ timeout: 4000 });
-    await sleep(7000); // wait for Gemini verdict
+    await sleep(8000); // wait for Gemini verdict
     await shot(p, '09-comparison-vs.png');
     await p.keyboard.press('Escape');
     await sleep(500);
