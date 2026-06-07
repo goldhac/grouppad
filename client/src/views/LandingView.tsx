@@ -2,6 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Sparkles, Users, Swords, Clapperboard, ArrowRight, LayoutGrid, ThumbsUp, Lock } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { MobileLanding } from '@/views/MobileLanding';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { ScoutMark } from '@/components/ui/ScoutMark';
@@ -22,6 +24,7 @@ const LOOP = [
 export function LandingView() {
   const { user, openAuth, startOnboarding } = useApp();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   useScrollReveal();
 
   const reduce =
@@ -34,6 +37,8 @@ export function LandingView() {
     else window.location.href = api.googleSignInUrl;
   };
   const seeHow = () => document.getElementById('how')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  if (isMobile) return <MobileLanding />;
 
   return (
     <div className="d1">

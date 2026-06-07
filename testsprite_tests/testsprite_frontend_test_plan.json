@@ -1,0 +1,1119 @@
+[
+  {
+    "id": "TC001",
+    "title": "Watch the landing page demo and start a trip",
+    "description": "This test verifies that a visitor can watch the landing page core-loop demo and use the primary call to action to begin the trip flow.",
+    "category": "Product landing",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the core-loop demo is visible"
+      },
+      {
+        "type": "action",
+        "description": "Wait for the demo to advance through its stages"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the landing page presents a clear path to start a trip"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC002",
+    "title": "Lock the official pick from Decision",
+    "description": "An organizer can lock the top choice in Decision and see the official pick banner appear.",
+    "category": "Decision lock (official pick)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the Decision tab"
+      },
+      {
+        "type": "action",
+        "description": "Review the top choice"
+      },
+      {
+        "type": "action",
+        "description": "Lock the official pick"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify an official pick banner is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the final pick is marked as official"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC003",
+    "title": "Browse recommended homes in grid view and open a listing",
+    "description": "This test verifies that a visitor can browse the recommended board, switch to grid view, and open a listing detail modal.",
+    "category": "Browse the board (Recommended)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify recommended homes are displayed"
+      },
+      {
+        "type": "action",
+        "description": "Switch to grid view"
+      },
+      {
+        "type": "action",
+        "description": "Open a home listing"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a listing detail modal is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC004",
+    "title": "Create a new trip with the required planning details",
+    "description": "This test verifies that a signed-in user can complete the trip creation flow and see the new trip created.",
+    "category": "Create a trip",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /trips/new"
+      },
+      {
+        "type": "action",
+        "description": "Enter a trip name"
+      },
+      {
+        "type": "action",
+        "description": "Enter a destination"
+      },
+      {
+        "type": "action",
+        "description": "Choose valid trip dates"
+      },
+      {
+        "type": "action",
+        "description": "Set a budget"
+      },
+      {
+        "type": "action",
+        "description": "Set a headcount"
+      },
+      {
+        "type": "action",
+        "description": "Submit the trip creation form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new trip is created"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC005",
+    "title": "Create a new trip",
+    "description": "This verifies that a signed-in user can create a trip with the required planning details.",
+    "category": "Trips dashboard",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the login field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /trips/new"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the trip name field with a unique trip name"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the destination field with a valid destination"
+      },
+      {
+        "type": "action",
+        "description": "Fill in valid trip dates and budget details"
+      },
+      {
+        "type": "action",
+        "description": "Fill in a valid headcount"
+      },
+      {
+        "type": "action",
+        "description": "Submit the trip creation form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the new trip is created"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user is taken to the new trip"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC006",
+    "title": "Filter recommended homes and keep the filtered results visible",
+    "description": "This test verifies that a visitor can open filters, apply lodging preferences, and see the board update to the filtered results.",
+    "category": "Browse the board (Recommended)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the filters panel"
+      },
+      {
+        "type": "action",
+        "description": "Toggle Under budget"
+      },
+      {
+        "type": "action",
+        "description": "Toggle Pool"
+      },
+      {
+        "type": "action",
+        "description": "Toggle Parking"
+      },
+      {
+        "type": "action",
+        "description": "Close the filters panel"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the filtered homes are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected filters remain applied"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC007",
+    "title": "Learn how the product works from the landing page",
+    "description": "This test verifies that a visitor can jump to the explainer content and see the product highlights on the landing page.",
+    "category": "Product landing",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /"
+      },
+      {
+        "type": "action",
+        "description": "Click the link to learn how the product works"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the demo and feature sections are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the landing page highlights the main product workflow"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC008",
+    "title": "Review Scout ranking of the shortlist",
+    "description": "A user can open Scout on the Shortlist tab and see the ranked analysis of shortlisted homes.",
+    "category": "Scout comparison & ranking",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the Shortlist tab"
+      },
+      {
+        "type": "action",
+        "description": "Click Ask Scout"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify Scout ranking results are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the shortlist analysis is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC009",
+    "title": "Open a listing and review its details",
+    "description": "A visitor can open a home from the board and inspect the full listing detail modal before closing it.",
+    "category": "Listing detail modal",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open a home card"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the listing detail modal is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify listing photos and key home details are displayed"
+      },
+      {
+        "type": "action",
+        "description": "Close the modal"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC010",
+    "title": "View trips dashboard with existing trips",
+    "description": "This verifies that a signed-in user can open the trips dashboard and see their trip list.",
+    "category": "Trips dashboard",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the login field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /trips"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the user's trips are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a trip can be opened from the dashboard"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC011",
+    "title": "Compare two homes with Scout",
+    "description": "A user can select two shortlisted homes, run a comparison, and see the comparison verdict and table.",
+    "category": "Scout comparison & ranking",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the Shortlist tab"
+      },
+      {
+        "type": "action",
+        "description": "Select two homes for comparison"
+      },
+      {
+        "type": "action",
+        "description": "Run the comparison"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a comparison table is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a comparison verdict is visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC012",
+    "title": "Browse more homes with the see-all expander",
+    "description": "This test verifies that a visitor can expand the recommended section to reveal additional homes on the board.",
+    "category": "Browse the board (Recommended)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Expand the recommended section to show more homes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify additional homes are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the expanded home set remains visible"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC013",
+    "title": "Change filters and see results update",
+    "description": "A visitor can refine the board with filters and immediately see the listing results reflect those choices.",
+    "category": "Filters (persisted)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the Filters modal"
+      },
+      {
+        "type": "action",
+        "description": "Toggle multiple filter options"
+      },
+      {
+        "type": "action",
+        "description": "Close the Filters modal"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the board results reflect the selected filters"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC014",
+    "title": "Refresh the board listings manually",
+    "description": "An owner can manually refresh the board listings and see a refresh confirmation on the board.",
+    "category": "Manual listing refresh",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Click Refresh on the board"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a refresh confirmation is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the listings remain displayed after the refresh"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC015",
+    "title": "Open a trip from the dashboard",
+    "description": "This verifies that a signed-in user can continue from the trips dashboard into a trip view.",
+    "category": "Trips dashboard",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the login field with {{LOGIN_USER}}"
+      },
+      {
+        "type": "action",
+        "description": "Fill in the password field with {{LOGIN_PASSWORD}}"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "action",
+        "description": "Navigate to /trips"
+      },
+      {
+        "type": "action",
+        "description": "Open one of the trips in the list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected trip is opened"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify trip content is displayed"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC016",
+    "title": "Switch to list view and return to the recommended board",
+    "description": "This test verifies that a visitor can switch between board layouts and still see the recommended homes afterward.",
+    "category": "Browse the board (Recommended)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Switch to list view"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the homes are displayed in list view"
+      },
+      {
+        "type": "action",
+        "description": "Switch back to grid view"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the recommended homes are displayed again"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC017",
+    "title": "Review price breakdown and home details",
+    "description": "A visitor can open a listing detail modal and confirm the price breakdown, amenities, and distance information are available.",
+    "category": "Listing detail modal",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open a home card"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the price breakdown is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify amenities and nearby distance details are displayed"
+      },
+      {
+        "type": "action",
+        "description": "Close the modal"
+      }
+    ],
+    "priority": "High"
+  },
+  {
+    "id": "TC018",
+    "title": "Apply board filters and keep them after reload",
+    "description": "A visitor can change board filters and still see the same applied filters after reloading the page.",
+    "category": "Filters (persisted)",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the Filters modal"
+      },
+      {
+        "type": "action",
+        "description": "Toggle a filter option"
+      },
+      {
+        "type": "action",
+        "description": "Adjust the split slider"
+      },
+      {
+        "type": "action",
+        "description": "Close the Filters modal"
+      },
+      {
+        "type": "action",
+        "description": "Reload the page"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected filters remain applied"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the split setting remains applied"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC019",
+    "title": "Submit a criteria request in Discussion",
+    "description": "A user can submit a new must-have criterion from Discussion and see it added to the pending requests list.",
+    "category": "Group criteria approval flow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the Discussion tab"
+      },
+      {
+        "type": "action",
+        "description": "Submit a criterion request"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the pending request appears"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the request is shown as pending"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC020",
+    "title": "Delete the trip from management",
+    "description": "An organizer can delete the trip from the management page and be taken to the appropriate post-delete state.",
+    "category": "Trip management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/manage"
+      },
+      {
+        "type": "action",
+        "description": "Delete the trip"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the trip is no longer accessible from the management view"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a deletion confirmation or empty state is displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC021",
+    "title": "Close voting for the trip",
+    "description": "An organizer can close voting from the management page and see voting marked as closed.",
+    "category": "Trip management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/manage"
+      },
+      {
+        "type": "action",
+        "description": "Close voting for the trip"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify voting is shown as closed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the board reflects that voting is no longer open"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC022",
+    "title": "Transfer the organizer role",
+    "description": "An organizer can transfer organizer access to another member and see the updated ownership reflected in the management view.",
+    "category": "Trip management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/manage"
+      },
+      {
+        "type": "action",
+        "description": "Select another member as the new organizer"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the organizer transfer"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the organizer role is updated"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the selected member is shown as the organizer"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC023",
+    "title": "Remove a member from the trip",
+    "description": "An organizer can remove a member from the trip and see the roster update accordingly.",
+    "category": "Trip management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/manage"
+      },
+      {
+        "type": "action",
+        "description": "Select a member to remove"
+      },
+      {
+        "type": "action",
+        "description": "Confirm the member removal"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the member roster no longer includes the removed member"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC024",
+    "title": "Page through listing photos",
+    "description": "A visitor can browse through multiple photos in a listing detail modal and continue viewing the same home details afterward.",
+    "category": "Listing detail modal",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open a home card"
+      },
+      {
+        "type": "action",
+        "description": "Page through the photo carousel"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify additional listing photos are displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the modal remains open on the same listing"
+      },
+      {
+        "type": "action",
+        "description": "Close the modal"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC025",
+    "title": "Expand Scout analysis details",
+    "description": "A user can open a Scout analysis and expand the full reasoning to review the detailed explanation and red flags.",
+    "category": "Scout comparison & ranking",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the Shortlist tab"
+      },
+      {
+        "type": "action",
+        "description": "Click a Scout analysis"
+      },
+      {
+        "type": "action",
+        "description": "Expand Scout's full analysis"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify detailed reasoning is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify red flags are visible"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC026",
+    "title": "Review the trip management roster",
+    "description": "An organizer can open the management page and see the current member roster for the trip.",
+    "category": "Trip management",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/manage"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the member roster is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify trip management controls are displayed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC027",
+    "title": "Open and step through the guided tour",
+    "description": "A visitor can start the board tour, advance through guidance, and complete the onboarding walkthrough.",
+    "category": "Guided tour",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Click the board tour entry point"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the guided tour is displayed"
+      },
+      {
+        "type": "action",
+        "description": "Click Next"
+      },
+      {
+        "type": "action",
+        "description": "Click Next"
+      },
+      {
+        "type": "action",
+        "description": "Click Done"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the guided tour is dismissed"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC028",
+    "title": "Approve a pending criterion request",
+    "description": "An organizer can approve a pending criterion request and see it move into the approved set used by Scout.",
+    "category": "Group criteria approval flow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the Discussion tab"
+      },
+      {
+        "type": "action",
+        "description": "Review a pending criterion request"
+      },
+      {
+        "type": "action",
+        "description": "Approve the request"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the criterion is approved"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify it is no longer pending"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC029",
+    "title": "Reject an incomplete trip creation form",
+    "description": "This test verifies that trip creation does not proceed when required planning details are missing and that the form shows validation feedback.",
+    "category": "Create a trip",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /trips/new"
+      },
+      {
+        "type": "action",
+        "description": "Enter a trip name"
+      },
+      {
+        "type": "action",
+        "description": "Submit the trip creation form"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify validation errors are visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the trip is not created"
+      }
+    ],
+    "priority": "Medium"
+  },
+  {
+    "id": "TC030",
+    "title": "Move backward and skip the guided tour",
+    "description": "A visitor can revisit earlier tour steps and dismiss the tour without finishing it.",
+    "category": "Guided tour",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Click the board tour entry point"
+      },
+      {
+        "type": "action",
+        "description": "Click Next"
+      },
+      {
+        "type": "action",
+        "description": "Click Back"
+      },
+      {
+        "type": "action",
+        "description": "Click Skip"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the guided tour is dismissed"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC031",
+    "title": "Reject a pending criterion request",
+    "description": "An organizer can reject a pending criterion request and see it removed from the pending set.",
+    "category": "Group criteria approval flow",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open the Discussion tab"
+      },
+      {
+        "type": "action",
+        "description": "Review a pending criterion request"
+      },
+      {
+        "type": "action",
+        "description": "Reject the request"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the request is removed from pending"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the pending set no longer includes the request"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC032",
+    "title": "See the refresh limit message",
+    "description": "An owner can attempt another manual refresh too soon and see the refresh limit message instead of another refresh.",
+    "category": "Manual listing refresh",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Click Refresh on the board"
+      },
+      {
+        "type": "action",
+        "description": "Click Refresh again"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify a refresh limit message is visible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC033",
+    "title": "Open the board help page from the public trip",
+    "description": "This test verifies that a visitor can access the public help content for the seeded trip and see the explainer content.",
+    "category": "Product landing",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/help"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the help content is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the trip guidance content is visible"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC034",
+    "title": "Close the listing modal with the keyboard",
+    "description": "A visitor can dismiss the listing detail modal using the keyboard after opening it from the board.",
+    "category": "Listing detail modal",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/board"
+      },
+      {
+        "type": "action",
+        "description": "Open a home card"
+      },
+      {
+        "type": "action",
+        "description": "Press Escape"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the listing detail modal is closed"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC035",
+    "title": "View the help guide and FAQ",
+    "description": "A visitor can open the public help page and review the trip-planning guidance and FAQ content.",
+    "category": "How-it-works help",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /t/la-birthday-2026/help"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the how-it-works guidance is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify FAQ content is displayed"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC036",
+    "title": "Read the terms of service",
+    "description": "This verifies that a visitor can open and read the public terms page.",
+    "category": "Legal pages",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /terms"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the terms of service content is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the legal page is readable"
+      }
+    ],
+    "priority": "Low"
+  },
+  {
+    "id": "TC037",
+    "title": "Read the privacy policy",
+    "description": "This verifies that a visitor can open and read the public privacy page.",
+    "category": "Legal pages",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /privacy"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the privacy policy content is displayed"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the legal page is readable"
+      }
+    ],
+    "priority": "Low"
+  }
+]

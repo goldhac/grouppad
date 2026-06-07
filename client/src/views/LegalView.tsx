@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { MobileLegal } from '@/views/MobileLegal';
 import { Icon } from '@/components/ui/Icon';
 
 interface Section { h: string; body: string[] }
@@ -34,6 +36,7 @@ function LegalDoc({ eyebrow, title, updated, intro, sections }: {
 }
 
 export function TermsView() {
+  if (useIsMobile()) return <MobileLegal />;
   return (
     <LegalDoc
       eyebrow="Legal" title="Terms of Service" updated="June 2026"
@@ -68,6 +71,7 @@ export function TermsView() {
 }
 
 export function PrivacyView() {
+  if (useIsMobile()) return <MobileLegal />;
   return (
     <LegalDoc
       eyebrow="Legal" title="Privacy Policy" updated="June 2026"

@@ -50,7 +50,7 @@ const FINALVOTES_FILE = path.join(DATA_DIR, 'finalvotes.json');      // persiste
 const DECISION_FILE   = path.join(DATA_DIR, 'decision.json');        // persisted (admin-locked final pick)
 const USAGE_FILE      = path.join(DATA_DIR, 'usage.json');           // persisted (app-side API meter, by month)
 
-app.use(express.json());
+app.use(express.json({ limit: '256kb' }));
 app.use((req, res, next) => attachUser(req, res, next));
 // Serve the compiled React client (Vite build) first; fall back to the legacy
 // static `public/` assets for anything not produced by the build. The client
@@ -80,6 +80,10 @@ const TRIPS_FILE = path.join(DATA_DIR, 'trips.json');
 
 function tripDir(tripId) {
   if (!tripId || tripId === LA_TRIP_ID) return DATA_DIR; // legacy flat files = LA trip
+  // Defense-in-depth: ids are server-generated as slug-hex ([a-z0-9-]). Reject anything
+  // else so a caller that skipped the getTrip gate can never escape the data dir via
+  // path traversal (e.g. tripId = "../../etc").
+  if (!/^[a-z0-9-]+$/.test(tripId)) throw new Error('Invalid trip id');
   const d = path.join(DATA_DIR, 'trips', tripId);
   try { fs.mkdirSync(d, { recursive: true }); } catch {}
   return d;
@@ -436,6 +440,11 @@ function requireAuth(req, res, next) {
 async function sendMagicLink(email, link) {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
+    // On a live deploy, NEVER print a working sign-in link to the logs — anyone with
+    // log access could log in as any email. Fail closed; the caller returns a 502.
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Email delivery is not configured');
+    }
     console.log(`[auth] (email not configured) magic link for ${email}: ${link}`);
     return { sent: false };
   }
@@ -675,7 +684,7 @@ async function pickBestPhotos(photos, maxN = TOUR_MAX_CLIPS) {
   const gk = process.env.GEMINI_API_KEY;
   const list = (photos || []).slice(0, 12);
   const fallback = () => list.slice(0, maxN).map((_, i) => ({ index: i, feature: 'Highlight' }));
-  if (!gk || list.length === 0) return fallback();
+  if (!gk || !geminiGuard() || list.length === 0) return fallback();
   if (list.length <= maxN) return fallback();
   const parts = [{ text: `These are photos of ONE vacation rental, in order (index 0..${list.length - 1}). Build a short house-tour shot list of ${maxN} photos, IN TOUR ORDER:
 1) FIRST pick the best establishing EXTERIOR shot — the front of the house, facade, building, or full exterior — if ANY photo shows one (this should lead the tour).
@@ -695,7 +704,7 @@ Respond JSON only: {"picks":[{"index":n,"feature":"short label"}]}` }];
     const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${gk}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json' } }),
+      body: JSON.stringify({ contents: [{ parts }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json', maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } } }),
     });
     const d = await r.json();
     bumpUsage('gemini', { calls: 1 });
@@ -906,9 +915,15 @@ async function assertSafeUrl(rawUrl) {
 
 // ── Admin middleware ──────────────────────────────────────────────────────────
 // Header-only (never the query string) so the key can't leak into access logs.
+// Constant-time string compare so the admin-key check can't be narrowed by timing.
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a)), bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
 function requireAdmin(req, res, next) {
   const key = req.headers['x-admin-key'] || '';
-  if (key && key === ADMIN_KEY) return next();
+  if (key && safeEqual(key, ADMIN_KEY)) return next();
   if (isSuperAdmin(req.user)) return next();   // signed-in platform admin — no key needed
   return res.status(401).json({ error: 'Admin access required' });
 }
@@ -1014,7 +1029,7 @@ async function geocodeArea(area) {
   if (!key) return null;
   if (_geoCache.has(key)) return _geoCache.get(key);
   const gk = process.env.GEMINI_API_KEY;
-  if (!gk) return null;
+  if (!gk || !geminiGuard()) return null;
   const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
   const prompt = `Give approximate coordinates for the place "${area}". Respond with JSON only: {"lat":0,"lng":0}`;
   try {
@@ -1316,7 +1331,17 @@ async function fetchAirbnbBookingPrice(listingId) {
 }
 
 // Playwright: renders the full page in headless Chromium, extracts price from the booking panel
+// Cap concurrent headless-Chromium launches so several simultaneous submits can't
+// spawn a dozen browsers and OOM-kill the single instance. Excess waits in a queue.
+const _scrapeSem = (() => {
+  const max = Math.max(1, Number(process.env.MAX_CONCURRENT_SCRAPES ?? 2));
+  let active = 0; const q = [];
+  const next = () => { while (active < max && q.length) { active++; q.shift()(); } };
+  return { acquire: () => new Promise((r) => { q.push(r); next(); }), release: () => { active = Math.max(0, active - 1); next(); } };
+})();
+
 async function fetchPriceWithPlaywright(cleanUrl, source) {
+  await _scrapeSem.acquire();
   let browser;
   try {
     const { chromium } = require('playwright-core');
@@ -1387,12 +1412,27 @@ async function fetchPriceWithPlaywright(cleanUrl, source) {
     return null;
   } finally {
     if (browser) await browser.close().catch(() => {});
+    _scrapeSem.release();
   }
 }
 
 // Firecrawl v2: renders the page with a managed browser + uses LLM to extract price
+// Cap Firecrawl spend: cache the remaining-credit check (~10 min) and stop before
+// it runs dry, with a small buffer. Unknown balance → allow (fail open).
+let _fcCredit = { at: 0, remaining: null };
+async function firecrawlGuard() {
+  try {
+    if (!FIRECRAWL_KEY) return true;
+    if (Date.now() - _fcCredit.at > 10 * 60 * 1000) {
+      const c = await fetchFirecrawlCredits().catch(() => null);
+      _fcCredit = { at: Date.now(), remaining: c && c.remaining != null ? c.remaining : null };
+    }
+    return _fcCredit.remaining == null || _fcCredit.remaining > 5;
+  } catch { return true; }
+}
 async function fetchPriceViaFirecrawl(listingUrl) {
   if (!FIRECRAWL_KEY) return null;
+  if (!(await firecrawlGuard())) { console.warn('[firecrawl] credits low — skipping scrape'); return null; }
   bumpUsage('firecrawl', { calls: 1 }); // each scrape spends Firecrawl credits
   try {
     const ctrl = new AbortController();
@@ -1660,7 +1700,10 @@ app.post('/api/auth/request-link', rateLimit({ windowMs: 60000, max: 5 }), async
   for (const [h, m] of Object.entries(magic)) if (m.expires_at < now) delete magic[h]; // prune
   magic[sha256(token)] = { email, expires_at: now + MAGIC_TTL_MS };
   saveMagic(magic);
-  const link = `${req.protocol}://${req.get('host')}/api/auth/verify?token=${token}`;
+  // Build the sign-in link from the trusted, configured base URL — never from the
+  // request Host header (a caller can spoof Host to point a valid token at their
+  // own domain and harvest it on click → account takeover).
+  const link = `${APP_BASE_URL}/api/auth/verify?token=${token}`;
   try { await sendMagicLink(email, link); }
   catch { return res.status(502).json({ error: 'Could not send the email. Try again shortly.' }); }
   res.json({ ok: true });
@@ -1719,11 +1762,11 @@ app.post('/api/admin/logout-all', requireAdmin, (req, res) => {
 // ── Auth: Sign in with Google (OAuth 2.0 authorization-code flow) ────────────────
 const OAUTH_STATE_COOKIE = 'gp_oauth_state';
 const googleConfigured = () => !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-// The redirect URI must match exactly what's registered in Google Cloud. We build
-// it from the request (trust-proxy makes this https on Railway) but allow an env
-// override for safety.
+// The redirect URI must match exactly what's registered in Google Cloud. Derive it
+// from the trusted configured base URL (env override still wins) rather than the
+// spoofable request Host header.
 function googleRedirectUri(req) {
-  return process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/auth/google/callback`;
+  return process.env.GOOGLE_REDIRECT_URI || `${APP_BASE_URL}/api/auth/google/callback`;
 }
 
 // Kick off the flow: stash a random state in a short-lived cookie (CSRF guard)
@@ -1831,8 +1874,8 @@ const hPostVotes = (req, res) => {
   noteJoin(tripId, req.user); // auto-join on first participation (+ alerts organizer)
   res.json(votes);
 };
-app.post('/api/votes', requireAuth, hPostVotes);
-app.post('/api/trips/:tripId/votes', requireAuth, loadTripOr404, hPostVotes);
+app.post('/api/votes', requireAuth, rateLimit({ windowMs: 60000, max: 90 }), hPostVotes);
+app.post('/api/trips/:tripId/votes', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 90 }), hPostVotes);
 
 // Admin: verify key (global super-admin)
 app.get('/api/admin/verify', requireAdmin, (req, res) => res.json({ ok: true }));
@@ -1905,10 +1948,14 @@ const hSubmit = async (req, res) => {
     scraped.priceIsBaseOnly = false;
   }
 
-  // Estimate 5-night all-in price (Airbnb total already includes most fees; add 14% tax)
+  // Estimate 5-night all-in price — SAME source-aware formula as the live pipeline
+  // (server.js ~2105) so community homes are comparable for budget + AI ranking:
+  // Airbnb totals already bundle the cleaning fee; base-only prices add the same
+  // cleaning placeholder the pipeline uses. Then apply tax on top.
   let est5n = null;
   if (scraped.displayed_5n) {
-    est5n = Math.round(scraped.displayed_5n * 1.14);
+    const base = scraped.priceIsBaseOnly ? scraped.displayed_5n + PIPELINE_CLEANING_FEE : scraped.displayed_5n;
+    est5n = Math.round(base * (1 + PIPELINE_TAX));
   }
 
   const budget = est5n == null ? 'unknown'
@@ -2024,16 +2071,20 @@ const hPipeline = (req, res) => {
     return res.json({ listings: seed, count: seed.length, note: 'Showing saved snapshot — pipeline DB unavailable' });
   }
   try {
-    // The `distances` column is added by the pipeline on its next run; older DBs
-    // don't have it yet, so select it conditionally to avoid "no such column".
-    const hasDistances = db.prepare('PRAGMA table_info(listings)').all().some(c => c.name === 'distances');
+    // The `distances` and `distance_mi` columns are added by the pipeline on its
+    // next run; older/read-only DBs may not have them yet, so select conditionally
+    // to avoid "no such column" (which otherwise throws → silent seed fallback,
+    // hiding ALL live listings).
+    const cols = db.prepare('PRAGMA table_info(listings)').all().map(c => c.name);
+    const hasDistances = cols.includes('distances');
+    const hasDistanceMi = cols.includes('distance_mi');
     const rows = db.prepare(`
       SELECT
         l.source, l.listing_id, l.name, l.url, l.location,
         l.bedrooms, l.bathrooms, l.sleeps,
         l.amenities, l.photos,
         l.has_pool, l.has_parking,
-        l.rating, l.reviews, l.distance_mi, ${hasDistances ? 'l.distances' : "'[]' AS distances"},
+        l.rating, l.reviews, ${hasDistanceMi ? 'l.distance_mi' : 'NULL AS distance_mi'}, ${hasDistances ? 'l.distances' : "'[]' AS distances"},
         l.enriched, l.last_seen,
         ps.price_total, ps.run_date
       FROM listings l
@@ -2120,10 +2171,26 @@ app.get('/api/trips/:tripId/pipeline-listings', loadTripOr404, hPipeline);
 //          parking,rating,reviews,url,amenities}], itinerary: "free text",
 //          criteria?: "free text" }
 // Returns: { analysis: "markdown text" }
+// Gemini has no per-key billing API, so we self-meter tokens → estimated USD and
+// hard-stop when the configured monthly cap is hit (mirrors apifyGuard). Rates +
+// usage are read at call time, so referencing the later-declared rate consts is safe.
+const GEMINI_MONTHLY_CAP_USD = Number(process.env.GEMINI_MONTHLY_CAP_USD ?? 25);
+function geminiSpendThisMonthUsd() {
+  const g = (loadUsage()[usageMonth()] || {}).gemini || {};
+  return (g.promptTokens || 0) * GEMINI_IN_RATE + (g.candidatesTokens || 0) * GEMINI_OUT_RATE;
+}
+function geminiGuard() {
+  try { return geminiSpendThisMonthUsd() < GEMINI_MONTHLY_CAP_USD; }
+  catch { return true; } // fail open on a metering error rather than block all AI
+}
+
 const hCompare = async (req, res) => {
   const tripId = req.params.tripId;
   if (!GEMINI_API_KEY) {
     return res.status(503).json({ error: 'AI compare is not configured (GEMINI_API_KEY missing).' });
+  }
+  if (!geminiGuard()) {
+    return res.status(429).json({ error: 'Scout has reached its usage limit for this month — comparisons are paused. The site owner can raise GEMINI_MONTHLY_CAP_USD.' });
   }
   const { listings, criteria, mode } = req.body || {};
   if (!Array.isArray(listings) || listings.length < 2) {
@@ -2230,8 +2297,92 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
     res.status(500).json({ error: e.message });
   }
 };
-app.post('/api/compare-listings', rateLimit({ windowMs: 60000, max: 10 }), hCompare);
-app.post('/api/trips/:tripId/compare-listings', loadTripOr404, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
+app.post('/api/compare-listings', requireAuth, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
+app.post('/api/trips/:tripId/compare-listings', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
+
+// ── AI-ranked recommendations ────────────────────────────────────────────────
+// Scout ranks the FULL candidate pool (curated + live + community — the client
+// sends them) by itinerary fit + all facets, with a one-line "why" each. Cached
+// by hash(candidate ids + itinerary + approved caveats) so the same pool never
+// re-spends Gemini; recomputes only when the pool or itinerary changes. Guests
+// and over-cap requests get a heuristic order (no spend), so the board never blocks.
+function loadAiRank(tripId) { return readJson(tripFile(tripId, 'ai-rank.json'), null); }
+function saveAiRank(tripId, v) { writeJsonAtomic(tripFile(tripId, 'ai-rank.json'), v); }
+function heuristicRankOrder(listings) {
+  const score = (l) => (l.budget === 'under' ? 3 : l.budget === 'marginal' ? 1 : l.budget === 'over' ? -1 : 0) * 100
+    + (l.rating || 0) * 10 + (l.sleeps || 0) * 0.1 - (l.distance_mi || 0) * 0.05;
+  return [...listings].sort((a, b) => score(b) - score(a)).map((l) => ({ id: String(l.id), why: null }));
+}
+const hAiRank = async (req, res) => {
+  const tripId = req.params.tripId;
+  const all = (Array.isArray(req.body?.listings) ? req.body.listings : []).filter((l) => l && l.id != null);
+  if (all.length < 2) return res.status(400).json({ error: 'Need at least 2 listings to rank.' });
+
+  const itinerary = loadItinerary(tripId).text || '';
+  const caveats = loadCaveats(tripId).filter((c) => (c.status ?? 'approved') === 'approved').map((c) => `${c.name}: ${c.text}`).join('\n');
+  const crypto = require('crypto');
+  const ids = all.map((l) => String(l.id)).sort();
+  const hash = crypto.createHash('sha1').update(`${ids.join(',')}::${itinerary}::${caveats}`).digest('hex');
+
+  const cached = loadAiRank(tripId);
+  if (cached && cached.hash === hash && req.query.force !== '1') {
+    return res.json({ order: cached.order, ranked_at: cached.ranked_at, cached: true });
+  }
+  // Only an authed member under the cost cap triggers a fresh Gemini spend.
+  if (!GEMINI_API_KEY || !req.user || !geminiGuard()) {
+    return res.json({ order: heuristicRankOrder(all), ranked_at: null, fallback: true });
+  }
+
+  const trip = getTrip(tripId) || loadListings(tripId).trip || {};
+  const adults = trip.adults || 14;
+  const dest = trip.destination || 'their destination';
+  const pre = heuristicRankOrder(all).slice(0, 22).map((o) => all.find((l) => String(l.id) === o.id)).filter(Boolean);
+  // Short keys ("c0", "c1"…) — the real ids are 19-digit numbers that lose
+  // precision if the model echoes them as JSON numbers, so never send the raw id.
+  const keyToId = {};
+  const compact = pre.map((l, i) => {
+    const k = 'c' + i; keyToId[k] = String(l.id);
+    return {
+      k, name: (l.name || '').slice(0, 80), source: l.source,
+      beds: l.bd, baths: l.ba, sleeps: l.sleeps, area: l.area, miFromDTLA: l.distance_mi,
+      all_in_5n: l.est_5n, per_person: l.est_5n ? Math.ceil(l.est_5n / Math.max(1, adults)) : null,
+      budget: l.budget, pool: l.pool === 'yes', hot_tub: l.hot_tub === 'yes', parking: l.parking === 'yes',
+      rating: l.rating, reviews: l.reviews, community: !!l.submitted_by,
+    };
+  });
+  const prompt = `You rank vacation rentals for a group of ${adults} planning a trip to ${dest}${trip.budget ? `, budget ~$${Number(trip.budget).toLocaleString()} all-in` : ''}. Rank the homes from BEST to WORST overall fit, weighing: all-in & per-person cost vs budget, distance/convenience to their plans, capacity for the whole group, pool/parking/amenities, and ratings.
+${itinerary ? `\nGroup itinerary / plans:\n${itinerary.slice(0, 3000)}\n` : ''}${caveats ? `\nGroup must-haves / dealbreakers:\n${caveats.slice(0, 1500)}\n` : ''}
+Candidates (JSON):\n${JSON.stringify(compact)}
+Return ONLY a JSON array, best first, of {"k":"<the candidate's k>","why":"<one short sentence, ≤16 words${itinerary ? ', referencing their itinerary/must-haves when relevant' : ''}>"}. Use the exact "k" values. Include every candidate exactly once.`;
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, responseMimeType: 'application/json', maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } } }) });
+    const data = await r.json();
+    if (!r.ok) { console.error('[ai-rank] gemini', r.status, JSON.stringify(data).slice(0, 200)); return res.json({ order: heuristicRankOrder(all), fallback: true }); }
+    const um = data.usageMetadata || {};
+    bumpUsage('gemini', { calls: 1, promptTokens: um.promptTokenCount || 0, candidatesTokens: um.candidatesTokenCount || 0, totalTokens: um.totalTokenCount || 0 });
+    let parsed = [];
+    const rawText = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '[]';
+    try {
+      const raw = JSON.parse(rawText);
+      parsed = Array.isArray(raw) ? raw : (Array.isArray(raw.ranking) ? raw.ranking : (Object.values(raw).find(Array.isArray) || []));
+    } catch { parsed = []; }
+    let order = parsed.filter((o) => o && keyToId[o.k]).map((o) => {
+      const w = o.why ?? o.reason ?? o.reasoning;
+      return { id: keyToId[o.k], why: typeof w === 'string' && w.trim() ? w.trim().slice(0, 140) : null };
+    });
+    const seen = new Set(order.map((o) => o.id));
+    for (const o of heuristicRankOrder(all)) if (!seen.has(o.id)) order.push(o);
+    if (order.length < 2) order = heuristicRankOrder(all);
+    const out = { hash, order, ranked_at: new Date().toISOString() };
+    saveAiRank(tripId, out);
+    res.json({ order, ranked_at: out.ranked_at });
+  } catch (e) {
+    console.error('[ai-rank]', e.message);
+    res.json({ order: heuristicRankOrder(all), fallback: true });
+  }
+};
+app.post('/api/trips/:tripId/ai-rank', loadTripOr404, rateLimit({ windowMs: 60000, max: 8 }), hAiRank);
 
 // Admin: trigger a pipeline run (runs pipeline.js as a child process)
 app.post('/api/admin/run-pipeline', requireAdmin, async (req, res) => {
@@ -2286,8 +2437,8 @@ const hPostCaveat = (req, res) => {
   noteJoin(tripId, req.user);
   res.json(trimmed);
 };
-app.post('/api/caveats', requireAuth, hPostCaveat);
-app.post('/api/trips/:tripId/caveats', requireAuth, loadTripOr404, hPostCaveat);
+app.post('/api/caveats', requireAuth, rateLimit({ windowMs: 60000, max: 20 }), hPostCaveat);
+app.post('/api/trips/:tripId/caveats', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 20 }), hPostCaveat);
 
 // Organizer approves a pending criterion request → it starts feeding Scout.
 const hApproveCaveat = (req, res) => {
@@ -2362,8 +2513,8 @@ const hFinalVote = (req, res) => {
   const { counts, total } = tallyFinal(votes);
   res.json({ counts, total, myPick: votes[req.user.id] || null, decision: loadDecision(tripId) });
 };
-app.post('/api/final-vote', requireAuth, hFinalVote);
-app.post('/api/trips/:tripId/final-vote', requireAuth, loadTripOr404, hFinalVote);
+app.post('/api/final-vote', requireAuth, rateLimit({ windowMs: 60000, max: 60 }), hFinalVote);
+app.post('/api/trips/:tripId/final-vote', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 60 }), hFinalVote);
 
 // ── Personal saved homes (each member's own shortlist) ──────────────────────────
 const hGetFavorites = (req, res) => {
@@ -2387,8 +2538,8 @@ const hToggleFavorite = (req, res) => {
   saveFavorites(favs, tripId);
   res.json({ ids: favs[req.user.id] });
 };
-app.post('/api/favorites', requireAuth, hToggleFavorite);
-app.post('/api/trips/:tripId/favorites', requireAuth, loadTripOr404, hToggleFavorite);
+app.post('/api/favorites', requireAuth, rateLimit({ windowMs: 60000, max: 90 }), hToggleFavorite);
+app.post('/api/trips/:tripId/favorites', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 90 }), hToggleFavorite);
 
 const hDecision = (req, res) => {
   const tripId = req.params.tripId;
@@ -3004,6 +3155,18 @@ function scheduleDigest() {
     scheduleDigest();
   }, delay);
 }
+
+// ── Crash safety ─────────────────────────────────────────────────────────────
+// One unhandled error must not take the whole single-process server down for
+// everyone. Express error middleware catches sync/async route throws; the process
+// handlers log (and lean on Railway's auto-restart) rather than exit silently.
+app.use((err, req, res, _next) => {
+  console.error('[express] unhandled route error:', (err && err.stack) || err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: 'Something went wrong on our end. Try again.' });
+});
+process.on('unhandledRejection', (reason) => { console.error('[unhandledRejection]', reason); });
+process.on('uncaughtException', (err) => { console.error('[uncaughtException]', (err && err.stack) || err); });
 
 app.listen(PORT, () => {
   console.log(`GroupPad listening on :${PORT}`);

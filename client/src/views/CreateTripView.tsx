@@ -6,12 +6,15 @@ import {
   CheckCircle2, AlertCircle,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { MobileCreate } from '@/views/MobileCreate';
 
 type SegKey = 'dest' | 'cin' | 'cout' | 'guests';
 
 export function CreateTripView() {
   const { user, accountLoading, createTrip, openAuth } = useApp();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   const [form, setForm] = useState({
     dest: '', cin: '', cout: '', guests: '8',
@@ -27,6 +30,7 @@ export function CreateTripView() {
     openAuth('create a trip');
     return <Navigate to="/" replace />;
   }
+  if (isMobile) return <MobileCreate />;
 
   const set = (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>

@@ -1,0 +1,166 @@
+/* ============================================================================
+   GroupPad — MOBILE LAYER.  Imported LAST so it wins specificity ties.
+   Viewport media queries (reliable everywhere, unlike container queries routed
+   through a Radix portal). The goal is RESIZE + COLLAPSE on phones — never
+   horizontal overflow, never desktop type sizes squeezed into a 375px column.
+
+   Tiers:
+     ≤ 720px  — phones + small tablets (single-column, full-bleed sheets)
+     ≤ 400px  — small phones (tighter type + spacing)
+   ============================================================================ */
+
+/* ---- global guards: nothing may push the page wider than the screen -------- */
+@media (max-width: 720px) {
+  html, body { overflow-x: hidden; }
+  img, video, canvas, iframe { max-width: 100%; }
+}
+
+/* ====================== DETAIL MODAL (the decision sheet) ==================== */
+/* Container queries on .dx-shell can be flaky inside the portal; pin the mobile
+   layout with viewport rules so the content can never out-grow the viewport. */
+@media (max-width: 720px) {
+  .dx-modalwrap { padding: 0 !important; align-items: stretch; }
+  .dx-modal {
+    width: 100vw; max-width: 100vw; min-height: 100vh;
+    border-radius: 0; border: 0;
+  }
+  .dx-shell, .dx, .dx-gallery, .dx-info, .dx-head, .dx-price, .dx-note, .pp-hero {
+    min-width: 0; max-width: 100%;
+  }
+  .dx { grid-template-columns: 1fr; }            /* always single column on phones */
+  .dx-info { padding: 16px 16px 96px; max-height: none; overflow-x: clip; }
+  .dx-title { font-size: clamp(19px, 5.2vw, 22px); line-height: 1.16; overflow-wrap: anywhere; }
+  .dx-lead { aspect-ratio: 4 / 3; }
+  .pp-hero .pp-amt { font-size: clamp(28px, 9vw, 34px); }
+  .pp-hero { padding: 14px; }
+  .dx-section-label { margin-bottom: 8px; }
+  /* sticky action bar already exists via container query — guarantee it here too */
+  .dx-bottombar { display: flex; align-items: center; gap: 9px; position: sticky; bottom: 0;
+    z-index: 25; padding: 10px 12px; background: var(--surface-overlay);
+    backdrop-filter: blur(11px); border-top: 1px solid var(--border); }
+  .dx-bottombar .btn { flex: 1; }
+  .dx-make { flex-wrap: wrap; }
+}
+@media (max-width: 400px) {
+  .dx-info { padding: 14px 13px 96px; gap: 13px; }
+  .dx-specs { gap: 10px; font-size: 13px; }
+  .dx-distrow { padding: 9px 10px; }
+}
+
+/* ====================== COMPARISON MODAL (1v1 / multi) ====================== */
+@media (max-width: 720px) {
+  .compare-modal { padding: 0; }
+  .compare-modal .cm-card { max-width: 100vw; min-height: 100vh; border-radius: 0; }
+  /* 1v1 stays side-by-side (that's the whole point) but tightens up */
+  .vs-wrap.vs-1v1 { gap: 10px; }
+  .vs-col .vbody { padding: 12px; gap: 7px; }
+  .vs-col .vtitle { font-size: 14px; }
+  .vs-col .specs { gap: 9px; font-size: 12.5px; }
+  /* multi-compare: switching to flex makes the inline grid-template-columns inert,
+     so the cards scroll horizontally instead of crushing to slivers */
+  .vs-wrap.vs-multi { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .vs-wrap.vs-multi > .vs-col { flex: 0 0 78%; scroll-snap-align: start; }
+  /* the comparison table scrolls horizontally rather than overflowing the sheet */
+  .cmp-table { display: block; overflow-x: auto; white-space: nowrap; font-size: 12.5px; }
+  .cmp-table th, .cmp-table td { padding: 8px 10px; }
+}
+
+/* ====================== LANDING — stat strip + hero ========================= */
+@media (max-width: 720px) {
+  .d1-stats { grid-template-columns: repeat(2, 1fr); gap: 18px 14px; padding: 30px 0; }
+  .d1-stat .n { font-size: clamp(28px, 8vw, 36px); }
+}
+
+/* ====================== ONBOARDING demo (per-person number) ================= */
+@media (max-width: 720px) {
+  .obv-pp .big { font-size: clamp(40px, 13vw, 52px); }
+}
+
+/* ====================== TOUCH TARGETS ====================================== */
+/* Make the small icon buttons comfortable to tap (≈44px) without changing their
+   visual box much — padding via min sizes only on phones. */
+@media (max-width: 720px) {
+  .dx-iconbtn, .modal-x, .ico-btn, .vt { min-width: 40px; min-height: 40px; }
+  .seeall, .filters-btn, .tab { min-height: 40px; }
+}
+
+/* ====================== HOME ROWS → 2-UP CAROUSEL (mobile) ==================
+   Airbnb/VRBO pattern: curated home rows scroll horizontally with ~2 cards
+   visible + a peek of the next, instead of one giant card per row. Applies to
+   the Recommended, Shortlist, Community and Live grids in GRID view only
+   (list view still renders the table). Desktop is untouched. */
+@media (max-width: 640px) {
+  .b-grid, .sl-grid {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: visible;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scroll-padding-left: 14px;
+    /* bleed to the screen edges (parent .b-body has 14px padding on mobile) so
+       the peek reads as "there's more →" rather than a clipped card */
+    margin-inline: -14px;
+    padding: 2px 14px 12px;
+  }
+  .b-grid::-webkit-scrollbar,
+  .sl-grid::-webkit-scrollbar { display: none; }
+  .b-grid { scrollbar-width: none; }
+
+  .b-grid > .card,
+  .sl-grid > .card {
+    flex: 0 0 44%;            /* two cards in view + a peek of the third */
+    scroll-snap-align: start;
+    min-width: 0;
+  }
+
+  /* compact the card body to read well in the ~155px carousel cell */
+  .b-grid > .card .body,
+  .sl-grid > .card .body { padding: 11px 12px 12px; gap: 7px; }
+  .b-grid > .card .title,
+  .sl-grid > .card .title { font-size: 14.5px; line-height: 1.22; }
+  .b-grid > .card .meta { font-size: 11.5px; gap: 3px 7px; }
+  /* stack all-in over per-person; side-by-side won't fit at this width */
+  .b-grid > .card .card-money .cm-top,
+  .sl-grid > .card .card-money .cm-top { flex-direction: column; align-items: flex-start; gap: 7px; }
+  .b-grid > .card .card-money .price .amt { font-size: 19px; }
+  .b-grid > .card .perperson,
+  .sl-grid > .card .perperson { align-self: flex-start; }
+  /* footer: votes on their own line, Compare below */
+  .b-grid > .card .card-foot,
+  .sl-grid > .card .card-foot { flex-wrap: wrap; gap: 9px 10px; }
+
+  /* a touch more breathing room between stacked rows/sections */
+  .row-tint, section + section { margin-top: 6px; }
+}
+
+/* ====================== BOARD TOP REGION (mobile) ==========================
+   On desktop the whole masthead+stats+decision-strip+tabs is sticky. On a phone
+   that eats ~70% of the viewport before a single home shows. Airbnb/VRBO keep
+   only a compact bar pinned and let the rest scroll away — do the same: the
+   masthead/stats/banner/decision-strip scroll off, the TAB BAR stays pinned so
+   you can still switch sections, and the decision strip is compacted. */
+@media (max-width: 640px) {
+  .b-stick { position: static; backdrop-filter: none; background: transparent; border-bottom: 0; }
+
+  /* pin just the tab bar, 56px below the global navbar. The filter scroller and
+     everything above scroll away (filters are still one tap away in the bottom
+     bar). One sticky element at a known offset = no fragile offset stacking. */
+  .b-controls {
+    position: sticky; top: 56px; z-index: 32;
+    background: var(--surface-overlay); backdrop-filter: blur(11px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* compact the decision strip so it doesn't dominate the first screen */
+  .strip { padding: 10px 14px; gap: 9px; }
+  .strip .lead .thumb { width: 34px; height: 34px; }
+  .strip .lead .who .nm { font-size: 13.5px; }
+  .strip .s-actions { width: 100%; display: flex; gap: 8px; }
+  .strip .s-actions .btn { flex: 1; }
+
+  /* tighten the masthead stats block so cards surface sooner */
+  .b-title { gap: 8px; }
+  .tab-panel { padding-top: 12px; }
+}

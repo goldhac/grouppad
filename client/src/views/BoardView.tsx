@@ -5,6 +5,8 @@ import { GuidedTour, type TourStep } from '@/components/ui/GuidedTour';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { MobileBoard } from '@/views/MobileBoard';
 import { Card } from '@/components/Card';
 import { BoardTable } from '@/components/board/BoardTable';
 import { EmptyBoardArt } from '@/components/ui/EmptyBoardArt';
@@ -126,8 +128,10 @@ export function BoardView() {
   const {
     listings, caveats, shortlistIds, favoriteIds, split, setSplit, selected, trip, user,
     requireSignIn, joinTrip, detailId, openDetail, closeDetail, findListing, isOwner,
+    aiRankIndex, aiRankLoading,
   } = useApp();
   const compare = useCompare();
+  const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
@@ -174,16 +178,27 @@ export function BoardView() {
   const activeFilterCount = (filters.under ? 1 : 0) + (filters.pool ? 1 : 0) + (filters.parking ? 1 : 0) + (filters.manual ? 0 : 1);
 
   const mainGrid = useMemo(
-    () =>
-      listings.filter((l) => {
+    () => {
+      const rows = listings.filter((l) => {
         if (shortlistIds.has(l.id)) return false;
         if (filters.under && !(l.budget === 'under' || l.budget === 'marginal')) return false;
         if (filters.pool && l.pool !== 'yes') return false;
         if (filters.parking && l.parking !== 'yes') return false;
         if (!filters.manual && l.check_manual) return false;
         return true;
-      }),
-    [listings, shortlistIds, filters],
+      });
+      // Order by the AI ranking when we have it (homes Scout placed first lead);
+      // anything the AI didn't rank sinks below, keeping its original order.
+      if (aiRankIndex.size) {
+        const BIG = Number.MAX_SAFE_INTEGER;
+        return rows
+          .map((l, i) => ({ l, i, r: aiRankIndex.get(l.id) ?? BIG }))
+          .sort((a, b) => a.r - b.r || a.i - b.i)
+          .map((x) => x.l);
+      }
+      return rows;
+    },
+    [listings, shortlistIds, filters, aiRankIndex],
   );
   const topHomes = topAll ? mainGrid : mainGrid.slice(0, 10);
 
@@ -201,6 +216,9 @@ export function BoardView() {
     { key: 'decision', label: 'Decision', icon: Trophy },
     { key: 'discussion', label: 'Discussion', icon: MessagesSquare, pip: caveats.length },
   ];
+
+  // Mobile (≤520px): dedicated app-shell from the design handoff. Desktop untouched.
+  if (isMobile) return <MobileBoard />;
 
   return (
     <div className="board">
@@ -269,7 +287,7 @@ export function BoardView() {
               <div className="row-head">
                 <span className="ttl">Top recommended</span>
                 <span className="cnt tnum">{topHomes.length}</span>
-                <span className="sub">ranked for your group · filtered</span>
+                <span className="sub">{aiRankLoading ? 'Scout is ranking these for your group…' : aiRankIndex.size ? 'ranked by Scout for your itinerary · filtered' : 'ranked for your group · filtered'}</span>
                 <div className="rh-right">
                   {mainGrid.length > 10 && (
                     <button className="seeall" onClick={() => setTopAll((v) => !v)}>

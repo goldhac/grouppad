@@ -151,6 +151,15 @@
 .row-head .rh-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
 .row-head .rh-right .view-toggle { margin-left: 0; }
 
+/* On phones the single header row can't hold title + subtitle + controls, so the
+   subtitle gets crushed to one-word-per-line. Let it wrap and give the controls
+   their own full-width row. */
+@media (max-width: 560px) {
+  .row-head { flex-wrap: wrap; row-gap: 9px; align-items: baseline; }
+  .row-head .sub { flex-basis: 100%; order: 3; margin-top: -3px; }
+  .row-head .rh-right { flex-basis: 100%; order: 4; margin-left: 0; justify-content: space-between; }
+}
+
 /* ── tabs + toolbar share one row ───────────────────────────────────────── */
 .b-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-top: 1px solid var(--border); padding-right: 18px; }
 .b-controls .tabbar { border-top: 0; }

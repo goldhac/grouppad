@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { Plus, MapPin, Calendar, Crown, ArrowRight } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { MobileTrips } from '@/views/MobileTrips';
 import { Button } from '@/components/ui/Button';
 import { Icon } from '@/components/ui/Icon';
 import { SafeImg } from '@/components/ui/SafeImg';
@@ -73,6 +75,7 @@ function TripCard({ trip, i }: { trip: TripView; i: number }) {
 export function TripsView() {
   const { user, myTrips, accountLoading, refreshMyTrips, openAuth } = useApp();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (user) void refreshMyTrips();
@@ -85,6 +88,8 @@ export function TripsView() {
     openAuth('see your trips');
     return <Navigate to="/" replace />;
   }
+
+  if (isMobile) return <MobileTrips />;
 
   const count = myTrips.length;
 

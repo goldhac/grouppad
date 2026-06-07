@@ -325,6 +325,10 @@ code.tok {
 .card .amen-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .card .reviews { font-size: 12.5px; color: var(--text-muted); display: flex; align-items: center; gap: 5px; }
 .card .reviews .ico { width: var(--icon-sm); height: var(--icon-sm); color: var(--star); fill: var(--star); }
+.card .ai-why { display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; line-height: 1.45; color: var(--text-2);
+  background: var(--accent-soft, color-mix(in srgb, var(--accent) 9%, transparent)); border: 1px solid var(--accent-line, color-mix(in srgb, var(--accent) 22%, transparent));
+  border-radius: var(--r-md, 10px); padding: 7px 10px; margin-top: 2px; }
+.card .ai-why .ico { width: var(--icon-sm); height: var(--icon-sm); color: var(--accent-text); flex: none; margin-top: 1px; }
 .card .divider { height: 1px; background: var(--border); margin: 3px 0; }
 
 .card .price { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }

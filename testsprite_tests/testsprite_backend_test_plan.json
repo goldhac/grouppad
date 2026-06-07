@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "post api trips create new trip",
+    "description": "Test creating a new trip with valid name, destination, and budget while authenticated; expect 200 response with the new trip data."
+  },
+  {
+    "id": "TC002",
+    "title": "get api me trips list user trips",
+    "description": "Test retrieving the list of trips for the signed-in user; expect 200 response with an array of trips when authenticated, and 401 when not authenticated."
+  },
+  {
+    "id": "TC003",
+    "title": "get api trips tripid retrieve trip board",
+    "description": "Test retrieving a public trip board by tripId; expect 200 with trip data for existing trip and 404 for unknown tripId."
+  },
+  {
+    "id": "TC004",
+    "title": "post api trips tripid join trip",
+    "description": "Test joining a trip as a member with valid session; expect 200 with { ok: true } and 401 if not authenticated."
+  },
+  {
+    "id": "TC005",
+    "title": "delete api trips tripid delete trip",
+    "description": "Test deleting a trip as the organizer; expect 200 with { ok: true } and 403 if not the organizer."
+  },
+  {
+    "id": "TC006",
+    "title": "get api trips tripid listings list ranked homes",
+    "description": "Test listing the trip's ranked homes publicly; expect 200 with Listing array for existing trip and 404 for missing trip."
+  },
+  {
+    "id": "TC007",
+    "title": "post api trips tripid votes cast or change vote",
+    "description": "Test casting or changing a vote on a listing while authenticated; expect 200 with { ok: true } and 401 if not authenticated."
+  },
+  {
+    "id": "TC008",
+    "title": "post api trips tripid submit submit home url",
+    "description": "Test submitting a home URL to the board while authenticated; expect 200 with created Submission and 401 if not authenticated."
+  },
+  {
+    "id": "TC009",
+    "title": "post api trips tripid caveats submit criterion",
+    "description": "Test submitting a must-have criterion request while authenticated; expect 200 with pending Caveat and 401 if not authenticated."
+  },
+  {
+    "id": "TC010",
+    "title": "post api trips tripid refresh trigger listing search",
+    "description": "Test triggering a fresh listing search as the organizer; expect 200 with { ok: true }, 403 if not organizer, and 429 if rate limited."
+  }
+]

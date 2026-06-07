@@ -75,6 +75,8 @@
 /* ---- ONBOARDING ---- */
 .modal.ob { max-width: 480px; }
 .ob-visual { position: relative; height: 244px; background: var(--surface-sunken); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+/* generated step illustrations fill the visual slot edge-to-edge */
+.ob-visual .obv-img { display: block; width: 480px; max-width: 100%; height: 244px; object-fit: cover; }
 .ob-skip { position: absolute; top: 14px; right: 14px; z-index: 4; font-size: 12.5px; font-weight: 600; color: var(--text-2); background: var(--surface-overlay); backdrop-filter: blur(6px); border: 1px solid var(--border); padding: 6px 12px; border-radius: var(--r-pill); cursor: pointer; }
 .ob-skip:hover { color: var(--text); background: var(--surface-inset); }
 .ob-body { padding: 24px 30px 26px; }

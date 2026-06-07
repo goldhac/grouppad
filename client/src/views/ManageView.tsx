@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { MobileManage } from '@/views/MobileManage';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import type { TripPulse, TripMember } from '@/types';
@@ -27,6 +29,7 @@ interface ConfirmState { kind: ConfirmKind; member?: TripMember; }
 export function ManageView() {
   const { trip, isOwner, deleteTrip, enterTrip, setDecision, toast } = useApp();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [pulse, setPulse] = useState<TripPulse | null>(null);
   const [members, setMembers] = useState<TripMember[]>([]);
   const [copied, setCopied] = useState(false);
@@ -69,6 +72,8 @@ export function ManageView() {
       </div></main>
     );
   }
+
+  if (isMobile) return <MobileManage />;
 
   const joinedCount = members.length || trip.memberCount;
   const inviteLink = `${window.location.origin}/#/t/${trip.id}/board${trip.join_code ? `?join=${trip.join_code}` : ''}`;

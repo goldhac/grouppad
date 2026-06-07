@@ -7,6 +7,8 @@ import {
   Award, BadgeCheck, GitCompare, Lock, HelpCircle, Check, Clapperboard, Bookmark,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { MobileDetail } from '@/views/MobileDetail';
 import { Icon } from '@/components/ui/Icon';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { cn } from '@/lib/cn';
@@ -51,8 +53,9 @@ export function DetailModal() {
   const {
     detailId, closeDetail, findListing, trip, split, setSplit,
     user, votes, final, isOwner, selected, favoriteIds, castVote, toggleFinalPick, toggleFavorite, setDecision, toggleSelect, requireSignIn,
-    reviewsMap, loadReviewsFor, toursMap, generateTour, toast,
+    reviewsMap, loadReviewsFor, toursMap, generateTour, toast, aiWhy,
   } = useApp();
+  const isMobile = useIsMobile();
 
   const l = detailId ? findListing(detailId) : undefined;
   const [photoIdx, setPhotoIdx] = useState(0);
@@ -81,6 +84,7 @@ export function DetailModal() {
   };
 
   if (!l) return null;
+  if (isMobile) return <MobileDetail />;
 
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
   const net = tally.up - tally.down;
@@ -207,10 +211,10 @@ export function DetailModal() {
                     {l.sleeps != null && <span className="ds"><Icon icon={Users} className="ico" /> sleeps {l.sleeps}</span>}
                   </div>
 
-                  {l.note && (
+                  {(aiWhy[l.id] || l.note) && (
                     <div className="dx-note">
-                      <div className="nh"><Icon icon={Sparkles} className="ico" /> Why it ranks here</div>
-                      <p>{l.note}</p>
+                      <div className="nh"><Icon icon={Sparkles} className="ico" /> Why Scout ranks it here</div>
+                      <p>{aiWhy[l.id] || l.note}</p>
                     </div>
                   )}
 

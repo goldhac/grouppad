@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, LayoutGrid, Link2, ThumbsUp, Users, BadgeCheck, HelpCircle, ChevronDown } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
+import { useIsMobile } from '@/lib/useIsMobile';
+import { MobileHelp } from '@/views/MobileHelp';
 import { Icon } from '@/components/ui/Icon';
 
 const CARDS = [
@@ -22,7 +24,10 @@ const FAQ = [
 export function HelpView() {
   const { trip } = useApp();
   const [open, setOpen] = useState(0);
+  const isMobile = useIsMobile();
   const boardHref = trip ? `/t/${trip.id}/board` : '/trips';
+
+  if (isMobile) return <MobileHelp />;
 
   return (
     <main className="uu-main">

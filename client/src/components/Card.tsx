@@ -28,10 +28,11 @@ function initials(name?: string | null) {
 
 export function Card({ listing: l, isSubmitted = false, isPipeline = false, compact = false }: CardProps) {
   const {
-    user, votes, final, isOwner, split, trip, selected, reviewsMap, toursMap, favoriteIds,
+    user, votes, final, isOwner, split, trip, selected, reviewsMap, toursMap, favoriteIds, aiWhy,
     castVote, toggleFinalPick, toggleFavorite, setDecision, deleteListing, toggleSelect, openDetail, requireSignIn,
   } = useApp();
   const isSaved = favoriteIds.has(l.id);
+  const aiNote = aiWhy[l.id];
 
   const rev = reviewsMap[`${l.source}:${l.id}`];
   const hasTour = toursMap[l.id]?.status === 'ready' && (toursMap[l.id]?.clips.some((c) => c.videoUrl) ?? false);
@@ -197,6 +198,14 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
           )}
           {l.rating != null && <span className="rate"><Icon icon={Star} className="ico" /> {l.rating}</span>}
         </div>
+
+        {/* Scout's take — the AI's one-line reason this home ranks where it does */}
+        {aiNote && (
+          <div className="ai-why">
+            <Icon icon={Sparkles} className="ico" />
+            <span className="line-clamp-2">{aiNote}</span>
+          </div>
+        )}
 
         {/* money zone — all-in + per-person */}
         <div className="card-money">

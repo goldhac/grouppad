@@ -16,6 +16,8 @@ import './ds2/auth.css';
 import './ds2/util.css';
 import './ds2/signature.css';
 import './ds2/motion.css';
+import './ds2/mobile.css';
+import './ds2/mobile-app.css';
 import { App } from './App';
 import { AppProvider } from './store/AppContext';
 

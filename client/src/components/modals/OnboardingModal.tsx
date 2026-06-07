@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link2, ArrowUp, ThumbsUp, ThumbsDown, Users, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
-import { SealMark } from '@/components/ui/SealMark';
 import { Avatar, AVATARS } from '@/components/ui/Avatar';
 import { useFocusTrap } from '@/lib/useFocusTrap';
 
@@ -33,61 +32,16 @@ function AvatarPickArt() {
   );
 }
 
-function BoardArt() {
-  return (
-    <div className="obv obv-board-wrap">
-      <div className="obv-board">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div className="c" key={i}><div className="p" /><div className="l" /><div className="l s" /></div>
-        ))}
-      </div>
-      <div className="obv-avatars">
-        <span className="av">MA</span>
-        <span className="av" style={{ background: 'var(--c-indigo-600)' }}>JL</span>
-        <span className="av" style={{ background: 'var(--c-cyan-600)' }}>RP</span>
-        <span className="av" style={{ background: 'var(--surface-sunken)', color: 'var(--text-2)' }}>+11</span>
-      </div>
-    </div>
-  );
+/** Generated warm-editorial illustrations for the 5 walkthrough steps.
+ *  (Brand-matched: cream ground, teal accents, gold reserved for the lock step.) */
+function StepImg({ src, alt }: { src: string; alt: string }) {
+  return <img className="obv-img" src={src} alt={alt} loading="lazy" decoding="async" />;
 }
-function AddArt() {
-  return (
-    <div className="obv obv-add">
-      <div className="bar"><Icon icon={Link2} className="ico" /><span className="ph" /><span className="go">Add</span></div>
-      <div className="src"><span>airbnb</span><span>VRBO</span><span>Booking</span><span>live LA</span></div>
-    </div>
-  );
-}
-function VoteArt() {
-  return (
-    <div className="obv obv-vote">
-      <span className="rise"><Icon icon={ArrowUp} className="ico" /> Rose to shortlist</span>
-      <div className="mini-card"><div className="p" /><div className="l" /><div className="l" style={{ width: '55%' }} /></div>
-      <div className="votebar">
-        <button className="vote up on"><Icon icon={ThumbsUp} className="ico" /></button>
-        <span className="net pos tnum">+5</span>
-        <button className="vote down"><Icon icon={ThumbsDown} className="ico" /></button>
-      </div>
-    </div>
-  );
-}
-function PpArt() {
-  return (
-    <div className="obv obv-pp">
-      <div className="big tnum">$359</div>
-      <div className="lab"><Icon icon={Users} className="ico" /> per person · split 14 ways</div>
-      <div className="strike"><b>$5,022</b> all-in · 5 nights</div>
-    </div>
-  );
-}
-function LockArt() {
-  return (
-    <div className="obv obv-lock">
-      <SealMark size={76} play />
-      <span className="chip"><span className="gdot" /> Official pick · locked</span>
-    </div>
-  );
-}
+const BoardArt = () => <StepImg src="/onboarding/01-board.webp" alt="Friends pinning rental homes onto one shared board" />;
+const AddArt = () => <StepImg src="/onboarding/02-add.webp" alt="Pasting a rental link to add a home to the board" />;
+const VoteArt = () => <StepImg src="/onboarding/03-vote.webp" alt="The group giving thumbs-up to favourite homes" />;
+const PpArt = () => <StepImg src="/onboarding/04-perperson.webp" alt="A home's cost split into fair per-person shares" />;
+const LockArt = () => <StepImg src="/onboarding/05-lock.webp" alt="Scout picking the winner and the organizer locking it official" />;
 
 const SLIDES = [
   { tag: 'Welcome', h: 'Pick your avatar', p: 'Choose a character so your group knows who’s who — or keep your initials. You can change it anytime from your account menu.', v: 'v0', Art: AvatarPickArt },

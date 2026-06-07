@@ -152,6 +152,11 @@ export const api = {
       method: 'POST',
       body: { listings, criteria, ...(mode ? { mode } : {}) },
     }),
+  aiRank: (tripId: string, listings: Listing[]) =>
+    request<{ order: { id: string; why: string | null }[]; ranked_at: string | null; fallback?: boolean; cached?: boolean }>(
+      `${t(tripId)}/ai-rank`,
+      { method: 'POST', body: { listings } },
+    ),
 
   reviews: (tripId: string) => request<Record<string, ListingReviews>>(`${t(tripId)}/reviews`),
   fetchReviews: (tripId: string, source: string, id: string, url: string, force?: boolean) =>

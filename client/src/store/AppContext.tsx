@@ -76,6 +76,11 @@ interface AppState {
 
   // derived
   shortlistIds: ReadonlySet<string>;
+  // AI ranking
+  aiOrder: string[];
+  aiWhy: Record<string, string>;
+  aiRankIndex: ReadonlyMap<string, number>;
+  aiRankLoading: boolean;
 }
 
 interface AppActions {
@@ -164,6 +169,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [reviewsMap, setReviewsMap] = useState<Record<string, ListingReviews>>({});
   const [toursMap, setToursMap] = useState<Record<string, ListingTour>>({});
 
+  // AI ranking — order (ids best-first) + per-home "why", computed server-side
+  const [aiOrder, setAiOrder] = useState<string[]>([]);
+  const [aiWhy, setAiWhy] = useState<Record<string, string>>({});
+  const [aiRankLoading, setAiRankLoading] = useState(false);
+
   // ui
   const [adminKey, setAdminKeyState] = useState<string | null>(() => localStorage.getItem(ADMIN_KEY_LS));
   const [split, setSplit] = useState(14);
@@ -237,6 +247,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTripLoading(true);
     setTripError(null);
     setSelected(new Set());
+    setAiOrder([]); setAiWhy({});
     setFavoriteIds(new Set()); favRef.current = new Set();
     try {
       const loadAll = () => Promise.all([
@@ -646,12 +657,61 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return ids;
   }, [submitted, pipeline, listings, votes]);
 
+  // Pool every candidate (community + live + curated), deduped, preferring the
+  // copy that carries distance chips — the same union the board renders.
+  const pooledListings = useMemo(() => {
+    const byId = new Map<string, Listing>();
+    for (const pool of [submitted, pipeline, listings]) {
+      for (const l of pool) {
+        const prev = byId.get(l.id);
+        if (!prev || (!prev.distances?.length && l.distances?.length)) byId.set(l.id, l);
+      }
+    }
+    return [...byId.values()];
+  }, [submitted, pipeline, listings]);
+
+  // Fetch the AI ranking whenever the candidate set (or itinerary/caveats) changes.
+  // Server caches by content hash, so repeat loads are free; only a real change
+  // triggers a fresh Gemini spend. Debounced to coalesce the initial bursts.
+  const aiSig = useMemo(
+    () => `${pooledListings.map((l) => l.id).sort().join(',')}::${itinerary.updated_at ?? ''}::${caveats.filter((c) => (c.status ?? 'approved') === 'approved').length}`,
+    [pooledListings, itinerary.updated_at, caveats],
+  );
+  useEffect(() => {
+    const id = tripIdRef.current;
+    if (!id || pooledListings.length < 2) { setAiOrder([]); setAiWhy({}); return; }
+    let cancelled = false;
+    setAiRankLoading(true);
+    const handle = setTimeout(() => {
+      api.aiRank(id, pooledListings)
+        .then((res) => {
+          if (cancelled || tripIdRef.current !== id) return;
+          setAiOrder(res.order.map((o) => o.id));
+          const why: Record<string, string> = {};
+          for (const o of res.order) if (o.why) why[o.id] = o.why;
+          setAiWhy(why);
+        })
+        .catch(() => { /* keep prior order; UI falls back to vote sort */ })
+        .finally(() => { if (!cancelled) setAiRankLoading(false); });
+    }, 400);
+    return () => { cancelled = true; clearTimeout(handle); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiSig]);
+
+  // Rank index for O(1) "where does this home sit in the AI order" lookups.
+  const aiRankIndex = useMemo(() => {
+    const m = new Map<string, number>();
+    aiOrder.forEach((id, i) => m.set(id, i));
+    return m;
+  }, [aiOrder]);
+
   const value: AppContextValue = useMemo(
     () => ({
       user, myTrips, accountLoading,
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
+      aiOrder, aiWhy, aiRankIndex, aiRankLoading,
       favoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
@@ -664,6 +724,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
+      aiOrder, aiWhy, aiRankIndex, aiRankLoading,
       favoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
