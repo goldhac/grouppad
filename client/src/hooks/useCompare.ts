@@ -56,22 +56,31 @@ export function useCompare(): CompareController {
   const runWhole = useCallback(
     async (items: Listing[]) => {
       if (items.length < 2) {
-        setError('Add at least 2 homes to the shortlist to compare.');
+        setError('Add at least 2 homes to compare.');
+        toast('Add at least 2 homes to compare.', 'error');
         return;
       }
+      // Drive the result modal (web + mobile) AND the shared Insights block, so
+      // there's immediate feedback everywhere — mobile has no Insights panel.
       setRunning(true);
       setError(null);
+      setResult(null);
+      setComparedListings(items);
+      setResultMode('multi');
       try {
-        // Whole-shortlist compare populates the shared Insights block (no modal).
-        await runCompare(items.map(toInput), criteria);
+        const analysis = await runCompare(items.map(toInput), criteria);
+        setResult(analysis);
         setPanelOpen(false);
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Compare failed.');
+        setComparedListings(null);
+        setResultMode(null);
+        toast('Compare failed.', 'error');
       } finally {
         setRunning(false);
       }
     },
-    [criteria, runCompare],
+    [criteria, runCompare, toast],
   );
 
   const runSelected = useCallback(

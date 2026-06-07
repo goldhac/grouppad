@@ -39,17 +39,19 @@ function StepImg({ src, alt }: { src: string; alt: string }) {
 }
 const BoardArt = () => <StepImg src="/onboarding/01-board.webp" alt="Friends pinning rental homes onto one shared board" />;
 const AddArt = () => <StepImg src="/onboarding/02-add.webp" alt="Pasting a rental link to add a home to the board" />;
+const ScoutArt = () => <StepImg src="/onboarding/06-scout.webp" alt="Scout the guide ranking homes best-to-worst with a gold top pick" />;
 const VoteArt = () => <StepImg src="/onboarding/03-vote.webp" alt="The group giving thumbs-up to favourite homes" />;
 const PpArt = () => <StepImg src="/onboarding/04-perperson.webp" alt="A home's cost split into fair per-person shares" />;
 const LockArt = () => <StepImg src="/onboarding/05-lock.webp" alt="Scout picking the winner and the organizer locking it official" />;
 
 const SLIDES = [
   { tag: 'Welcome', h: 'Pick your avatar', p: 'Choose a character so your group knows who’s who — or keep your initials. You can change it anytime from your account menu.', v: 'v0', Art: AvatarPickArt },
-  { tag: 'Step 1 of 5', h: 'One board for the whole group', p: 'Everyone’s ideas land in one place — no more links lost in the group chat.', v: 'v1', Art: BoardArt },
-  { tag: 'Step 2 of 5', h: 'Browse & add any rental', p: 'Paste an Airbnb, VRBO, or Booking link — or let GroupPad pull fresh homes for your dates.', v: 'v2', Art: AddArt },
-  { tag: 'Step 3 of 5', h: 'Vote in the open', p: 'Shared thumbs, not secret hearts. Liked homes rise into the group’s shortlist on their own.', v: 'v3', Art: VoteArt },
-  { tag: 'Step 4 of 5', h: 'The number that ends the argument', p: 'Every home shows the real all-in cost split across your group — recomputed live as it grows.', v: 'v4', Art: PpArt },
-  { tag: 'Step 5 of 5', h: 'Compare with Scout, then lock it', p: 'Down to two? Scout calls the winner. The organizer makes it official — and the debate is over.', v: 'v5', Art: LockArt },
+  { tag: 'Step 1 of 6', h: 'One board for the whole group', p: 'Everyone’s ideas land in one place — no more links lost in the group chat.', v: 'v1', Art: BoardArt },
+  { tag: 'Step 2 of 6', h: 'Browse & add any rental', p: 'Paste an Airbnb, VRBO, or Booking link — or let GroupPad pull fresh homes for your dates.', v: 'v2', Art: AddArt },
+  { tag: 'Step 3 of 6', h: 'Scout ranks every home for your trip', p: 'Our AI reads your itinerary, budget, and must-haves, then sorts the board best-to-worst — each home shows a one-line “why it ranks here.” The strongest fit leads.', v: 'v6', Art: ScoutArt },
+  { tag: 'Step 4 of 6', h: 'Vote — and watch the shortlist build', p: 'Shared thumbs, not secret hearts. Any home the group likes rises into the Group’s Shortlist on its own.', v: 'v3', Art: VoteArt },
+  { tag: 'Step 5 of 6', h: 'The number that ends the argument', p: 'Every home shows the real all-in cost split across your group — recomputed live as people join.', v: 'v4', Art: PpArt },
+  { tag: 'Step 6 of 6', h: 'Compare head-to-head, then lock the pick', p: 'Down to a few? Ask Scout to compare them and call the winner. The organizer makes it the official pick — and the debate is over.', v: 'v5', Art: LockArt },
 ];
 
 export function OnboardingModal() {

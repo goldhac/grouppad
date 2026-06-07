@@ -151,6 +151,7 @@
 .ob-visual.v3 { background: var(--accent-tint); }
 .ob-visual.v4 { background: var(--under-bg); }
 .ob-visual.v5 { background: color-mix(in srgb, var(--star-bg) 70%, var(--surface)); }
+.ob-visual.v6 { background: var(--accent-tint); }
 
 /* ---- prototype scenario control reused from trips.css (.scenario) ---- */
 

@@ -1676,9 +1676,24 @@ async function scrapeListingDetails(cleanUrl, parsed) {
   }
 
   result.photos = result.photos.slice(0, 16);
-  if (!result.name) result.name = `${parsed.source} listing ${parsed.id}`;
+  if (!result.name) result.name = niceNameFromUrl(cleanUrl) || `${parsed.source} listing ${parsed.id}`;
 
   return result;
+}
+
+// Boutique/long-tail sites often don't expose an og:title — derive a readable
+// name from the last meaningful URL slug (drops trailing numeric ids), e.g.
+// .../encino/via-vallarta-722129 → "Via Vallarta".
+function niceNameFromUrl(rawUrl) {
+  try {
+    const segs = new URL(rawUrl).pathname.split('/').filter(Boolean);
+    let slug = segs.pop() || '';
+    if (/^\d+$/.test(slug) && segs.length) slug = segs.pop(); // trailing pure-id segment
+    slug = slug.replace(/[-_]?\d{4,}$/, '');                  // trailing -722129
+    const words = slug.replace(/[-_]+/g, ' ').trim();
+    if (!words || words.length < 3) return null;
+    return words.replace(/\b\w/g, (c) => c.toUpperCase()).slice(0, 80);
+  } catch { return null; }
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -1914,32 +1929,38 @@ const hGetSubmitted = (req, res) => res.json(loadSubmitted(req.params.tripId));
 app.get('/api/submitted', hGetSubmitted);
 app.get('/api/trips/:tripId/submitted', loadTripOr404, hGetSubmitted);
 
-// Submit a new listing
-const hSubmit = async (req, res) => {
-  const tripId = req.params.tripId;
-  const { url, manual_price } = req.body || {};
-  if (!url) return res.status(400).json({ error: 'url required' });
+// Core submission flow — scrape a URL and attribute it to `user`. Shared by the
+// member submit route and the admin bulk-import. Returns { code, body }.
+async function createSubmission(tripId, url, manual_price, user, opts = {}) {
+  if (!url) return { code: 400, body: { error: 'url required' } };
 
   const parsed = parseListingUrl(url);
   if (!parsed)
-    return res.status(400).json({ error: 'Please enter a valid http/https URL' });
+    return { code: 400, body: { error: 'Please enter a valid http/https URL' } };
 
   // Guard against SSRF before we fetch the URL server-side.
   try { await assertSafeUrl(url); }
-  catch (e) { return res.status(400).json({ error: e.message || 'URL not allowed' }); }
+  catch (e) { return { code: 400, body: { error: e.message || 'URL not allowed' } }; }
+
+  // Optional re-import: drop any existing community copy first so it re-scrapes.
+  if (opts.replace) {
+    const cur = loadSubmitted(tripId);
+    const next = cur.filter(s => !(s.id === parsed.id && s.source === parsed.source));
+    if (next.length !== cur.length) saveSubmitted(next, tripId);
+  }
 
   // Dedup check against submitted
   if (loadSubmitted(tripId).find(s => s.id === parsed.id && s.source === parsed.source))
-    return res.status(409).json({ error: 'Already submitted' });
+    return { code: 409, body: { error: 'Already submitted' } };
 
   // Dedup check against main listings
   const main = loadListings(tripId);
   if (main.listings.find(l => String(l.id) === String(parsed.id) && l.source === parsed.source))
-    return res.status(409).json({ error: 'Already in the main list' });
+    return { code: 409, body: { error: 'Already in the main list' } };
 
   const cleanUrl = url.split('?')[0];
   const scraped  = await scrapeListingDetails(cleanUrl, parsed);
-  const by       = (req.user.name || 'member').slice(0, 60);
+  const by       = (user.name || user.email?.split('@')[0] || 'member').slice(0, 60);
 
   // Manual price overrides auto-detection
   const manualVal = manual_price ? Math.round(+String(manual_price).replace(/[$,]/g, '')) : 0;
@@ -2010,7 +2031,7 @@ const hSubmit = async (req, res) => {
   fresh.push(entry);
   saveSubmitted(fresh, tripId);
   logEvent(tripId, 'submit', `${by} added "${scraped.name || 'a home'}"`);
-  noteJoin(tripId, req.user); // auto-join on first contribution (+ alerts organizer)
+  noteJoin(tripId, user); // auto-join on first contribution (+ alerts organizer)
 
   // Pull this submission's guest reviews in the background so it lands with the
   // same 4 👍 / 4 👎 as everything else (cached; guarded; never blocks the submit).
@@ -2024,10 +2045,38 @@ const hSubmit = async (req, res) => {
     } catch (e) { console.error('[reviews] submit fetch failed:', e.message); }
   })();
 
-  res.json(entry);
+  return { code: 200, body: entry };
+}
+
+// Submit a new listing (member)
+const hSubmit = async (req, res) => {
+  const { url, manual_price } = req.body || {};
+  const r = await createSubmission(req.params.tripId, url, manual_price, req.user);
+  res.status(r.code).json(r.body);
 };
 app.post('/api/submit', requireAuth, rateLimit({ windowMs: 60000, max: 5 }), hSubmit);
 app.post('/api/trips/:tripId/submit', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 5 }), hSubmit);
+
+// Admin: bulk-import listings, attributed to a chosen member (by email) or the
+// trip organizer. Sequential so it respects the scrape concurrency cap.
+const hAdminBulkSubmit = async (req, res) => {
+  const tripId = req.params.tripId;
+  const { urls, as_email, replace } = req.body || {};
+  if (!Array.isArray(urls) || !urls.length) return res.status(400).json({ error: 'urls[] required' });
+  let user = null;
+  if (as_email) user = Object.values(loadUsers()).find(u => (u.email || '').toLowerCase() === String(as_email).toLowerCase());
+  if (!user) { const t = getTrip(tripId) || loadListings(tripId).trip || {}; user = loadUsers()[t.owner_id]; }
+  if (!user) return res.status(400).json({ error: 'Could not resolve a user to attribute submissions to' });
+  const results = [];
+  for (const url of urls.slice(0, 40)) {
+    try {
+      const r = await createSubmission(tripId, String(url).trim(), undefined, user, { replace: !!replace });
+      results.push({ url, code: r.code, name: r.body?.name, error: r.body?.error });
+    } catch (e) { results.push({ url, code: 500, error: e.message }); }
+  }
+  res.json({ attributed_to: user.email, added: results.filter(r => r.code === 200).length, total: results.length, results });
+};
+app.post('/api/trips/:tripId/admin-submit', loadTripOr404, requireAdmin, hAdminBulkSubmit);
 
 // ── Pipeline listings (from SQLite) ──────────────────────────────────────────
 

@@ -1,12 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Map, ChevronDown, Upload, Save, Trash2 } from 'lucide-react';
+import { Map, Upload, Save, Trash2 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
-import { cn } from '@/lib/cn';
+import { ItineraryCard } from '@/components/board/ItineraryCard';
 
 export function ItinerarySection() {
   const { itinerary, isOwner, saveItinerary } = useApp();
-  const [expanded, setExpanded] = useState(false);
   const [draft, setDraft] = useState(itinerary.text);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -41,27 +40,14 @@ export function ItinerarySection() {
           <span className="inline-flex items-center gap-1.5 font-semibold">
             <Map className="h-4 w-4" /> Trip itinerary
           </span>
-          <span className="text-xs text-muted">Posted by the organizer — feeds Scout’s compare</span>
-          <button
-            className="ml-auto inline-flex items-center gap-1 text-sm text-link hover:underline"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-          >
-            {expanded ? 'Hide' : itinerary.text ? 'View itinerary' : 'No itinerary yet'}
-            <ChevronDown className={cn('h-4 w-4 transition-transform', expanded && 'rotate-180')} />
-          </button>
+          <span className="text-xs text-muted">Posted by the organizer — feeds Scout’s ranking & compare</span>
         </div>
 
-        {expanded && (
-          <div
-            className={cn(
-              'mt-3 whitespace-pre-wrap rounded-md border border-border bg-panel-2 p-3 text-sm',
-              !itinerary.text && 'italic text-muted',
-            )}
-          >
-            {itinerary.text || 'No itinerary posted yet.'}
-          </div>
-        )}
+        <div className="mt-3">
+          {itinerary.text
+            ? <ItineraryCard />
+            : !isOwner && <p className="text-sm italic text-muted">No itinerary posted yet.</p>}
+        </div>
 
         {isOwner && (
           <div className="mt-3 border-t border-border pt-3">

@@ -30,6 +30,7 @@ type Tab = 'all' | 'shortlist' | 'saved' | 'decision' | 'discussion';
 
 const BOARD_TOUR: TourStep[] = [
   { target: '.b-controls .tabbar', title: 'Your group’s board', body: 'Everything for this trip — browse, vote, compare, and decide — lives in these tabs.' },
+  { target: '.b-grid article.card .ai-why', title: 'Scout ranks every home', body: 'Homes are sorted best-to-worst for your itinerary, budget, and must-haves. This line is Scout’s reason each one ranks where it does.' },
   { target: '.b-grid article.card .card-money', title: 'The number that ends the debate', body: 'Every home shows the all-in cost and exactly what each person pays.' },
   { target: '.b-grid article.card .votebar', title: 'Vote in the open', body: 'Thumbs-up the ones you like. At net +1, a home rises into the group’s Shortlist.' },
   { target: '.b-grid article.card .save-btn', title: 'Save your own picks', body: 'Bookmark homes to your private Saved list — only you see it. Ask Scout to rank just yours.' },

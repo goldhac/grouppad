@@ -9,6 +9,7 @@ import {
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
+import { ItineraryCard } from '@/components/board/ItineraryCard';
 import { Icon } from '@/components/ui/Icon';
 import { fmt, netVotes } from '@/lib/utils';
 import { cn } from '@/lib/cn';
@@ -308,7 +309,7 @@ export function MobileBoard() {
         <input className="field" placeholder="Add a must-have or dealbreaker…" value={draft} onChange={(e) => setDraft(e.target.value)} />
         <button className="btn btn-primary btn-icon" onClick={() => { if (draft.trim() && requireSignIn('post')) { void postCaveat(draft.trim()); setDraft(''); } }}><Icon icon={Send} className="ico" /></button>
       </div>
-      {itinerary?.text && (<><div className="sec-h" style={{ marginTop: 24 }}><span className="t">Trip itinerary</span></div><div className="itin"><p style={{ whiteSpace: 'pre-wrap' }}>{itinerary.text}</p></div></>)}
+      {itinerary?.text && (<><div className="sec-h" style={{ marginTop: 24 }}><span className="t">Trip itinerary</span></div><ItineraryCard /></>)}
     </div>
   );
 

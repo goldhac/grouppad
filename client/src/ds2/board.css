@@ -479,3 +479,10 @@ body { background: var(--surface); }
   .detail-modal .sheet-card, .compare-modal .cm-card { max-width: 100%; min-height: 100%; border-radius: 0; }
   .toast-stack { left: 12px; right: 12px; bottom: 80px; }
 }
+/* Narrow screens: two property cards side-by-side are too cramped — stack them
+   and float the VS badge at the seam between the two cards (the "middle"). */
+@media (max-width: 560px) {
+  .compare-modal .vs-wrap.vs-1v1 { grid-template-columns: 1fr; gap: 14px; }
+  .compare-modal .vs-wrap.vs-1v1 .vs-badge { top: 50%; left: 50%; }
+  .compare-modal .vs-wrap.vs-multi { grid-template-columns: 1fr !important; }
+}
