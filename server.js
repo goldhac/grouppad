@@ -1423,6 +1423,28 @@ async function fetchPriceWithPlaywright(cleanUrl, source) {
       return { price: htmlPrice, type: 'full' };
     }
 
+    // Nightly-rate fallback (boutique sites that only show "$X / night"): take the
+    // lowest plausible nightly rate × 5 nights as a BASE estimate (cleaning + tax
+    // added downstream). Lowest avoids picking an inflated peak/holiday rate.
+    const nightly = [];
+    const nightlyRe = [
+      /\$\s*([\d,]+(?:\.\d{2})?)\s*(?:\/|per\s+)\s*night/ig,
+      /\$\s*([\d,]+(?:\.\d{2})?)\s*(?:nightly|\/\s*nt|a\s+night)\b/ig,
+    ];
+    for (const re of nightlyRe) {
+      let m;
+      while ((m = re.exec(allText))) {
+        const v = parseFloat(m[1].replace(/,/g, ''));
+        if (v >= 150 && v <= 40000) nightly.push(v);
+      }
+    }
+    if (nightly.length) {
+      const rate = Math.min(...nightly);
+      const total = Math.round(rate * 5);
+      console.log('[Playwright] nightly rate', rate, '→ 5-night base', total);
+      return { price: total, type: 'nightly_only' };
+    }
+
     console.log('[Playwright] no price found on page');
     return null;
   } catch (e) {
@@ -1681,7 +1703,8 @@ async function scrapeListingDetails(cleanUrl, parsed) {
       const pwResult = await fetchPriceWithPlaywright(cleanUrl, parsed.source);
       if (pwResult) {
         result.displayed_5n    = pwResult.price;
-        result.priceIsBaseOnly = false;
+        // nightly_only = a base nightly rate × nights, so cleaning/tax get added downstream.
+        result.priceIsBaseOnly = pwResult.type === 'nightly_only';
       } else {
         // 3. Last resort: Firecrawl LLM extraction (uses Firecrawl's managed browser)
         const fcResult = await fetchPriceViaFirecrawl(urlWithDates(cleanUrl, parsed.source));
