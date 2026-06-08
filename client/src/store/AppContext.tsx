@@ -703,13 +703,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // listings can never be recommended. Ordered by Scout's ranking.
   const recommendedPool = useMemo(() => {
     const BIG = Number.MAX_SAFE_INTEGER;
+    const decided = final.decision?.listing_id;
     return pooledListings
-      .filter((l) => (l.budget === 'under' || l.budget === 'marginal') && !isDeadListing(l))
+      .filter((l) => (l.budget === 'under' || l.budget === 'marginal') && !isDeadListing(l) && l.id !== decided)
       .map((l, i) => ({ l, i, r: aiRankIndex.get(l.id) ?? BIG }))
       .sort((a, b) => a.r - b.r || a.i - b.i)
       .map((x) => x.l);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pooledListings, aiRankIndex]);
+  }, [pooledListings, aiRankIndex, final.decision]);
 
   // Fetch the AI ranking whenever the candidate set (or itinerary/caveats) changes.
   // Server caches by content hash, so repeat loads are free; only a real change

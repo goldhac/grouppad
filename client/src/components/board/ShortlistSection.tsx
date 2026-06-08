@@ -11,12 +11,13 @@ import type { CompareController } from '@/hooks/useCompare';
 import type { Listing } from '@/types';
 
 export function ShortlistSection({ compare }: { compare: CompareController }) {
-  const { shortlistIds, findListing, votes, selected, insights, trip, clearSelection } = useApp();
+  const { shortlistIds, findListing, votes, selected, insights, trip, clearSelection, final } = useApp();
 
   const shortlist = useMemo(() => {
-    const items = [...shortlistIds].map((id) => findListing(id)).filter(Boolean) as Listing[];
+    const decided = final.decision?.listing_id;
+    const items = ([...shortlistIds].map((id) => findListing(id)).filter(Boolean) as Listing[]).filter((l) => l.id !== decided);
     return items.sort((a, b) => netVotes(votes, b.id) - netVotes(votes, a.id) || mansionScore(b) - mansionScore(a));
-  }, [shortlistIds, findListing, votes]);
+  }, [shortlistIds, findListing, votes, final.decision]);
 
   const selCount = selected.size;
 

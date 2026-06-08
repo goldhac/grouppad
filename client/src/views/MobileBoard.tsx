@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Crown, Settings, Bookmark, Moon, Sun, Star,
   SlidersHorizontal, Check, Image as ImageIcon, Home,
   BadgeCheck, MessageSquare, Plus, Sparkles, Swords, Users,
-  HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale,
+  HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
 import { type Filters, readFilters, writeFilters, DEFAULT_FILTERS } from '@/components/board/FilterBar';
+import { useMobileShellLock } from '@/lib/useIsMobile';
 import { Icon } from '@/components/ui/Icon';
 import { fmt, netVotes } from '@/lib/utils';
 import { cn } from '@/lib/cn';
@@ -36,12 +37,20 @@ export function MobileBoard() {
   const {
     trip, listings, submitted, pipeline, votes, final, caveats, isOwner, split,
     favoriteIds, shortlistIds, itinerary, aiRankIndex, aiWhy, aiRankLoading, recommendedPool, suppressedIds,
+    user, openAuth, joinTrip,
     toggleFavorite, toggleFinalPick, setDecision, openDetail, requireSignIn, postCaveat,
     submitListing, toast, selected, toggleSelect, clearSelection, setSplit, startOnboarding,
   } = useApp();
   const compare = useCompare();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  useMobileShellLock();
   const [view, setView] = useState<View>('home');
+  const isGuest = !!trip && !trip.isMember && !trip.isOwner;
+  const joinThisTrip = () => {
+    if (!user) { openAuth('join this trip'); return; }
+    if (trip) void joinTrip(trip.id, searchParams.get('join') || undefined);
+  };
   // Persistent per-trip filters, shared with the desktop board (survive refresh).
   const [filters, setFilters] = useState<Filters>(() => readFilters(trip?.id));
   const filtersTripRef = useRef(trip?.id);
@@ -84,7 +93,12 @@ export function MobileBoard() {
     return recommendedPool.filter((l) => !shortlistIds.has(l.id) && passes(l));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recommendedPool, shortlistIds, filters]);
-  const shortlist = useMemo(() => [...listings, ...submitted].filter((l) => shortlistIds.has(l.id)), [listings, submitted, shortlistIds]);
+  // Shortlist = liked homes still in the running — the locked official pick drops
+  // out (it's decided; it lives in the Decision tab + the leader strip now).
+  const shortlist = useMemo(
+    () => [...listings, ...submitted].filter((l) => shortlistIds.has(l.id) && final.decision?.listing_id !== l.id),
+    [listings, submitted, shortlistIds, final.decision],
+  );
   const savedItems = useMemo(() => [...listings, ...submitted, ...pipeline].filter((l) => favoriteIds.has(l.id)), [listings, submitted, pipeline, favoriteIds]);
   // Browse rows exclude cross-source duplicates already shown elsewhere.
   const communityItems = useMemo(() => submitted.filter((l) => !suppressedIds.has(l.id)), [submitted, suppressedIds]);
@@ -164,6 +178,11 @@ export function MobileBoard() {
           {isOff
             ? <span className="ribbon"><Icon icon={BadgeCheck} className="ico" /> Official pick</span>
             : <div className="tagL"><span className={`pchip ${b}`}><Icon icon={b === 'under' ? Check : b === 'over' ? TrendingUp : b === 'unknown' ? HelpCircle : Minus} className="ico" /> {B_SHORT[b]}</span></div>}
+          {!opts.compact && (
+            <button className={cn('save', final.myPick === l.id && 'on gold')} style={{ right: 92 }} onClick={(e) => { e.stopPropagation(); if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }} aria-label="Top choice" title="Make my top choice">
+              <Icon icon={Star} className="ico" />
+            </button>
+          )}
           <button className={cn('save', selected.has(l.id) && 'on')} style={{ right: 52 }} onClick={(e) => { e.stopPropagation(); toggleSelect(l.id); }} aria-label="Select to compare" title="Compare">
             <Icon icon={Scale} className="ico" />
           </button>
@@ -348,7 +367,16 @@ export function MobileBoard() {
           {isOwner && <button className="iconbtn" onClick={() => trip && navigate(`/t/${trip.id}/manage`)} aria-label="Manage"><Icon icon={Settings} className="ico" /></button>}
           <button className={cn('iconbtn', view === 'saved' && 'on')} onClick={() => setView('saved')} aria-label="Saved"><Icon icon={Bookmark} className="ico" />{favoriteIds.size > 0 && <span className="hbadge tnum">{favoriteIds.size}</span>}</button>
           <button className="iconbtn" onClick={toggleTheme} aria-label="Theme"><Icon icon={theme === 'dark' ? Sun : Moon} className="ico" /></button>
+          {!user && <button className="btn btn-primary btn-sm" style={{ marginLeft: 4, height: 34, padding: '0 12px' }} onClick={() => openAuth('sign in')}>Sign in</button>}
         </div>
+
+        {isGuest && (
+          <div className="guest-join">
+            <Icon icon={UserPlus} className="ico" />
+            <span>{user ? 'Join to vote, save, and add homes.' : 'Viewing as a guest — sign in to join.'}</span>
+            <button className="btn btn-primary btn-sm" onClick={joinThisTrip}>{user ? 'Join trip' : 'Sign in to join'}</button>
+          </div>
+        )}
 
         {view === 'home' && (
           <div className="fchips">

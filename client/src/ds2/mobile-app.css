@@ -488,6 +488,7 @@
 .gp-mobile .mcard .save .ico { width: 25px; height: 25px; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); stroke-width: 2.2; transition: transform var(--dur-fast) var(--ease-out); }
 .gp-mobile .mcard .save:active .ico { transform: scale(0.85); }
 .gp-mobile .mcard .save.on .ico { color: var(--accent); fill: var(--accent); }
+.gp-mobile .mcard .save.on.gold .ico { color: var(--gold-dot, var(--star)); fill: var(--gold-dot, var(--star)); }
 .gp-mobile .mcard .ph .dots { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; z-index: 2; }
 .gp-mobile .mcard .ph .dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.6); box-shadow: 0 1px 2px rgba(0,0,0,0.35); }
 .gp-mobile .mcard .ph .dots i.act { background: #fff; }
@@ -1332,6 +1333,21 @@
    constrained height to scroll within. Make the inner `.mb` the flex column. */
 .gp-mobile > .mb { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 .gp-mobile .mb-scroll { min-height: 0; flex: 1 1 auto; }
+
+/* iOS touch-scroll robustness: tell the engine this is the vertical scroller,
+   keep momentum scrolling, and stop the gesture leaking to the (locked) body
+   which is what made some iOS Safari users unable to scroll the board. */
+.gp-mobile .mb-scroll { touch-action: pan-y; overscroll-behavior-y: contain; -webkit-overflow-scrolling: touch; }
+/* While a mobile shell is mounted, lock the underlying document so the page
+   itself can't compete for the first touch (added/removed by the view). */
+html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+
+/* Guest "sign in to join" banner under the mobile masthead */
+.gp-mobile .guest-join { display: flex; align-items: center; gap: 9px; margin: 0 12px 4px; padding: 10px 12px;
+  background: var(--accent-tint); border: 1px solid var(--accent-tint-border, var(--accent-line)); border-radius: 12px; font-size: 13px; color: var(--text-2); }
+.gp-mobile .guest-join > .ico { width: 17px; height: 17px; color: var(--accent-text); flex: none; }
+.gp-mobile .guest-join span { flex: 1; line-height: 1.35; }
+.gp-mobile .guest-join .btn { flex: none; white-space: nowrap; }
 
 /* ── Bottom-nav refinement (user feedback) ───────────────────────────────────
    Smaller nav, the + inline on the same line (not a raised FAB), and the
