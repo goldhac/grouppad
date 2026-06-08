@@ -697,13 +697,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return m;
   }, [aiOrder]);
 
-  // The "Recommended" pool: every distinct, in-budget, real home across all three
-  // sources, ordered by Scout's ranking (heuristic until it loads). Over-budget
-  // and dead/test listings are excluded — they can't be a recommendation.
+  // The "Recommended" pool: distinct homes across all three sources whose price
+  // is CONFIRMED within (or within ~10% of) budget — only 'under'/'marginal'.
+  // Over-budget, unknown-price (can't confirm it's affordable), and dead/test
+  // listings can never be recommended. Ordered by Scout's ranking.
   const recommendedPool = useMemo(() => {
     const BIG = Number.MAX_SAFE_INTEGER;
     return pooledListings
-      .filter((l) => l.budget !== 'over' && !isDeadListing(l))
+      .filter((l) => (l.budget === 'under' || l.budget === 'marginal') && !isDeadListing(l))
       .map((l, i) => ({ l, i, r: aiRankIndex.get(l.id) ?? BIG }))
       .sort((a, b) => a.r - b.r || a.i - b.i)
       .map((x) => x.l);
