@@ -522,6 +522,13 @@
   border-radius: 9px; padding: 7px 9px; }
 .gp-mobile .mcard .ai-why .ico { width: 13px; height: 13px; flex: none; margin-top: 1px; color: var(--accent-text); }
 
+/* Detail quick-facts grid — themed at-a-glance numbers */
+.gp-mobile .detail .d-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 4px; }
+.gp-mobile .detail .d-fact { background: var(--surface-inset); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; }
+.gp-mobile .detail .d-fact .fk { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); font-weight: 600; }
+.gp-mobile .detail .d-fact .fv { font-size: 15px; font-weight: 700; color: var(--text); margin-top: 2px; }
+.gp-mobile .detail .mapw-frame { height: 165px; }
+
 /* compact (used in horizontal rows) */
 .gp-mobile .mcard.compact .ph { aspect-ratio: 20 / 14; }
 .gp-mobile .mcard.compact .row1 .nm { font-size: 14.5px; }

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { MapWidget } from '@/components/MapWidget';
 import { fmt, tallyVotes } from '@/lib/utils';
 import { cn } from '@/lib/cn';
 
@@ -66,14 +67,27 @@ export function MobileDetail() {
               <span>{[l.bd != null ? `${l.bd} bd` : null, l.ba != null ? `${l.ba} ba` : null, l.sleeps != null ? `sleeps ${l.sleeps}` : null].filter(Boolean).join(' · ')}</span>
               {l.rating != null && <span className="rev"><Icon icon={Star} className="ico" /> {l.rating}{rev?.total ? ` (${rev.total})` : ''}</span>}
             </div>
-            {dists.length > 0 && (
-              <div className="d-dist">
-                {dists.map((d, i) => <span className="pill-dist" key={i}><Icon icon={MapPin} className="ico" /><span className="mi tnum">{d.mi} mi</span><span className="sep">·</span><span className="tnum">{d.min} min · {d.label}</span></span>)}
-              </div>
-            )}
+            {/* Quick facts — themed at-a-glance grid */}
+            <div className="d-facts">
+              {[
+                { k: 'Bedrooms', v: l.bd != null ? `${l.bd}` : '—' },
+                { k: 'Bathrooms', v: l.ba != null ? `${l.ba}` : '—' },
+                { k: 'Sleeps', v: l.sleeps != null ? `${l.sleeps}` : '—' },
+                { k: 'Rating', v: l.rating != null ? `★ ${l.rating}` : 'New' },
+                { k: 'Per person', v: pp || '—' },
+                { k: 'From DTLA', v: l.distance_mi != null ? `${l.distance_mi} mi` : '—' },
+              ].map((f) => <div className="d-fact" key={f.k}><div className="fk">{f.k}</div><div className="fv tnum">{f.v}</div></div>)}
+            </div>
             <div className="d-amen">
               {amen.map((a, i) => <span key={i} className={cn('chip-amen', a.yes && 'chip-yes', a.no && 'chip-no', a.unk && 'chip-unk')}><Icon icon={a.unk ? HelpCircle : a.no ? X : a.icon} className="ico" /> {a.label}</span>)}
             </div>
+            {/* Location & map */}
+            {(l.lat != null || dists.length > 0 || l.area) && (
+              <div style={{ marginTop: 8 }}>
+                <div className="d-seclabel"><Icon icon={MapPin} className="ico" /> Location</div>
+                <MapWidget l={l} />
+              </div>
+            )}
             <div className="d-break">
               <div className="brow"><span>5-night est all-in</span><span className="v tnum">{fmt(l.est_5n)}</span></div>
               {l.est_4n != null && <div className="brow"><span>4-night est</span><span className="v tnum">{fmt(l.est_4n)}</span></div>}

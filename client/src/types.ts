@@ -129,6 +129,8 @@ export interface Listing {
   url: string;
   source: string;
   area?: string;
+  lat?: number | null;
+  lng?: number | null;
   distance_mi?: number | null;
   /** Distance + drive-time chips to the trip's reference points. */
   distances?: { icon: string; kind?: string; label: string; mi: number; min: number }[];
