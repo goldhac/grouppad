@@ -12,19 +12,21 @@ const CAP = 8;
 /** Live listings — same card as the board; a "See all" cap, and it follows the
  *  grid/list view toggle. */
 export function PipelineSection({ filters, view = 'grid' }: { filters: Filters; view?: 'grid' | 'list' }) {
-  const { pipeline, shortlistIds } = useApp();
+  const { pipeline, shortlistIds, suppressedIds } = useApp();
   const [open, setOpen] = useState(false);
 
   const items = useMemo(() => {
     const filtered = pipeline.filter((l) => {
-      if (shortlistIds.has(l.id)) return false;
+      if (shortlistIds.has(l.id) || suppressedIds.has(l.id)) return false;
       if (filters.under && !(l.budget === 'under' || l.budget === 'marginal')) return false;
       if (filters.pool && l.pool !== 'yes') return false;
       if (filters.parking && l.parking !== 'yes') return false;
+      if (filters.hottub && l.hot_tub !== 'yes') return false;
+      if (filters.sleeps && (l.sleeps ?? 0) < filters.sleeps) return false;
       return true;
     });
     return filtered.sort((a, b) => mansionScore(b) - mansionScore(a));
-  }, [pipeline, shortlistIds, filters]);
+  }, [pipeline, shortlistIds, suppressedIds, filters]);
 
   if (pipeline.length === 0) return null;
 

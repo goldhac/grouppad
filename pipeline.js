@@ -23,6 +23,22 @@ const Database = require('better-sqlite3');
 
 const APIFY_TOKEN    = process.env.APIFY_TOKEN;
 const FIRECRAWL_KEY  = process.env.FIRECRAWL_API_KEY;
+
+// One-shot owner alert when the listings search can't run (key down / 0 results).
+// Sent at most once per pipeline process so a bad key emails exactly one heads-up.
+let _alerted = false;
+async function pipelineAlert(subject, html) {
+  if (_alerted) return; _alerted = true;
+  const key = process.env.RESEND_API_KEY, to = process.env.OWNER_EMAIL;
+  if (!key || !to) { console.log(`[alert] (email not configured) ${subject}`); return; }
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: process.env.MAIL_FROM || 'GroupPad <onboarding@resend.dev>', to: [to], subject, html }),
+    });
+  } catch (e) { console.error('[alert] send error:', e.message); }
+}
 const CHROMIUM_PATH  = process.env.CHROMIUM_PATH || '/usr/bin/chromium';
 const DATA_DIR       = process.env.PIPELINE_DATA_DIR || path.join(__dirname, 'data');
 try { require('fs').mkdirSync(DATA_DIR, { recursive: true }); } catch {}
@@ -249,6 +265,8 @@ async function runApify(actorSlug, input, timeoutMs = 300000) {
     if (!res.ok) {
       const err = await res.text().catch(() => '');
       console.error(`  [Apify] HTTP ${res.status}:`, err.slice(0, 200));
+      if ([401, 402, 403].includes(res.status)) pipelineAlert('⚠️ GroupPad: couldn’t pull fresh listings (Apify)',
+        `<p>The listings search (<code>${actorSlug}</code>) failed with <b>HTTP ${res.status}</b> — the Apify key looks invalid, expired, or out of credit.</p><p>Drop a fresh key into <code>APIFY_TOKEN</code> / <code>APIFY_TOKEN_FALLBACK</code> on Railway to resume.</p>`).catch(() => {});
       return [];
     }
     return await res.json();
@@ -270,6 +288,8 @@ async function runApifyAsync(actorSlug, input, maxWaitMs = 540000) {
     );
     if (!startRes.ok) {
       console.error(`  [Apify] start HTTP ${startRes.status}:`, (await startRes.text()).slice(0, 200));
+      if ([401, 402, 403].includes(startRes.status)) pipelineAlert('⚠️ GroupPad: couldn’t pull fresh listings (Apify)',
+        `<p>The listings search (<code>${actorSlug}</code>) failed with <b>HTTP ${startRes.status}</b> — the Apify key looks invalid, expired, or out of credit. Rotate the key on Railway to resume.</p>`).catch(() => {});
       return [];
     }
     const run = (await startRes.json()).data;
@@ -942,6 +962,11 @@ async function main() {
   console.log(`\n═══════════════════════════════════════════════════`);
   console.log(` Done in ${secs}s — ${survivors.n} listings on site ✓`);
   console.log('═══════════════════════════════════════════════════\n');
+
+  // If a run produces zero listings, the board is about to look empty — that's
+  // almost always a key/credit problem. Tell the owner (one email per run).
+  if (!survivors.n) await pipelineAlert('⚠️ GroupPad: latest listings refresh found 0 homes',
+    `<p>The scheduled listings refresh finished but found <b>0 homes</b>. This usually means the Apify key is out of credit/invalid, or the source actors changed.</p><p>Check <code>APIFY_TOKEN</code> / <code>APIFY_TOKEN_FALLBACK</code> on Railway.</p>`).catch(() => {});
 
   db.close();
 }

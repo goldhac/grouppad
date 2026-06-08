@@ -602,7 +602,12 @@ async function runApifyActor(slug, input, timeoutMs = 120000) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input), signal: ctrl.signal,
     });
-    if (!res.ok) { console.error(`[reviews] apify ${slug} ${res.status}`); return null; }
+    if (!res.ok) {
+      console.error(`[reviews] apify ${slug} ${res.status}`);
+      // 401/403 = key invalid/expired/over-credit → alert the owner.
+      if (res.status === 401 || res.status === 402 || res.status === 403) noteApifyDown(`actor ${slug}`, `HTTP ${res.status}`);
+      return null;
+    }
     const items = await res.json();
     bumpUsage('apify', { calls: 1, results: Array.isArray(items) ? items.length : 0 });
     return Array.isArray(items) ? items : [];
@@ -801,55 +806,68 @@ function scheduleTours() {
 // working; only when BOTH are near-limit does it pause + email the manager.
 // `_activeApify` is the key currently in use; spawned children (pipeline.js) get it
 // passed in as APIFY_TOKEN, so the swap propagates everywhere.
-const APIFY_PRIMARY  = process.env.APIFY_TOKEN || '';
-const APIFY_FALLBACK = process.env.APIFY_TOKEN_FALLBACK || '';
-let _activeApify = APIFY_PRIMARY || APIFY_FALLBACK;
+// Stacked Apify keys, in priority order. Sources (deduped): APIFY_TOKEN,
+// APIFY_TOKEN_FALLBACK, APIFY_TOKEN_3..8, and a comma-list in APIFY_TOKENS.
+// The guard rotates to the first key with headroom; spawned children get the
+// active key via env so the swap propagates everywhere.
+const APIFY_KEYS = (() => {
+  const keys = [];
+  const add = (k) => { k = (k || '').trim(); if (k && !keys.includes(k)) keys.push(k); };
+  add(process.env.APIFY_TOKEN);
+  add(process.env.APIFY_TOKEN_FALLBACK);
+  for (let i = 3; i <= 8; i++) add(process.env['APIFY_TOKEN_' + i]);
+  (process.env.APIFY_TOKENS || '').split(',').forEach(add);
+  return keys;
+})();
+let _activeApify = APIFY_KEYS[0] || '';
 let _lastApifyAlertAt = 0;
-let _lastApifySwapAt = 0;
+let _lastApifyDownAlertAt = 0;
 const APIFY_ALERT_PCT = Number(process.env.APIFY_ALERT_PCT || 0.85);
 function getApifyToken() { return _activeApify; }
-function apifyConfigured() { return !!(APIFY_PRIMARY || APIFY_FALLBACK); }
+function apifyConfigured() { return APIFY_KEYS.length > 0; }
 // True if a usage summary shows headroom (or is unknown — never hard-block on errors).
 const _apifyHasRoom = (s) =>
   !s || s.usageUsd == null || s.limitUsd == null || s.limitUsd <= 0 || (s.usageUsd / s.limitUsd) < APIFY_ALERT_PCT;
 
+// A key/actor call hard-failed (invalid key, 401/403, or the search returned
+// nothing). Email the owner so they know fresh listings stalled — throttled 6h.
+async function noteApifyDown(context, detail) {
+  const now = Date.now();
+  if (now - _lastApifyDownAlertAt < 6 * 60 * 60 * 1000) return;
+  _lastApifyDownAlertAt = now;
+  console.warn(`[apify-down] ${context}: ${detail}`);
+  await sendManagerEmail('⚠️ GroupPad: couldn’t pull fresh listings (Apify)',
+    `<p>GroupPad tried to fetch listings (<b>${context}</b>) but the Apify call failed: <code>${String(detail).slice(0, 200)}</code>.</p>
+     <p>This usually means a key is invalid, expired, or out of credit. Drop a fresh key into <code>APIFY_TOKEN</code> / <code>APIFY_TOKEN_FALLBACK</code> (or <code>APIFY_TOKENS</code>) on Railway to resume.</p>`).catch(() => {});
+}
+
 async function apifyGuard(context) {
   try {
     if (!apifyConfigured()) return true; // nothing configured → never hard-block
-    // Prefer the primary while it has headroom.
-    if (APIFY_PRIMARY) {
-      const ps = await fetchApifySummary(APIFY_PRIMARY);
-      if (_apifyHasRoom(ps)) { _activeApify = APIFY_PRIMARY; return true; }
-      // Primary near limit → auto-swap to the backup if it still has room.
-      if (APIFY_FALLBACK) {
-        const fb = await fetchApifySummary(APIFY_FALLBACK);
-        if (_apifyHasRoom(fb)) {
-          if (_activeApify !== APIFY_FALLBACK) {
-            _activeApify = APIFY_FALLBACK;
-            _lastApifySwapAt = Date.now();
-            const pctP = Math.round((ps.usageUsd / ps.limitUsd) * 100);
-            console.warn(`[apify-guard] primary at ${pctP}% — auto-swapped to backup key for ${context}`);
-            sendManagerEmail('GroupPad: switched to the backup Apify key',
-              `<p>Your primary Apify key reached <b>${pctP}%</b> of its monthly limit, so GroupPad automatically switched to the backup key to keep ${context} running — no action needed right now.</p>
-               <p>When you get a chance, drop a fresh key into <code>APIFY_TOKEN_FALLBACK</code> on Railway so there's always a spare.</p>`).catch(() => {});
-          }
-          return true;
+    let worstPct = 0;
+    for (let i = 0; i < APIFY_KEYS.length; i++) {
+      const key = APIFY_KEYS[i];
+      const s = await fetchApifySummary(key);
+      if (_apifyHasRoom(s)) {
+        if (_activeApify !== key && i > 0) {
+          console.warn(`[apify-guard] swapped to stacked key #${i + 1} for ${context}`);
+          sendManagerEmail('GroupPad: switched to a backup Apify key',
+            `<p>An earlier Apify key was near its monthly limit, so GroupPad switched to stacked key #${i + 1} to keep ${context} running — no action needed right now. Top up the earlier keys when you can.</p>`).catch(() => {});
         }
+        _activeApify = key;
+        return true;
       }
-      // Both keys near limit → pause + alert (throttled to once / 12h).
-      const pct = ps.usageUsd / ps.limitUsd;
-      const now = Date.now();
-      if (now - _lastApifyAlertAt > 12 * 60 * 60 * 1000) {
-        _lastApifyAlertAt = now;
-        await sendManagerEmail(`⚠️ GroupPad: Apify usage at ${Math.round(pct * 100)}%`,
-          `<p>${APIFY_FALLBACK ? 'Both Apify keys are' : 'The Apify key is'} near the monthly limit. GroupPad <b>paused ${context}</b> to avoid overage. Rotate <code>APIFY_TOKEN</code>${APIFY_FALLBACK ? ' / <code>APIFY_TOKEN_FALLBACK</code>' : ''} on Railway (or upgrade the plan) to resume.</p>`);
-        console.warn(`[apify-guard] near limit (${Math.round(pct * 100)}%) — paused ${context}, manager alerted`);
-      }
-      return false;
+      if (s && s.limitUsd > 0) worstPct = Math.max(worstPct, s.usageUsd / s.limitUsd);
     }
-    // Only a backup is configured → use it, guarded by its own usage.
-    _activeApify = APIFY_FALLBACK;
-    return _apifyHasRoom(await fetchApifySummary(APIFY_FALLBACK));
+    // No key had room → pause + alert (throttled to once / 12h).
+    const now = Date.now();
+    if (now - _lastApifyAlertAt > 12 * 60 * 60 * 1000) {
+      _lastApifyAlertAt = now;
+      await sendManagerEmail(`⚠️ GroupPad: all ${APIFY_KEYS.length} Apify key(s) near limit (${Math.round(worstPct * 100)}%)`,
+        `<p>All ${APIFY_KEYS.length} stacked Apify key(s) are near their monthly limit. GroupPad <b>paused ${context}</b> to avoid overage. Add a fresh key to <code>APIFY_TOKEN</code> / <code>APIFY_TOKEN_FALLBACK</code> / <code>APIFY_TOKENS</code> on Railway (or upgrade the plan) to resume.</p>`);
+      console.warn(`[apify-guard] all keys near limit (${Math.round(worstPct * 100)}%) — paused ${context}, owner alerted`);
+    }
+    return false;
   } catch (e) {
     console.error('[apify-guard]', e.message);
     return true;

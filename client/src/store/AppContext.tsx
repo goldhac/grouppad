@@ -81,6 +81,9 @@ interface AppState {
   aiWhy: Record<string, string>;
   aiRankIndex: ReadonlyMap<string, number>;
   aiRankLoading: boolean;
+  // Cross-pool recommendation set + suppressed duplicate ids
+  recommendedPool: Listing[];
+  suppressedIds: ReadonlySet<string>;
 }
 
 interface AppActions {
@@ -142,6 +145,19 @@ type AppContextValue = AppState & AppActions;
 const AppContext = createContext<AppContextValue | null>(null);
 const EMPTY_FINAL: FinalState = { counts: {}, total: 0, myPick: null, decision: null };
 let toastSeq = 0;
+
+// Auto-generated platform names ("Home in Encino", "Villa near Malibu") aren't
+// distinctive, so we never cross-merge them — only the listing id dedups those.
+const GENERIC_NAME = /^(a\s+)?(home|villa|place|condo|cabin|guesthouse|casa(\s+particular)?|apartment|rental|room|cottage|townhouse|bungalow|loft|house|stay|entire)\b.*\b(in|near|by)\b/i;
+/** A stable property key: distinctive names merge the same villa across sources
+ *  (e.g. Via Vallarta on villaway + maimongroup); generic names stay per-id. */
+function propKey(l: Listing): string {
+  const raw = (l.name || '').trim();
+  if (!raw || GENERIC_NAME.test(raw)) return `id:${l.source}:${l.id}`;
+  return `nm:${raw.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 32)}`;
+}
+const dataScore = (l: Listing) => (l.est_5n ? 4 : 0) + ((l.photos?.length ?? 0) ? 2 : 0) + ((l.distances?.length ?? 0) ? 1 : 0);
+const isDeadListing = (l: Listing) => /\b(delisted|de-listed|test listing|placeholder|example)\b/i.test(l.name || '');
 
 export function AppProvider({ children }: { children: ReactNode }) {
   // global account
@@ -657,18 +673,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return ids;
   }, [submitted, pipeline, listings, votes]);
 
-  // Pool every candidate (community + live + curated), deduped, preferring the
-  // copy that carries distance chips — the same union the board renders.
-  const pooledListings = useMemo(() => {
-    const byId = new Map<string, Listing>();
-    for (const pool of [submitted, pipeline, listings]) {
-      for (const l of pool) {
-        const prev = byId.get(l.id);
-        if (!prev || (!prev.distances?.length && l.distances?.length)) byId.set(l.id, l);
-      }
+  // Pool every candidate (community + live + curated) and dedupe at the property
+  // level — the same villa from two sources collapses to one card (we keep the
+  // richest copy). `suppressedIds` are the dropped duplicates, hidden everywhere.
+  const { pooledListings, suppressedIds } = useMemo(() => {
+    const union = [...submitted, ...pipeline, ...listings];
+    const best = new Map<string, Listing>();
+    for (const l of union) {
+      const k = propKey(l);
+      const cur = best.get(k);
+      if (!cur || dataScore(l) > dataScore(cur)) best.set(k, l);
     }
-    return [...byId.values()];
+    const keep = new Set([...best.values()].map((l) => l.id));
+    const suppressed = new Set<string>();
+    for (const l of union) if (!keep.has(l.id)) suppressed.add(l.id);
+    return { pooledListings: [...best.values()], suppressedIds: suppressed };
   }, [submitted, pipeline, listings]);
+
+  // Rank index for O(1) "where does this home sit in the AI order" lookups.
+  const aiRankIndex = useMemo(() => {
+    const m = new Map<string, number>();
+    aiOrder.forEach((id, i) => m.set(id, i));
+    return m;
+  }, [aiOrder]);
+
+  // The "Recommended" pool: every distinct, in-budget, real home across all three
+  // sources, ordered by Scout's ranking (heuristic until it loads). Over-budget
+  // and dead/test listings are excluded — they can't be a recommendation.
+  const recommendedPool = useMemo(() => {
+    const BIG = Number.MAX_SAFE_INTEGER;
+    return pooledListings
+      .filter((l) => l.budget !== 'over' && !isDeadListing(l))
+      .map((l, i) => ({ l, i, r: aiRankIndex.get(l.id) ?? BIG }))
+      .sort((a, b) => a.r - b.r || a.i - b.i)
+      .map((x) => x.l);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pooledListings, aiRankIndex]);
 
   // Fetch the AI ranking whenever the candidate set (or itinerary/caveats) changes.
   // Server caches by content hash, so repeat loads are free; only a real change
@@ -698,20 +738,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiSig]);
 
-  // Rank index for O(1) "where does this home sit in the AI order" lookups.
-  const aiRankIndex = useMemo(() => {
-    const m = new Map<string, number>();
-    aiOrder.forEach((id, i) => m.set(id, i));
-    return m;
-  }, [aiOrder]);
-
   const value: AppContextValue = useMemo(
     () => ({
       user, myTrips, accountLoading,
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
-      aiOrder, aiWhy, aiRankIndex, aiRankLoading,
+      aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds,
       favoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
@@ -724,7 +757,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
       listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
-      aiOrder, aiWhy, aiRankIndex, aiRankLoading,
+      aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds,
       favoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,

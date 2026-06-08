@@ -11,15 +11,15 @@ const CAP = 8;
 /** Community submissions — same card as the board; a "See all" cap, and it
  *  follows the grid/list view toggle. */
 export function SubmittedSection({ view = 'grid' }: { view?: 'grid' | 'list' }) {
-  const { submitted, shortlistIds, votes } = useApp();
+  const { submitted, shortlistIds, votes, suppressedIds } = useApp();
   const [open, setOpen] = useState(false);
 
   const items = useMemo(
     () =>
       submitted
-        .filter((l) => !shortlistIds.has(l.id))
+        .filter((l) => !shortlistIds.has(l.id) && !suppressedIds.has(l.id))
         .sort((a, b) => netVotes(votes, b.id) - netVotes(votes, a.id) || mansionScore(b) - mansionScore(a)),
-    [submitted, shortlistIds, votes],
+    [submitted, shortlistIds, votes, suppressedIds],
   );
 
   if (items.length === 0) return null;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Crown, Settings, Bookmark, Moon, Sun, Star,
@@ -10,6 +10,7 @@ import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
+import { type Filters, readFilters, writeFilters, DEFAULT_FILTERS } from '@/components/board/FilterBar';
 import { Icon } from '@/components/ui/Icon';
 import { fmt, netVotes } from '@/lib/utils';
 import { cn } from '@/lib/cn';
@@ -34,14 +35,20 @@ function rangeLabel(a?: string, b?: string) {
 export function MobileBoard() {
   const {
     trip, listings, submitted, pipeline, votes, final, caveats, isOwner, split,
-    favoriteIds, shortlistIds, itinerary, aiRankIndex, aiWhy, aiRankLoading,
+    favoriteIds, shortlistIds, itinerary, aiRankIndex, aiWhy, aiRankLoading, recommendedPool, suppressedIds,
     toggleFavorite, toggleFinalPick, setDecision, openDetail, requireSignIn, postCaveat,
     submitListing, toast, selected, toggleSelect, clearSelection, setSplit, startOnboarding,
   } = useApp();
   const compare = useCompare();
   const navigate = useNavigate();
   const [view, setView] = useState<View>('home');
-  const [filters, setFilters] = useState({ under: false, pool: false, parking: false, manual: true });
+  // Persistent per-trip filters, shared with the desktop board (survive refresh).
+  const [filters, setFilters] = useState<Filters>(() => readFilters(trip?.id));
+  const filtersTripRef = useRef(trip?.id);
+  useEffect(() => {
+    if (filtersTripRef.current !== trip?.id) { filtersTripRef.current = trip?.id; setFilters(readFilters(trip?.id)); }
+  }, [trip?.id]);
+  useEffect(() => { writeFilters(trip?.id, filters); }, [filters, trip?.id]);
   const [sheet, setSheet] = useState<'add' | 'filter' | null>(null);
   const [addUrl, setAddUrl] = useState('');
   const [addPrice, setAddPrice] = useState('');
@@ -66,23 +73,22 @@ export function MobileBoard() {
     if (filters.under && !(l.budget === 'under' || l.budget === 'marginal')) return false;
     if (filters.pool && l.pool !== 'yes') return false;
     if (filters.parking && l.parking !== 'yes') return false;
+    if (filters.hottub && l.hot_tub !== 'yes') return false;
+    if (filters.sleeps && (l.sleeps ?? 0) < filters.sleeps) return false;
     if (!filters.manual && l.budget === 'unknown') return false;
     return true;
   };
+  // Recommended = the cross-pool, budget-safe, Scout-ranked set (top 10), with
+  // the active filters applied. Already deduped + ordered in the store.
   const visible = useMemo(() => {
-    const rows = listings.filter((l) => !shortlistIds.has(l.id) && passes(l));
-    if (aiRankIndex.size) {
-      const BIG = Number.MAX_SAFE_INTEGER;
-      return rows
-        .map((l, i) => ({ l, i, r: aiRankIndex.get(l.id) ?? BIG }))
-        .sort((a, b) => a.r - b.r || a.i - b.i)
-        .map((x) => x.l);
-    }
-    return rows;
+    return recommendedPool.filter((l) => !shortlistIds.has(l.id) && passes(l));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listings, shortlistIds, filters, aiRankIndex]);
+  }, [recommendedPool, shortlistIds, filters]);
   const shortlist = useMemo(() => [...listings, ...submitted].filter((l) => shortlistIds.has(l.id)), [listings, submitted, shortlistIds]);
   const savedItems = useMemo(() => [...listings, ...submitted, ...pipeline].filter((l) => favoriteIds.has(l.id)), [listings, submitted, pipeline, favoriteIds]);
+  // Browse rows exclude cross-source duplicates already shown elsewhere.
+  const communityItems = useMemo(() => submitted.filter((l) => !suppressedIds.has(l.id)), [submitted, suppressedIds]);
+  const liveItems = useMemo(() => pipeline.filter((l) => !suppressedIds.has(l.id)), [pipeline, suppressedIds]);
 
   const groupTotal = trip?.adults || trip?.memberCount || 14;
   const votedCount = useMemo(() => {
@@ -137,12 +143,12 @@ export function MobileBoard() {
     </div>
   ) : null;
 
-  const fchip = (k: 'under' | 'pool' | 'parking', t: string) => (
+  const fchip = (k: 'under' | 'pool' | 'parking' | 'hottub', t: string) => (
     <button className={cn('fchip', filters[k] && 'on')} onClick={() => setFilters((f) => ({ ...f, [k]: !f[k] }))}>
       {filters[k] && <Icon icon={Check} className="ico" />}{t}
     </button>
   );
-  const activeFilters = (filters.under ? 1 : 0) + (filters.pool ? 1 : 0) + (filters.parking ? 1 : 0) + (!filters.manual ? 1 : 0);
+  const activeFilters = (filters.under ? 1 : 0) + (filters.pool ? 1 : 0) + (filters.parking ? 1 : 0) + (filters.hottub ? 1 : 0) + (filters.sleeps ? 1 : 0) + (!filters.manual ? 1 : 0);
 
   function mcard(l: Listing, opts: { compact?: boolean; by?: boolean } = {}) {
     const isOff = official?.id === l.id;
@@ -188,24 +194,24 @@ export function MobileBoard() {
     <>
       {pulse}
       <div className="sec">
-        <div className="sec-h"><span className="t">Recommended</span><span className="c tnum">{visible.length} homes</span></div>
-        <div className="sec-sub">{aiRankLoading ? 'Scout is ranking these for your group…' : aiRankIndex.size ? 'Ranked by Scout for your itinerary · tap any home for the full breakdown' : 'Curated & ranked for your group · tap any home for the full breakdown'}</div>
+        <div className="sec-h"><span className="t">Recommended</span><span className="c tnum">Top {Math.min(10, visible.length)}</span></div>
+        <div className="sec-sub">{aiRankLoading ? 'Scout is ranking these for your group…' : aiRankIndex.size ? 'Ranked by Scout across all sources · within budget · tap a home for the breakdown' : 'Ranked for your group · within budget · tap a home for the breakdown'}</div>
         {visible.length
-          ? <div className="list">{visible.map((l) => mcard(l))}</div>
-          : <div className="empty"><div className="ec"><Icon icon={Home} className="ico" /></div><h3>No homes match</h3><p>Loosen the filters to see more.</p><button className="btn btn-ghost" onClick={() => setFilters({ under: false, pool: false, parking: false, manual: true })}>Clear filters</button></div>}
+          ? <div className="list">{visible.slice(0, 10).map((l) => mcard(l))}</div>
+          : <div className="empty"><div className="ec"><Icon icon={Home} className="ico" /></div><h3>No homes match</h3><p>Loosen the filters to see more.</p><button className="btn btn-ghost" onClick={() => setFilters(DEFAULT_FILTERS)}>Clear filters</button></div>}
       </div>
-      {submitted.length > 0 && (
+      {communityItems.length > 0 && (
         <div className="sec">
-          <div className="sec-h"><span className="t">From your group</span><span className="c tnum">{submitted.length}</span></div>
+          <div className="sec-h"><span className="t">From your group</span><span className="c tnum">{communityItems.length}</span></div>
           <div className="sec-sub">Member-added · they rise into the shortlist once liked · swipe →</div>
-          <div className="hrow">{submitted.map((l) => mcard(l, { compact: true, by: true }))}</div>
+          <div className="hrow">{communityItems.map((l) => mcard(l, { compact: true, by: true }))}</div>
         </div>
       )}
-      {pipeline.length > 0 && (
+      {liveItems.length > 0 && (
         <div className="sec">
-          <div className="sec-h"><span className="t">More LA homes</span><span className="c tnum">{pipeline.length}</span></div>
+          <div className="sec-h"><span className="t">More LA homes</span><span className="c tnum">{liveItems.length}</span></div>
           <div className="sec-sub">Auto-refreshed from Airbnb &amp; VRBO · swipe →</div>
-          <div className="hrow">{pipeline.map((l) => mcard(l, { compact: true }))}</div>
+          <div className="hrow">{liveItems.map((l) => mcard(l, { compact: true }))}</div>
         </div>
       )}
     </>
@@ -347,7 +353,7 @@ export function MobileBoard() {
         {view === 'home' && (
           <div className="fchips">
             <button className="fbtn" onClick={() => setSheet('filter')}><Icon icon={SlidersHorizontal} className="ico" /> Filters{activeFilters > 0 && <span className="dotn tnum">{activeFilters}</span>}</button>
-            {fchip('under', 'Under budget')}{fchip('pool', 'Pool')}{fchip('parking', 'Parking')}
+            {fchip('under', 'Under budget')}{fchip('pool', 'Pool')}{fchip('parking', 'Parking')}{fchip('hottub', 'Hot tub')}
           </div>
         )}
 
@@ -388,12 +394,13 @@ export function MobileBoard() {
           <div className="sheet show"><div className="grab" />
             <div className="sh-head"><h3>Filters &amp; split</h3><button className="iconbtn x" onClick={() => setSheet(null)} aria-label="Close"><Icon icon={X} className="ico" /></button></div>
             <div className="sh-sec"><div className="lbl">Show only</div><div className="chip-list">
-              {([['under', 'Under budget'], ['pool', 'Pool required'], ['parking', 'Parking required'], ['manual', 'Include “check manually”']] as const).map(([k, t]) => (
+              {([['under', 'Under budget'], ['pool', 'Pool required'], ['parking', 'Parking required'], ['hottub', 'Hot tub'], ['manual', 'Include “check manually”']] as const).map(([k, t]) => (
                 <label key={k} className={cn('chip-filter', (k === 'manual' ? filters.manual : filters[k]) && 'on')} onClick={() => setFilters((f) => ({ ...f, [k]: !f[k] }))}><span className="box"><Icon icon={Check} className="ico" /></span> {t}</label>
               ))}
             </div></div>
+            <div className="sh-sec"><div className="lbl">Sleeps at least</div><div className="split-row"><input type="range" min={0} max={20} value={filters.sleeps} onChange={(e) => setFilters((f) => ({ ...f, sleeps: Number(e.target.value) }))} /><span className="val tnum">{filters.sleeps || 'any'}</span></div></div>
             <div className="sh-sec"><div className="lbl">Split cost between</div><div className="split-row"><input type="range" min={2} max={20} value={split} onChange={(e) => setSplit(Number(e.target.value))} /><span className="val tnum">{split} people</span></div></div>
-            <div className="sh-foot"><button className="btn btn-ghost" onClick={() => { setFilters({ under: false, pool: false, parking: false, manual: true }); }}>Reset</button><button className="btn btn-primary" onClick={() => setSheet(null)}>Show {visible.length} homes</button></div>
+            <div className="sh-foot"><button className="btn btn-ghost" onClick={() => { setFilters(DEFAULT_FILTERS); }}>Reset</button><button className="btn btn-primary" onClick={() => setSheet(null)}>Show {Math.min(10, visible.length)} homes</button></div>
           </div>
         </>
       )}

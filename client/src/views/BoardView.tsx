@@ -13,7 +13,7 @@ import { EmptyBoardArt } from '@/components/ui/EmptyBoardArt';
 import { Icon } from '@/components/ui/Icon';
 import { BoardHeader } from '@/components/chrome/BoardHeader';
 import { DecisionStrip } from '@/components/board/DecisionStrip';
-import { type Filters } from '@/components/board/FilterBar';
+import { type Filters, readFilters, writeFilters } from '@/components/board/FilterBar';
 import { SearchPanel } from '@/components/board/SearchPanel';
 import { ItinerarySection } from '@/components/board/ItinerarySection';
 import { DecisionSection } from '@/components/board/DecisionSection';
@@ -117,19 +117,11 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total, onTour }: { onOp
   );
 }
 
-const DEFAULT_FILTERS: Filters = { under: false, pool: false, parking: false, manual: true };
-const FILTERS_KEY = (id?: string) => `gp_filters_${id || 'default'}`;
-function readFilters(id?: string): Filters {
-  if (!id) return DEFAULT_FILTERS;
-  try { const raw = localStorage.getItem(FILTERS_KEY(id)); return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : DEFAULT_FILTERS; }
-  catch { return DEFAULT_FILTERS; }
-}
-
 export function BoardView() {
   const {
     listings, caveats, shortlistIds, favoriteIds, split, setSplit, selected, trip, user,
     requireSignIn, joinTrip, detailId, openDetail, closeDetail, findListing, isOwner,
-    aiRankIndex, aiRankLoading,
+    aiRankIndex, aiRankLoading, recommendedPool,
   } = useApp();
   const compare = useCompare();
   const isMobile = useIsMobile();
@@ -172,34 +164,25 @@ export function BoardView() {
   useEffect(() => {
     if (filtersTripRef.current !== trip?.id) { filtersTripRef.current = trip?.id; setFilters(readFilters(trip?.id)); }
   }, [trip?.id]);
-  useEffect(() => {
-    if (trip?.id) { try { localStorage.setItem(FILTERS_KEY(trip.id), JSON.stringify(filters)); } catch { /* ignore */ } }
-  }, [filters, trip?.id]);
+  useEffect(() => { writeFilters(trip?.id, filters); }, [filters, trip?.id]);
   // count of *active* filters (manual defaults on, so a bare board reads 0)
-  const activeFilterCount = (filters.under ? 1 : 0) + (filters.pool ? 1 : 0) + (filters.parking ? 1 : 0) + (filters.manual ? 0 : 1);
+  const activeFilterCount = (filters.under ? 1 : 0) + (filters.pool ? 1 : 0) + (filters.parking ? 1 : 0) + (filters.hottub ? 1 : 0) + (filters.sleeps ? 1 : 0) + (filters.manual ? 0 : 1);
 
+  // Recommended draws from the cross-pool, budget-safe, AI-ranked set (already
+  // ordered + deduped in the store) — curated + live + community together.
   const mainGrid = useMemo(
-    () => {
-      const rows = listings.filter((l) => {
+    () =>
+      recommendedPool.filter((l) => {
         if (shortlistIds.has(l.id)) return false;
         if (filters.under && !(l.budget === 'under' || l.budget === 'marginal')) return false;
         if (filters.pool && l.pool !== 'yes') return false;
         if (filters.parking && l.parking !== 'yes') return false;
+        if (filters.hottub && l.hot_tub !== 'yes') return false;
+        if (filters.sleeps && (l.sleeps ?? 0) < filters.sleeps) return false;
         if (!filters.manual && l.check_manual) return false;
         return true;
-      });
-      // Order by the AI ranking when we have it (homes Scout placed first lead);
-      // anything the AI didn't rank sinks below, keeping its original order.
-      if (aiRankIndex.size) {
-        const BIG = Number.MAX_SAFE_INTEGER;
-        return rows
-          .map((l, i) => ({ l, i, r: aiRankIndex.get(l.id) ?? BIG }))
-          .sort((a, b) => a.r - b.r || a.i - b.i)
-          .map((x) => x.l);
-      }
-      return rows;
-    },
-    [listings, shortlistIds, filters, aiRankIndex],
+      }),
+    [recommendedPool, shortlistIds, filters],
   );
   const topHomes = topAll ? mainGrid : mainGrid.slice(0, 10);
 
@@ -400,9 +383,10 @@ export function BoardView() {
   );
 }
 
-const MFILTERS: { key: keyof Filters; label: string; short: string }[] = [
+const MFILTERS: { key: 'under' | 'pool' | 'parking' | 'hottub' | 'manual'; label: string; short: string }[] = [
   { key: 'under', label: 'Under budget only', short: 'Under budget' },
   { key: 'pool', label: 'Pool required', short: 'Pool' },
   { key: 'parking', label: 'Parking required', short: 'Parking' },
+  { key: 'hottub', label: 'Hot tub', short: 'Hot tub' },
   { key: 'manual', label: 'Include “check manually”', short: 'Manual' },
 ];
