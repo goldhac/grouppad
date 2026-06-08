@@ -6,6 +6,8 @@ import {
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 import { MapWidget } from '@/components/MapWidget';
+import { MobilePhotoCarousel } from '@/components/MobilePhotoCarousel';
+import { PhotoLightbox } from '@/components/PhotoLightbox';
 import { fmt, tallyVotes } from '@/lib/utils';
 import { cn } from '@/lib/cn';
 
@@ -13,13 +15,12 @@ const B_LABEL: Record<string, string> = { under: 'Under budget', marginal: 'Marg
 
 export function MobileDetail() {
   const { detailId, tripId, findListing, closeDetail, user, votes, split, isOwner, final, favoriteIds, reviewsMap, loadReviewsFor, selected, toggleSelect, castVote, toggleFavorite, toggleFinalPick, setDecision, requireSignIn, toast, aiWhy } = useApp();
-  const [photo, setPhoto] = useState(0);
+  const [lightbox, setLightbox] = useState<number | null>(null);
   const l = detailId ? findListing(detailId) : null;
   useEffect(() => { if (l && user && !reviewsMap[`${l.source}:${l.id}`]) void loadReviewsFor(l); /* eslint-disable-next-line */ }, [detailId, user]);
   if (!l) return null;
 
-  const photos = (l.photos && l.photos.length ? l.photos : ['']).slice(0, 6);
-  const cur = photos[photo % photos.length];
+  const photos = (l.photos || []).filter(Boolean).slice(0, 12);
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
   const net = tally.up - tally.down;
   const pp = l.est_5n ? fmt(Math.ceil(l.est_5n / Math.max(1, split))) : null;
@@ -44,16 +45,16 @@ export function MobileDetail() {
       <div className="detail show">
         <div className="d-scroll">
           <div className="d-hero">
-            {cur && <img src={cur} alt="" onError={(e) => (e.currentTarget.style.display = 'none')} />}
-            <div className="bar">
-              <button className="gbtn" onClick={closeDetail} aria-label="Back"><Icon icon={ChevronLeft} className="ico" /></button>
-              <span className="spacer" />
-              <button className={cn('gbtn', isSaved && 'saved')} onClick={() => { if (requireSignIn('save')) void toggleFavorite(l.id); }} aria-label="Save"><Icon icon={Bookmark} className="ico" /></button>
-              <button className="gbtn" onClick={share} aria-label="Share"><Icon icon={Share2} className="ico" /></button>
-            </div>
-            {photos.length > 1 && <div className="dots">{photos.map((_, i) => <i key={i} className={i === photo % photos.length ? 'act' : ''} />)}</div>}
+            <MobilePhotoCarousel photos={photos} alt={l.name} onPhotoTap={(i) => setLightbox(i)}>
+              <div className="bar">
+                <button className="gbtn" onClick={(e) => { e.stopPropagation(); closeDetail(); }} aria-label="Back"><Icon icon={ChevronLeft} className="ico" /></button>
+                <span className="spacer" />
+                <button className={cn('gbtn', isSaved && 'saved')} onClick={(e) => { e.stopPropagation(); if (requireSignIn('save')) void toggleFavorite(l.id); }} aria-label="Save"><Icon icon={Bookmark} className="ico" /></button>
+                <button className="gbtn" onClick={(e) => { e.stopPropagation(); share(); }} aria-label="Share"><Icon icon={Share2} className="ico" /></button>
+              </div>
+              {photos.length > 0 && <span className="d-zoomhint">Tap to zoom</span>}
+            </MobilePhotoCarousel>
           </div>
-          {photos.length > 1 && <div className="d-thumbs">{photos.map((p, i) => <img key={i} className={i === photo % photos.length ? 'on' : ''} src={p} alt="" onClick={() => setPhoto(i)} onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />)}</div>}
           <div className="d-body">
             <div className="d-badges">
               {isOff ? <span className="badge badge-official"><Icon icon={BadgeCheck} className="ico" /> Official pick</span> : <span className={`badge badge-${l.budget ?? 'unknown'}`}>{B_LABEL[l.budget ?? 'unknown']}</span>}
@@ -129,6 +130,7 @@ export function MobileDetail() {
             : <button className={cn('btn', isMyPick ? 'btn-primary' : 'btn-ghost')} onClick={() => { if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }}><Icon icon={Star} className="ico" /> {isMyPick ? 'Top choice' : 'Make top choice'}</button>}
         </div>
       </div>
+      {lightbox != null && photos.length > 0 && <PhotoLightbox photos={photos} start={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   );
 }

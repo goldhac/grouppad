@@ -475,6 +475,34 @@
    MINIMAL CARD — collapsed by default (Airbnb/VRBO grade)
    ============================================================================ */
 .gp-mobile .mcard { position: relative; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+/* ── Swipeable photo carousel (cards + detail hero) ───────────────────────── */
+.pcar-wrap { position: absolute; inset: 0; }
+.pcar { position: absolute; inset: 0; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch; touch-action: pan-x; scrollbar-width: none; }
+.pcar::-webkit-scrollbar { display: none; }
+.pcar-slide { flex: 0 0 100%; width: 100%; height: 100%; scroll-snap-align: center; scroll-snap-stop: always; }
+.pcar-slide img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.pcar-fallback { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
+.pcar-fallback .ico { width: 30px; height: 30px; }
+.pcar-dots { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; z-index: 3; pointer-events: none; }
+.pcar-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.55); box-shadow: 0 1px 2px rgba(0,0,0,0.4); transition: background 0.2s, width 0.2s; }
+.pcar-dots i.act { background: #fff; width: 16px; border-radius: 3px; }
+
+/* ── Fullscreen photo zoom (pinch / double-tap / swipe) ───────────────────── */
+.plb { position: fixed; inset: 0; z-index: 90; background: #000; display: flex; align-items: center; justify-content: center; }
+.plb-stage { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; touch-action: none; }
+.plb-stage img { max-width: 100%; max-height: 100%; object-fit: contain; will-change: transform; user-select: none; -webkit-user-drag: none; }
+.plb-x { position: absolute; top: max(14px, env(safe-area-inset-top)); right: 14px; z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 0; background: rgba(0,0,0,0.45); backdrop-filter: blur(6px); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.plb-x .ico { width: 22px; height: 22px; }
+.plb-nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; width: 42px; height: 42px; border-radius: 50%; border: 0; background: rgba(0,0,0,0.4); color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.plb-nav.l { left: 10px; } .plb-nav.r { right: 10px; }
+.plb-nav .ico { width: 24px; height: 24px; }
+.plb-dots { position: absolute; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+.plb-dots i { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.4); }
+.plb-dots i.act { background: #fff; }
+.plb-count { position: absolute; top: max(18px, env(safe-area-inset-top)); left: 16px; color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 600; }
+.gp-mobile .d-hero .d-zoomhint { position: absolute; bottom: 10px; right: 12px; z-index: 3; font-size: 11px; font-weight: 600; color: #fff; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); padding: 4px 9px; border-radius: var(--r-pill); pointer-events: none; }
+
 .gp-mobile .mcard .ph { position: relative; aspect-ratio: 20 / 15; border-radius: var(--r-card); overflow: hidden; background: var(--surface-sunken); }
 .gp-mobile .mcard .ph::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--photo-border); pointer-events: none; }
 .gp-mobile .mcard .ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform var(--dur-slow) var(--ease-out); }

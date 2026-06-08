@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Crown, Settings, Bookmark, Moon, Sun, Star,
-  SlidersHorizontal, Check, Image as ImageIcon, Home,
+  SlidersHorizontal, Check, Home,
   BadgeCheck, MessageSquare, Plus, Sparkles, Swords, Users,
   HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus,
 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { useApp } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
+import { MobilePhotoCarousel } from '@/components/MobilePhotoCarousel';
 import { type Filters, readFilters, writeFilters, DEFAULT_FILTERS } from '@/components/board/FilterBar';
 import { useMobileShellLock } from '@/lib/useIsMobile';
 import { Icon } from '@/components/ui/Icon';
@@ -173,23 +174,22 @@ export function MobileBoard() {
     return (
       <article key={l.id} className={cn('mcard', opts.compact && 'compact')} onClick={() => openDetail(l.id)} role="button" tabIndex={0}>
         <div className="ph">
-          <div className="fb"><Icon icon={ImageIcon} className="ico" /></div>
-          {l.photos?.[0] && <img src={l.photos[0]} alt="" loading="lazy" onError={(e) => (e.currentTarget.style.display = 'none')} />}
-          {isOff
-            ? <span className="ribbon"><Icon icon={BadgeCheck} className="ico" /> Official pick</span>
-            : <div className="tagL"><span className={`pchip ${b}`}><Icon icon={b === 'under' ? Check : b === 'over' ? TrendingUp : b === 'unknown' ? HelpCircle : Minus} className="ico" /> {B_SHORT[b]}</span></div>}
-          {!opts.compact && (
-            <button className={cn('save', final.myPick === l.id && 'on gold')} style={{ right: 92 }} onClick={(e) => { e.stopPropagation(); if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }} aria-label="Top choice" title="Make my top choice">
-              <Icon icon={Star} className="ico" />
+          <MobilePhotoCarousel photos={l.photos} alt={l.name}>
+            {isOff
+              ? <span className="ribbon"><Icon icon={BadgeCheck} className="ico" /> Official pick</span>
+              : <div className="tagL"><span className={`pchip ${b}`}><Icon icon={b === 'under' ? Check : b === 'over' ? TrendingUp : b === 'unknown' ? HelpCircle : Minus} className="ico" /> {B_SHORT[b]}</span></div>}
+            {!opts.compact && (
+              <button className={cn('save', final.myPick === l.id && 'on gold')} style={{ right: 92 }} onClick={(e) => { e.stopPropagation(); if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }} aria-label="Top choice" title="Make my top choice">
+                <Icon icon={Star} className="ico" />
+              </button>
+            )}
+            <button className={cn('save', selected.has(l.id) && 'on')} style={{ right: 52 }} onClick={(e) => { e.stopPropagation(); toggleSelect(l.id); }} aria-label="Select to compare" title="Compare">
+              <Icon icon={Scale} className="ico" />
             </button>
-          )}
-          <button className={cn('save', selected.has(l.id) && 'on')} style={{ right: 52 }} onClick={(e) => { e.stopPropagation(); toggleSelect(l.id); }} aria-label="Select to compare" title="Compare">
-            <Icon icon={Scale} className="ico" />
-          </button>
-          <button className={cn('save', favoriteIds.has(l.id) && 'on')} onClick={(e) => { e.stopPropagation(); if (requireSignIn('save')) void toggleFavorite(l.id); }} aria-label="Save">
-            <Icon icon={Bookmark} className="ico" />
-          </button>
-          <div className="dots"><i className="act" /><i /><i /><i /></div>
+            <button className={cn('save', favoriteIds.has(l.id) && 'on')} onClick={(e) => { e.stopPropagation(); if (requireSignIn('save')) void toggleFavorite(l.id); }} aria-label="Save">
+              <Icon icon={Bookmark} className="ico" />
+            </button>
+          </MobilePhotoCarousel>
         </div>
         <div className="info">
           <div className="row1"><span className="nm">{shortName(l.name)}</span>{rt}</div>
