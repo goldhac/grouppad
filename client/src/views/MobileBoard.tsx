@@ -71,7 +71,7 @@ export function MobileBoard() {
     catch (e) { toast(e instanceof Error ? e.message : 'Could not add that link.', 'error'); }
     finally { setAdding(false); }
   };
-  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
+  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
 
   const ppOf = (l: Listing) => (l.est_5n ? fmt(Math.ceil(l.est_5n / Math.max(1, split))) : null);
   const netOf = (l: Listing) => netVotes(votes, l.id);
@@ -381,7 +381,13 @@ export function MobileBoard() {
         {view === 'home' && (
           <div className="fchips">
             <button className="fbtn" onClick={() => setSheet('filter')}><Icon icon={SlidersHorizontal} className="ico" /> Filters{activeFilters > 0 && <span className="dotn tnum">{activeFilters}</span>}</button>
-            {fchip('under', 'Under budget')}{fchip('pool', 'Pool')}{fchip('parking', 'Parking')}{fchip('hottub', 'Hot tub')}
+            {/* Only the ACTIVE filters show as chips (tap to remove) — keeps the row
+                clean instead of an overflowing list of every option. */}
+            {filters.under && fchip('under', 'Under budget')}
+            {filters.pool && fchip('pool', 'Pool')}
+            {filters.parking && fchip('parking', 'Parking')}
+            {filters.hottub && fchip('hottub', 'Hot tub')}
+            {filters.sleeps > 0 && <button className="fchip on" onClick={() => setFilters((f) => ({ ...f, sleeps: 0 }))}><Icon icon={Check} className="ico" /> Sleeps {filters.sleeps}+</button>}
           </div>
         )}
 

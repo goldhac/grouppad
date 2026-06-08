@@ -34,7 +34,7 @@ export function MobileTrips() {
   const { myTrips, user } = useApp();
   const navigate = useNavigate();
   const [seg, setSeg] = useState<'upcoming' | 'past'>('upcoming');
-  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
+  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';

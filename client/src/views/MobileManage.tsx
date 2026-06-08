@@ -23,7 +23,7 @@ const CONFIRMS: Record<ConfirmKind, { glyph: typeof Crown; tone: string; title: 
 export function MobileManage() {
   const { trip, deleteTrip, enterTrip, setDecision, toast } = useApp();
   const navigate = useNavigate();
-  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
+  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
   const [members, setMembers] = useState<TripMember[]>([]);
   const [pulse, setPulse] = useState<TripPulse | null>(null);
   const [copied, setCopied] = useState(false);

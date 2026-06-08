@@ -38,7 +38,7 @@ const FAQ = [
 export function MobileHelp() {
   const { trip } = useApp();
   const navigate = useNavigate();
-  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
+  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
   const [open, setOpen] = useState(0);
   const toggleTheme = () => { const next = theme === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', next); try { localStorage.setItem('gp_theme', next); } catch { /**/ } setTheme(next); };
   const toBoard = () => navigate(trip ? `/t/${trip.id}/board` : '/trips');

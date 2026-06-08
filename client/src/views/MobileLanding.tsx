@@ -26,7 +26,7 @@ export function MobileLanding() {
   const { openAuth, user } = useApp();
   const scrollRef = useRef<HTMLDivElement>(null);
   const howRef = useRef<HTMLElement>(null);
-  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
+  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
 
   const toggleTheme = () => {
     const next = theme === 'dark' ? 'light' : 'dark';

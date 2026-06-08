@@ -6,7 +6,7 @@ export type Theme = 'light' | 'dark';
  *  The initial attribute is set by the no-FOUC bootstrap in index.html. */
 export function useTheme() {
   const [theme, setThemeState] = useState<Theme>(
-    () => (document.documentElement.getAttribute('data-theme') as Theme) || 'light',
+    () => (document.documentElement.getAttribute('data-theme') as Theme) || 'dark',
   );
 
   const setTheme = useCallback((t: Theme) => {

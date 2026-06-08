@@ -1332,7 +1332,10 @@
    this the inner `.mb` is a plain block and `.mb-scroll` (flex:1) has no
    constrained height to scroll within. Make the inner `.mb` the flex column. */
 .gp-mobile > .mb { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.gp-mobile .mb-scroll { min-height: 0; flex: 1 1 auto; }
+/* WebKit/Safari fix: flex-basis MUST be 0 (not `auto`) or the scroll child sizes
+   to its content and never becomes a scroll container — Chrome tolerates `auto`,
+   Safari (iOS + macOS) does not. `height:0` forces the height to come from flex-grow. */
+.gp-mobile .mb-scroll { min-height: 0; height: 0; flex: 1 1 0%; }
 
 /* iOS touch-scroll robustness: tell the engine this is the vertical scroller,
    keep momentum scrolling, and stop the gesture leaking to the (locked) body

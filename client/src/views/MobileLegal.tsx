@@ -29,7 +29,7 @@ const PRIVACY = {
 export function MobileLegal() {
   const navigate = useNavigate();
   const loc = useLocation();
-  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
+  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
   const isPrivacy = loc.pathname.includes('privacy');
   const doc = isPrivacy ? PRIVACY : TERMS;
   const toggleTheme = () => { const next = theme === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', next); try { localStorage.setItem('gp_theme', next); } catch { /**/ } setTheme(next); };
