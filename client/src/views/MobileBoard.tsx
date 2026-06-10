@@ -9,6 +9,7 @@ import {
 import { useApp, isDeadListing } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { ScoutVerdict } from '@/components/board/ScoutVerdict';
+import { SplitPill } from '@/components/board/SplitPill';
 import { useCompare } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
@@ -43,7 +44,7 @@ export function MobileBoard() {
     user, openAuth, joinTrip, findListing, insights,
     toggleFavorite, toggleFinalPick, setDecision, openDetail, requireSignIn, postCaveat,
     approveCaveat, deleteCaveat, saveItinerary,
-    submitListing, toast, selected, toggleSelect, clearSelection, setSplit, startOnboarding,
+    submitListing, toast, selected, toggleSelect, clearSelection, startOnboarding,
   } = useApp();
   const compare = useCompare();
   const navigate = useNavigate();
@@ -237,25 +238,10 @@ export function MobileBoard() {
     );
   }
 
-  // Always-visible split control — every card shows a /person price, so the
-  // group size shouldn't be buried in the filter sheet.
-  const splitBar = (
-    <div className="splitbar">
-      <span className="sb-lab"><Icon icon={Users} className="ico" /> Splitting between</span>
-      <div className="sb-step">
-        <button aria-label="Fewer people" onClick={() => setSplit(Math.max(2, split - 1))} disabled={split <= 2}><Icon icon={Minus} className="ico" /></button>
-        <span className="sb-n tnum">{split}</span>
-        <button aria-label="More people" onClick={() => setSplit(Math.min(30, split + 1))} disabled={split >= 30}><Icon icon={Plus} className="ico" /></button>
-      </div>
-      <span className="sb-hint">sets every /person price</span>
-    </div>
-  );
-
   // ---- views ----
   const homeView = (
     <>
       {pulse}
-      {splitBar}
       <div className="sec">
         <div className="sec-h"><span className="t">Recommended</span><span className="c tnum">Top {Math.min(10, visible.length)}</span></div>
         <div className="sec-sub">{aiRankLoading ? 'Scout is ranking these for your group…' : aiRankIndex.size ? 'Ranked by Scout across all sources · within budget · tap a home for the breakdown' : 'Ranked for your group · within budget · tap a home for the breakdown'}</div>
@@ -493,6 +479,7 @@ export function MobileBoard() {
         {view === 'home' && (
           <div className="fchips">
             <button className="fbtn" onClick={() => setSheet('filter')}><Icon icon={SlidersHorizontal} className="ico" /> Filters{activeFilters > 0 && <span className="dotn tnum">{activeFilters}</span>}</button>
+            <SplitPill />
             {/* Only the ACTIVE filters show as chips (tap to remove) — keeps the row
                 clean instead of an overflowing list of every option. */}
             {filters.under && fchip('under', 'Under budget')}

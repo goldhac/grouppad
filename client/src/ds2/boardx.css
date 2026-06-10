@@ -223,6 +223,19 @@
 /* ── collapsed filters button (replaces the desktop chip row) ───────────── */
 .b-toolbar .filters-btn { display: inline-flex; align-items: center; gap: 6px; }
 .b-toolbar .filters-btn .fcount { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-fg); font-size: 11px; font-weight: 700; line-height: 1; }
+
+/* ── Split pill (group-size stepper beside Filters; web + mobile) ────────── */
+.split-pill { display: inline-flex; align-items: center; gap: 1px; height: 32px; padding: 0 4px 0 9px; border-radius: var(--r-pill); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); white-space: nowrap; }
+.split-pill .sp-lead { width: 15px; height: 15px; margin-right: 4px; color: var(--text-muted); }
+.split-pill .sp-n { min-width: 18px; text-align: center; font-size: 13px; font-weight: 800; }
+.split-pill .sp-btn { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: var(--accent-text); border-radius: 50%; cursor: pointer; -webkit-tap-highlight-color: transparent; padding: 0; }
+.split-pill .sp-btn:hover:not(:disabled) { background: var(--accent-tint); }
+.split-pill .sp-btn:disabled { color: var(--text-faint); opacity: 0.5; cursor: default; }
+.split-pill .sp-btn .ico { width: 15px; height: 15px; }
+/* Mobile chips row: match the .fbtn height + tap targets */
+.gp-mobile .split-pill { height: 36px; padding: 0 5px 0 11px; gap: 2px; }
+.gp-mobile .split-pill .sp-btn { width: 28px; height: 28px; }
+.gp-mobile .split-pill .sp-n { font-size: 14px; min-width: 20px; }
 .b-toolbar .b-count { font-size: 12.5px; color: var(--text-muted); font-weight: 600; white-space: nowrap; }
 
 /* ── grid ⇄ list view toggle ────────────────────────────────────────────── */

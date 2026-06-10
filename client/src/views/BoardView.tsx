@@ -14,6 +14,7 @@ import { Icon } from '@/components/ui/Icon';
 import { BoardHeader } from '@/components/chrome/BoardHeader';
 import { DecisionStrip } from '@/components/board/DecisionStrip';
 import { type Filters, readFilters, writeFilters } from '@/components/board/FilterBar';
+import { SplitPill } from '@/components/board/SplitPill';
 import { SearchPanel } from '@/components/board/SearchPanel';
 import { ItinerarySection } from '@/components/board/ItinerarySection';
 import { DecisionSection } from '@/components/board/DecisionSection';
@@ -112,6 +113,7 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total, onTour }: { onOp
         <Icon icon={SlidersHorizontal} className="ico" /> Filters
         {filterCount > 0 && <span className="fcount tnum">{filterCount}</span>}
       </button>
+      <SplitPill />
       <button className="btn btn-ghost btn-sm btn-icon" onClick={onTour} title="Show me around" aria-label="Show me around">
         <Icon icon={HelpCircle} className="ico" />
       </button>
