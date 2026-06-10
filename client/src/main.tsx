@@ -35,3 +35,11 @@ createRoot(rootEl).render(
     </HashRouter>
   </StrictMode>,
 );
+
+// Register the service worker so the app is installable (Add to Home Screen)
+// and has an offline shell. Production only — avoids caching the dev server.
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* non-fatal */ });
+  });
+}

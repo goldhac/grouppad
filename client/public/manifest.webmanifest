@@ -1,0 +1,19 @@
+{
+  "name": "GroupPad",
+  "short_name": "GroupPad",
+  "description": "One shared board for your group to browse rentals, vote, compare with Scout, and lock in the winner.",
+  "id": "/",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#15201E",
+  "theme_color": "#15201E",
+  "categories": ["travel", "lifestyle", "productivity"],
+  "icons": [
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ]
+}
