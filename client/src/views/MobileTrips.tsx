@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Moon, Sun, Crown, MapPin, Calendar, Home, ArrowRight, Image as ImageIcon, Plus, LayoutGrid, User, Check } from 'lucide-react';
+import { Moon, Sun, Crown, MapPin, Calendar, Home, ArrowRight, Image as ImageIcon, Plus, LayoutGrid, User, Check, LogOut, X, DoorOpen } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 import { SafeImg } from '@/components/ui/SafeImg';
@@ -31,9 +31,10 @@ function Avatars({ count }: { count: number }) {
 }
 
 export function MobileTrips() {
-  const { myTrips, user } = useApp();
+  const { myTrips, user, signOut, leaveTrip, openAuth } = useApp();
   const navigate = useNavigate();
   const [seg, setSeg] = useState<'upcoming' | 'past'>('upcoming');
+  const [acctOpen, setAcctOpen] = useState(false);
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
 
   const toggleTheme = () => {
@@ -75,7 +76,7 @@ export function MobileTrips() {
             </span>
             <span className="spacer" />
             <button className="iconbtn" onClick={toggleTheme} aria-label="Theme"><Icon icon={theme === 'dark' ? Sun : Moon} className="ico" /></button>
-            <button className="iconbtn acct" aria-label="Account"><span className="av">{(user?.name || 'G').slice(0, 1).toUpperCase()}</span></button>
+            <button className="iconbtn acct" aria-label="Account" onClick={() => setAcctOpen(true)}><span className="av">{(user?.name || 'G').slice(0, 1).toUpperCase()}</span></button>
           </div>
         </div>
 
@@ -110,8 +111,42 @@ export function MobileTrips() {
         <div className="mb-nav">
           <div className="nav-item on"><Icon icon={LayoutGrid} className="ico" /><span className="lab">Trips</span></div>
           <div className="nav-add" onClick={() => navigate('/trips/new')}><div className="fab"><Icon icon={Plus} className="ico" /></div><div className="lab">Create</div></div>
-          <div className="nav-item"><Icon icon={User} className="ico" /><span className="lab">Account</span></div>
+          <div className="nav-item" onClick={() => setAcctOpen(true)} role="button" tabIndex={0}><Icon icon={User} className="ico" /><span className="lab">Account</span></div>
         </div>
+
+        {acctOpen && (
+          <div className="acct-sheet-wrap" onClick={() => setAcctOpen(false)}>
+            <div className="acct-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Account">
+              <div className="ash-grab" />
+              <button className="ash-x" aria-label="Close" onClick={() => setAcctOpen(false)}><Icon icon={X} className="ico" /></button>
+              <div className="ash-id">
+                <span className="ash-av">{(user?.name || 'G').slice(0, 1).toUpperCase()}</span>
+                <div className="ash-meta">
+                  <div className="ash-name">{user?.name || 'Guest'}</div>
+                  {user?.email && <div className="ash-email">{user.email}</div>}
+                </div>
+              </div>
+
+              {myTrips.length > 0 && (
+                <div className="ash-trips">
+                  <div className="ash-lbl">Your trips</div>
+                  {myTrips.map((t) => (
+                    <div className="ash-trip" key={t.id}>
+                      <span className="ash-trip-name">{t.name || t.destination || 'Trip'}</span>
+                      {t.isOwner
+                        ? <span className="ash-owner"><Icon icon={Crown} className="ico" /> Organizer</span>
+                        : <button className="ash-leave" onClick={() => { if (confirm('Leave this trip? You can rejoin with the invite link.')) leaveTrip(t.id); }}><Icon icon={DoorOpen} className="ico" /> Leave</button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {user
+                ? <button className="ash-signout" onClick={async () => { await signOut(); setAcctOpen(false); }}><Icon icon={LogOut} className="ico" /> Sign out</button>
+                : <button className="ash-signin" onClick={() => { setAcctOpen(false); openAuth('sign in'); }}><Icon icon={User} className="ico" /> Sign in</button>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

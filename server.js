@@ -6,8 +6,14 @@ const dns = require('dns').promises;
 const net = require('net');
 const Emails = require('./emails');
 
+// Keys that would pollute Object.prototype if used to index a plain object.
+const UNSAFE_KEY = /^(__proto__|constructor|prototype)$/;
+
 const app = express();
-app.set('trust proxy', true);
+// Trust exactly ONE proxy hop (Railway's LB). With `true`, a client could spoof
+// X-Forwarded-For to forge a fresh source IP per request and defeat every rate
+// limit; with a fixed hop count Express derives req.ip from the trusted entry.
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 // No insecure default: if ADMIN_KEY isn't set in the environment we generate a
 // random ephemeral key, which effectively disables admin until it's configured
@@ -20,7 +26,7 @@ if (!process.env.ADMIN_KEY) {
 // Platform super-admins by email — these accounts get the admin dashboard without
 // needing the key (just by being signed in). Configurable via SUPER_ADMIN_EMAILS.
 const SUPER_ADMIN_EMAILS = new Set(
-  (process.env.SUPER_ADMIN_EMAILS || 'gold.nwobu@gmail.com,akporkofi11@gmail.com')
+  (process.env.SUPER_ADMIN_EMAILS || '')   // configured via env, never hardcoded
     .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
 );
 function isSuperAdmin(user) {
@@ -318,6 +324,16 @@ function requireTripOwner(req, res, next) {
   if (trip.owner_id !== req.user.id) return res.status(403).json({ error: 'Only the trip organizer can do that.' });
   req.trip = trip;
   next();
+}
+// Participation (vote/submit/comment/etc.) requires actually being a member of
+// THIS trip — joining is explicit via /join with the invite code. Without this,
+// any signed-in user could act on any trip just by knowing its id.
+function requireTripMember(req, res, next) {
+  const trip = req.trip || getTrip(req.params.tripId);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  if (!req.user) return res.status(401).json({ error: 'Sign in to do that.' });
+  if (trip.owner_id === req.user.id || isMember(trip, req.user) || isSuperAdmin(req.user)) { req.trip = trip; return next(); }
+  return res.status(403).json({ error: 'Join this trip to take part.', needsJoin: true });
 }
 
 // App-side API meter. Google gives no per-key billing endpoint for Gemini, so we
@@ -882,9 +898,19 @@ async function apifyGuard(context) {
 // /compare-listings) from being hammered. Good enough for a small group app.
 function rateLimit({ windowMs, max }) {
   const hits = new Map();
+  let lastSweep = 0;
   return (req, res, next) => {
-    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
     const now = Date.now();
+    // Periodically prune expired buckets so the Map can't grow unbounded across
+    // every distinct IP that ever hits the route (bots/scanners) → OOM.
+    if (now - lastSweep > windowMs) {
+      lastSweep = now;
+      for (const [k, r] of hits) if (now > r.reset) hits.delete(k);
+    }
+    // Prefer the per-user id when signed in (a NAT'd group shares one IP);
+    // else req.ip, which Express derives from the trusted proxy hop (not the
+    // spoofable leftmost X-Forwarded-For).
+    const ip = (req.user && req.user.id) ? `u:${req.user.id}` : (req.ip || 'unknown');
     let rec = hits.get(ip);
     if (!rec || now > rec.reset) { rec = { count: 0, reset: now + windowMs }; hits.set(ip, rec); }
     rec.count++;
@@ -1111,16 +1137,27 @@ async function fetchHtml(url) {
   try {
     const ctrl = new AbortController();
     const tid  = setTimeout(() => ctrl.abort(), 10000);
-    const res  = await fetch(url, {
-      signal: ctrl.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-    });
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+    };
+    // SSRF guard: follow redirects MANUALLY, re-running assertSafeUrl on every
+    // hop, so a listing URL can't 30x-redirect server-side into 169.254.169.254
+    // / localhost / an internal service after passing the initial check.
+    let cur = url;
+    let res;
+    for (let hop = 0; hop < 5; hop++) {
+      await assertSafeUrl(cur);
+      res = await fetch(cur, { signal: ctrl.signal, headers, redirect: 'manual' });
+      if (res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+        cur = new URL(res.headers.get('location'), cur).toString();
+        continue;
+      }
+      break;
+    }
     clearTimeout(tid);
-    return res.ok ? await res.text() : '';
+    return res && res.ok ? await res.text() : '';
   } catch { return ''; }
 }
 
@@ -1385,6 +1422,16 @@ async function fetchPriceWithPlaywright(cleanUrl, source) {
     const page = await ctx.newPage();
     const dated = urlWithDates(cleanUrl, source);
     console.log('[Playwright] loading', dated);
+
+    // SSRF guard: abort any main-frame navigation (incl. server redirects) that
+    // resolves to a private/internal/metadata address, so the scraper can't be
+    // bounced into the internal network.
+    await page.route('**/*', async (route) => {
+      const reqq = route.request();
+      if (!reqq.isNavigationRequest()) return route.continue();
+      try { await assertSafeUrl(reqq.url()); route.continue(); }
+      catch { console.warn('[Playwright] blocked internal navigation', reqq.url()); route.abort(); }
+    });
 
     await page.goto(dated, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
@@ -1772,7 +1819,7 @@ app.post('/api/auth/request-link', rateLimit({ windowMs: 60000, max: 5 }), async
 });
 
 // Click target from the email: consume the token, start a session, land home.
-app.get('/api/auth/verify', (req, res) => {
+app.get('/api/auth/verify', rateLimit({ windowMs: 60000, max: 20 }), (req, res) => {
   const token = String(req.query.token || '');
   const magic = loadMagic();
   const hash = sha256(token);
@@ -1926,9 +1973,10 @@ const hPostVotes = (req, res) => {
   const { listing_id, vote } = req.body || {};
   if (!listing_id || !['up', 'down', null].includes(vote))
     return res.status(400).json({ error: 'expected { listing_id, vote: "up"|"down"|null }' });
+  if (UNSAFE_KEY.test(String(listing_id))) return res.status(400).json({ error: 'Invalid listing id' });
   const voter = req.user.id;
   const votes = loadVotes(tripId);
-  if (!votes[listing_id]) votes[listing_id] = {};
+  if (!Object.prototype.hasOwnProperty.call(votes, listing_id)) votes[listing_id] = {};
   if (vote === null) delete votes[listing_id][voter];
   else votes[listing_id][voter] = vote;
   saveVotes(votes, tripId);
@@ -1937,7 +1985,7 @@ const hPostVotes = (req, res) => {
   res.json(votes);
 };
 app.post('/api/votes', requireAuth, rateLimit({ windowMs: 60000, max: 90 }), hPostVotes);
-app.post('/api/trips/:tripId/votes', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 90 }), hPostVotes);
+app.post('/api/trips/:tripId/votes', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 90 }), hPostVotes);
 
 // Admin: verify key (global super-admin)
 app.get('/api/admin/verify', requireAdmin, (req, res) => res.json({ ok: true }));
@@ -1996,8 +2044,13 @@ async function createSubmission(tripId, url, manual_price, user, opts = {}) {
     if (next.length !== cur.length) saveSubmitted(next, tripId);
   }
 
+  // Absolute ceiling per trip so submitted.json can't grow without bound.
+  const existing = loadSubmitted(tripId);
+  if (existing.length >= 250 && !opts.replace)
+    return { code: 429, body: { error: 'This trip already has the maximum number of community homes.' } };
+
   // Dedup check against submitted
-  if (loadSubmitted(tripId).find(s => s.id === parsed.id && s.source === parsed.source))
+  if (existing.find(s => s.id === parsed.id && s.source === parsed.source))
     return { code: 409, body: { error: 'Already submitted' } };
 
   // Dedup check against main listings
@@ -2102,7 +2155,7 @@ const hSubmit = async (req, res) => {
   res.status(r.code).json(r.body);
 };
 app.post('/api/submit', requireAuth, rateLimit({ windowMs: 60000, max: 5 }), hSubmit);
-app.post('/api/trips/:tripId/submit', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 5 }), hSubmit);
+app.post('/api/trips/:tripId/submit', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 5 }), hSubmit);
 
 // Admin: bulk-import listings, attributed to a chosen member (by email) or the
 // trip organizer. Sequential so it respects the scrape concurrency cap.
@@ -2390,11 +2443,11 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
     res.json({ analysis });
   } catch (e) {
     console.error('[compare]', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Scout could not compare these right now. Try again in a moment.' });
   }
 };
 app.post('/api/compare-listings', requireAuth, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
-app.post('/api/trips/:tripId/compare-listings', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
+app.post('/api/trips/:tripId/compare-listings', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
 
 // ── AI-ranked recommendations ────────────────────────────────────────────────
 // Scout ranks the FULL candidate pool (curated + live + community — the client
@@ -2538,7 +2591,7 @@ const hPostCaveat = (req, res) => {
   res.json(trimmed);
 };
 app.post('/api/caveats', requireAuth, rateLimit({ windowMs: 60000, max: 20 }), hPostCaveat);
-app.post('/api/trips/:tripId/caveats', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 20 }), hPostCaveat);
+app.post('/api/trips/:tripId/caveats', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 20 }), hPostCaveat);
 
 // Organizer approves a pending criterion request → it starts feeding Scout.
 const hApproveCaveat = (req, res) => {
@@ -2596,6 +2649,7 @@ const hFinalVote = (req, res) => {
   if (tripId && getTrip(tripId)?.voting_closed)
     return res.status(403).json({ error: 'Voting is closed for this trip.' });
   const raw = req.body && req.body.listing_id;
+  if (raw != null && raw !== '' && UNSAFE_KEY.test(String(raw))) return res.status(400).json({ error: 'Invalid listing id' });
   const votes = loadFinalVotes(tripId);
   if (raw === null || raw === undefined || raw === '') {
     delete votes[req.user.id]; // allow clearing your top choice
@@ -2614,7 +2668,7 @@ const hFinalVote = (req, res) => {
   res.json({ counts, total, myPick: votes[req.user.id] || null, decision: loadDecision(tripId) });
 };
 app.post('/api/final-vote', requireAuth, rateLimit({ windowMs: 60000, max: 60 }), hFinalVote);
-app.post('/api/trips/:tripId/final-vote', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 60 }), hFinalVote);
+app.post('/api/trips/:tripId/final-vote', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 60 }), hFinalVote);
 
 // ── Personal saved homes (each member's own shortlist) ──────────────────────────
 const hGetFavorites = (req, res) => {
@@ -2639,7 +2693,7 @@ const hToggleFavorite = (req, res) => {
   res.json({ ids: favs[req.user.id] });
 };
 app.post('/api/favorites', requireAuth, rateLimit({ windowMs: 60000, max: 90 }), hToggleFavorite);
-app.post('/api/trips/:tripId/favorites', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 90 }), hToggleFavorite);
+app.post('/api/trips/:tripId/favorites', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 90 }), hToggleFavorite);
 
 const hDecision = (req, res) => {
   const tripId = req.params.tripId;
@@ -2947,8 +3001,10 @@ app.post('/api/trips/:tripId/join', requireAuth, (req, res) => {
   const trip = getTrip(req.params.tripId);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
   const code = (req.body && req.body.join_code) || '';
-  if (trip.join_code && code && code !== trip.join_code)
-    return res.status(403).json({ error: 'Invalid invite link.' });
+  // The invite code is REQUIRED when one is set — an empty/missing or wrong code
+  // is rejected (previously an empty code short-circuited the check and joined).
+  if (trip.join_code && code !== trip.join_code)
+    return res.status(403).json({ error: 'This invite link is invalid or has changed. Ask the organizer for a fresh one.' });
   noteJoin(trip.id, req.user);
   res.json(tripView(getTrip(trip.id), req.user));
 });
@@ -2966,7 +3022,7 @@ app.post('/api/trips/:tripId/leave', requireAuth, (req, res) => {
 });
 
 // Organizer: invite people by email (each gets a one-tap join link). "You're invited."
-app.post('/api/trips/:tripId/invite', requireTripOwner, async (req, res) => {
+app.post('/api/trips/:tripId/invite', requireTripOwner, rateLimit({ windowMs: 60000, max: 6 }), async (req, res) => {
   const trip = req.trip;
   const raw = String((req.body && req.body.emails) || '');
   const emails = [...new Set(raw.split(/[\s,;]+/).map(s => s.trim().toLowerCase()).filter(isEmail))].slice(0, 25);
@@ -3270,6 +3326,9 @@ app.use((err, req, res, _next) => {
 });
 process.on('unhandledRejection', (reason) => { console.error('[unhandledRejection]', reason); });
 process.on('uncaughtException', (err) => { console.error('[uncaughtException]', (err && err.stack) || err); });
+
+// Public, unauthenticated health check for uptime monitors / Railway.
+app.get('/healthz', (req, res) => res.json({ ok: true, ts: Date.now() }));
 
 app.listen(PORT, () => {
   console.log(`GroupPad listening on :${PORT}`);

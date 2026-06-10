@@ -257,7 +257,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
                 {l.check_manual ? 'Check manually' : `View on ${l.source}`} <Icon icon={ExternalLink} className="ico" />
               </a>
               {isOwner && (
-                <button className="source-link" onClick={(e) => { e.stopPropagation(); void setDecision(isDecision ? null : l.id); }}>
+                <button className="source-link" disabled={!isDecision && final.total === 0} title={!isDecision && final.total === 0 ? 'Wait for the group to cast top choices first' : undefined} onClick={(e) => { e.stopPropagation(); if (isDecision || final.total > 0) void setDecision(isDecision ? null : l.id); }}>
                   <Icon icon={Lock} className="ico" /> {isDecision ? 'Unlock' : 'Make official'}
                 </button>
               )}

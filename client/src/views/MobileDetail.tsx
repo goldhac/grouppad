@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ChevronLeft, Bookmark, Share2, ThumbsUp, ThumbsDown, Star, BadgeCheck, Award,
-  Waves, SquareParking, Bath, HelpCircle, X, Sparkles, ExternalLink, MapPin, Scale, Check, Clapperboard, Lock, Trash2,
+  Waves, SquareParking, Bath, HelpCircle, X, Sparkles, ExternalLink, MapPin, Scale, Check, Clapperboard, LockOpen, Trash2,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
@@ -158,10 +158,14 @@ export function MobileDetail() {
               >
                 <Icon icon={Star} className="ico" />
               </button>
-              <button className="btn btn-primary" onClick={() => void setDecision(l.id)}><Icon icon={BadgeCheck} className="ico" /> Make official</button>
+              {final.total > 0
+                ? <button className="btn btn-primary" onClick={() => void setDecision(l.id)}><Icon icon={BadgeCheck} className="ico" /> Make official</button>
+                : <button className="btn btn-ghost" disabled style={{ opacity: 0.55 }} title="Wait for the group to cast top choices first">
+                    <Icon icon={BadgeCheck} className="ico" /> Make official
+                  </button>}
             </>
           ) : isOwner && isOff ? (
-            <button className="btn btn-ghost" onClick={() => void setDecision(null)}><Icon icon={Lock} className="ico" /> Unlock the pick</button>
+            <button className="btn btn-ghost" onClick={() => void setDecision(null)}><Icon icon={LockOpen} className="ico" /> Unlock the pick</button>
           ) : (
             <button className={cn('btn', isMyPick ? 'btn-primary' : 'btn-ghost')} onClick={() => { if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }}><Icon icon={Star} className="ico" /> {isMyPick ? 'Top choice' : 'Make top choice'}</button>
           )}

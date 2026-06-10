@@ -96,6 +96,7 @@ interface AppActions {
   createTrip: (input: CreateTripInput) => Promise<TripView>;
   joinTrip: (tripId: string, code?: string) => Promise<void>;
   deleteTrip: (tripId: string) => Promise<void>;
+  leaveTrip: (tripId: string) => Promise<void>;
   // auth
   signOut: () => Promise<void>;
   rename: (name: string) => Promise<void>;
@@ -454,6 +455,33 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const leaveTrip = useCallback(async (id: string) => {
+    try {
+      await api.leaveTrip(id);
+      setMyTrips((t) => t.filter((x) => x.id !== id));
+      if (tripIdRef.current === id) { setTrip(null); setTripId(null); tripIdRef.current = null; }
+      toast('You left the trip.', 'info');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not leave the trip.', 'error');
+    }
+  }, [toast]);
+
+  // Shared handler for write-action failures: 401 → sign-in modal,
+  // 403 needsJoin → nudge the signed-in non-member to join (no dead-end).
+  const handleActionError = useCallback(
+    (e: unknown, reason: string, fallback: string) => {
+      if (e instanceof ApiError && e.status === 401) { setUser(null); userRef.current = null; openAuth(reason); return; }
+      if (e instanceof ApiError && e.status === 403 && e.needsJoin) {
+        const id = tripIdRef.current;
+        toast('Join this trip to take part.', 'info');
+        if (id) joinTrip(id);
+        return;
+      }
+      toast(e instanceof Error ? e.message : fallback, 'error');
+    },
+    [openAuth, joinTrip, toast],
+  );
+
   // ── Onboarding ───────────────────────────────────────────────────────────────
   const startOnboarding = useCallback((force: boolean) => {
     if (!force && localStorage.getItem(ONBOARDED_LS)) return;
@@ -527,11 +555,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         setVotes(await api.vote(id, listingId, next));
       } catch (e) {
-        if (e instanceof ApiError && e.status === 401) { setUser(null); openAuth('vote on homes'); }
-        else toast(e instanceof Error ? e.message : 'Could not save your vote.', 'error');
+        handleActionError(e, 'vote on homes', 'Could not save your vote.');
       }
     },
-    [requireSignIn, openAuth, toast],
+    [requireSignIn, handleActionError],
   );
 
   const toggleFinalPick = useCallback(
@@ -542,11 +569,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         setFinal(await api.finalVote(id, next));
       } catch (e) {
-        if (e instanceof ApiError && e.status === 401) { setUser(null); openAuth('cast your top choice'); }
-        else toast(e instanceof Error ? e.message : 'Could not save your pick.', 'error');
+        handleActionError(e, 'cast your top choice', 'Could not save your pick.');
       }
     },
-    [requireSignIn, openAuth, toast],
+    [requireSignIn, handleActionError],
   );
 
   const toggleFavorite = useCallback(
@@ -563,11 +589,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const set = new Set(res.ids); favRef.current = set; setFavoriteIds(set);
       } catch (e) {
         favRef.current = cur; setFavoriteIds(cur); // revert
-        if (e instanceof ApiError && e.status === 401) { setUser(null); openAuth('save this home'); }
-        else toast(e instanceof Error ? e.message : 'Could not save this home.', 'error');
+        handleActionError(e, 'save this home', 'Could not save this home.');
       }
     },
-    [requireSignIn, openAuth, toast],
+    [requireSignIn, handleActionError],
   );
 
   const setDecision = useCallback(
@@ -601,11 +626,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         setCaveats(await api.postCaveat(id, text));
       } catch (e) {
-        if (e instanceof ApiError && e.status === 401) { setUser(null); openAuth('post a caveat'); }
-        else toast(e instanceof Error ? e.message : 'Could not post.', 'error');
+        handleActionError(e, 'post a caveat', 'Could not post.');
       }
     },
-    [requireSignIn, openAuth, toast],
+    [requireSignIn, handleActionError],
   );
 
   const deleteCaveat = useCallback(
@@ -817,7 +841,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
       favoriteIds: canonFavoriteIds, toggleFavorite,
-      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
+      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
@@ -830,7 +854,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
       canonFavoriteIds, toggleFavorite,
-      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
+      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,

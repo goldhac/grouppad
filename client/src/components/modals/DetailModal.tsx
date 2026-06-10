@@ -333,7 +333,7 @@ export function DetailModal() {
                       <div className="dx-make">
                         {isDecision
                           ? <button className="btn btn-ghost" onClick={() => void setDecision(null)}><Icon icon={Lock} className="ico" /> Unlock official pick</button>
-                          : <button className="btn btn-primary" onClick={() => void setDecision(l.id)}><Icon icon={BadgeCheck} className="ico" /> Make official pick</button>}
+                          : <button className="btn btn-primary" disabled={final.total === 0} title={final.total === 0 ? 'Wait for the group to cast top choices first' : undefined} onClick={() => void setDecision(l.id)}><Icon icon={BadgeCheck} className="ico" /> Make official pick</button>}
                       </div>
                     )}
                     <div className="links">
@@ -349,7 +349,7 @@ export function DetailModal() {
                 {votebar}
                 <button className="btn btn-ghost btn-sm" onClick={() => { if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }}><Icon icon={Star} className="ico" /> {isMyPick ? 'Picked' : 'Top'}</button>
                 {isOwner
-                  ? <button className="btn btn-primary btn-sm" onClick={() => void setDecision(isDecision ? null : l.id)}><Icon icon={BadgeCheck} className="ico" /> {isDecision ? 'Unlock' : 'Make official'}</button>
+                  ? <button className="btn btn-primary btn-sm" disabled={!isDecision && final.total === 0} title={!isDecision && final.total === 0 ? 'Wait for the group to cast top choices first' : undefined} onClick={() => void setDecision(isDecision ? null : l.id)}><Icon icon={BadgeCheck} className="ico" /> {isDecision ? 'Unlock' : 'Make official'}</button>
                   : <button className="btn btn-primary btn-sm" onClick={() => toggleSelect(l.id)}><Icon icon={GitCompare} className="ico" /> Compare</button>}
               </div>
             </div>

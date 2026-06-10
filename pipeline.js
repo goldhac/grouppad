@@ -904,13 +904,16 @@ async function runTripSearch(tripId) {
     fs.writeFileSync(tmp, JSON.stringify(final, null, 2));
     fs.renameSync(tmp, listingsFile);
 
-    // Stamp refreshed_at on the trip record.
+    // Stamp refreshed_at on the trip record. Atomic temp+rename so a crash
+    // mid-write can't corrupt the whole trips registry (the server reads it).
     try {
       const t2 = JSON.parse(fs.readFileSync(TRIPS_FILE, 'utf8'));
       if (t2[tripId]) {
         t2[tripId].refreshed_at = new Date().toISOString().slice(0, 10);
         if (refs) t2[tripId].ref_points = refs;
-        fs.writeFileSync(TRIPS_FILE, JSON.stringify(t2, null, 2));
+        const tmp = TRIPS_FILE + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(t2, null, 2));
+        fs.renameSync(tmp, TRIPS_FILE);
       }
     } catch {}
 

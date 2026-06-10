@@ -24,10 +24,13 @@ import type {
 /** Error carrying the HTTP status so callers can branch (e.g. 401 → sign in). */
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Server set { needsJoin: true } on a 403 — caller should nudge to join, not dead-end. */
+  needsJoin: boolean;
+  constructor(status: number, message: string, needsJoin = false) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.needsJoin = needsJoin;
   }
 }
 
@@ -63,7 +66,8 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
       (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
         ? data.error
         : null) ?? `Request failed (HTTP ${res.status}).`;
-    throw new ApiError(res.status, msg);
+    const needsJoin = !!(data && typeof data === 'object' && 'needsJoin' in data && data.needsJoin);
+    throw new ApiError(res.status, msg, needsJoin);
   }
   return data as T;
 }

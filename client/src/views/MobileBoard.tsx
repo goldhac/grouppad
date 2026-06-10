@@ -369,7 +369,9 @@ export function MobileBoard() {
             })}
           </div>
           {leader && (isOwner
-            ? <button className="btn btn-primary" style={{ width: '100%', marginTop: 14 }} onClick={() => void setDecision(leader.id)}><Icon icon={BadgeCheck} className="ico" /> Make “{shortName(leader.name)}” official</button>
+            ? (final.total > 0
+                ? <button className="btn btn-primary" style={{ width: '100%', marginTop: 14 }} onClick={() => void setDecision(leader.id)}><Icon icon={BadgeCheck} className="ico" /> Make “{shortName(leader.name)}” official</button>
+                : <button className="btn btn-ghost" style={{ width: '100%', marginTop: 14, opacity: 0.6 }} disabled><Icon icon={BadgeCheck} className="ico" /> Waiting on top choices</button>)
             : <button className="btn btn-ghost" style={{ width: '100%', marginTop: 14 }} onClick={() => { if (requireSignIn('cast your top choice')) void toggleFinalPick(leader.id); }}><Icon icon={Star} className="ico" /> Cast my top choice</button>)}
         </div>
         {aiCard}

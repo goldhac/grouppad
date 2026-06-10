@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import {
   Sparkles, MapPin, Calendar, CalendarCheck, Users, ArrowRight,
@@ -25,11 +25,12 @@ export function CreateTripView() {
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
+  useEffect(() => {
+    if (!accountLoading && !user) openAuth('create a trip');
+  }, [accountLoading, user, openAuth]);
+
   if (accountLoading) return <div className="py-24 text-center text-text-muted">Loading…</div>;
-  if (!user) {
-    openAuth('create a trip');
-    return <Navigate to="/" replace />;
-  }
+  if (!user) return <Navigate to="/" replace />;
   if (isMobile) return <MobileCreate />;
 
   const set = (k: keyof typeof form) =>

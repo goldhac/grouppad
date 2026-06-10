@@ -81,13 +81,14 @@ export function TripsView() {
     if (user) void refreshMyTrips();
   }, [user, refreshMyTrips]);
 
+  useEffect(() => {
+    if (!accountLoading && !user) openAuth('see your trips');
+  }, [accountLoading, user, openAuth]);
+
   if (accountLoading) {
     return <div className="py-24 text-center text-text-muted">Loading…</div>;
   }
-  if (!user) {
-    openAuth('see your trips');
-    return <Navigate to="/" replace />;
-  }
+  if (!user) return <Navigate to="/" replace />;
 
   if (isMobile) return <MobileTrips />;
 
