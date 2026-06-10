@@ -26,6 +26,8 @@ export interface Trip {
   budget: number;
   bedrooms?: number | null;
   home_type?: string;
+  /** How many days the group can shift each side of the dates (0 = exact). */
+  flex_days?: number;
   tax_rate?: number;
   cleaning_placeholder?: number;
   refreshed_at?: string | null;
@@ -61,6 +63,7 @@ export interface CreateTripInput {
   budget: number;
   bedrooms?: number | null;
   home_type?: string;
+  flex_days?: number;
   itinerary?: string;
 }
 
@@ -149,6 +152,8 @@ export interface Listing {
   reviews?: number | null;
   superhost?: boolean;
   budget?: BudgetTier;
+  /** Availability for the trip dates: true/false when the scrape could tell, else undefined. */
+  available?: boolean | null;
   check_manual?: boolean;
   displayed_5n?: number | null;
   est_5n?: number | null;

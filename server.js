@@ -298,6 +298,8 @@ function createTrip(owner, f) {
     budget: Number(f.budget) || 0,
     bedrooms: f.bedrooms != null && f.bedrooms !== '' ? Math.max(1, Number(f.bedrooms)) : null,
     home_type: (f.home_type && String(f.home_type).trim()) || 'Any',
+    // Date flexibility: how many days the group can shift each side of the dates.
+    flex_days: f.flex_days != null && f.flex_days !== '' ? Math.min(14, Math.max(0, Number(f.flex_days) || 0)) : 0,
     tax_rate: f.tax_rate != null ? Number(f.tax_rate) : 0.14,
     cleaning_placeholder: f.cleaning_placeholder != null ? Number(f.cleaning_placeholder) : 0,
     owner_id: owner.id,
@@ -1523,7 +1525,7 @@ const _scrapeSem = (() => {
   return { acquire: () => new Promise((r) => { q.push(r); next(); }), release: () => { active = Math.max(0, active - 1); next(); } };
 })();
 
-async function fetchPriceWithPlaywright(cleanUrl, source) {
+async function fetchPriceWithPlaywright(cleanUrl, source, dates) {
   await _scrapeSem.acquire();
   let browser;
   try {
@@ -1545,7 +1547,7 @@ async function fetchPriceWithPlaywright(cleanUrl, source) {
       locale: 'en-US',
     });
     const page = await ctx.newPage();
-    const dated = urlWithDates(cleanUrl, source);
+    const dated = urlWithDates(cleanUrl, source, dates);
     console.log('[Playwright] loading', dated);
 
     // SSRF guard: abort any main-frame navigation (incl. server redirects) that
@@ -1721,22 +1723,38 @@ async function fetchAirbnbCalendarPrice(listingId) {
   } catch { return null; }
 }
 
-// Trip dates — fixed for Aug 18-23, 2026
+// Fallback dates (the seed LA trip) when a caller doesn't pass a trip's own.
 const TRIP = { checkin: '2026-08-18', checkout: '2026-08-23', adults: 14 };
 
-function urlWithDates(cleanUrl, source) {
+// Resolve the check-in/out/adults to scrape a listing for: the trip's own dates
+// when available, else the seed fallback. So a December trip scrapes December
+// prices instead of the hardcoded August ones.
+function tripDates(trip) {
+  if (!trip) return TRIP;
+  return {
+    checkin: trip.checkin || TRIP.checkin,
+    checkout: trip.checkout_5n || trip.checkout || TRIP.checkout,
+    adults: trip.adults || TRIP.adults,
+  };
+}
+
+function urlWithDates(cleanUrl, source, dates) {
+  const d = dates || TRIP;
+  const cin = d.checkin || TRIP.checkin;
+  const cout = d.checkout || d.checkout_5n || TRIP.checkout;
+  const ad = d.adults || TRIP.adults;
   if (source === 'Airbnb') {
-    return `${cleanUrl}?check_in=${TRIP.checkin}&check_out=${TRIP.checkout}&adults=${TRIP.adults}`;
+    return `${cleanUrl}?check_in=${cin}&check_out=${cout}&adults=${ad}`;
   }
   if (source === 'VRBO') {
-    return `${cleanUrl}?startDate=${TRIP.checkin}&endDate=${TRIP.checkout}&adults=${TRIP.adults}`;
+    return `${cleanUrl}?startDate=${cin}&endDate=${cout}&adults=${ad}`;
   }
   return cleanUrl;
 }
 
-async function scrapeListingDetails(cleanUrl, parsed) {
-  // Fetch with trip dates so the server returns price-specific HTML
-  const html = await fetchHtml(urlWithDates(cleanUrl, parsed.source));
+async function scrapeListingDetails(cleanUrl, parsed, dates) {
+  // Fetch with the trip's own dates so the server returns price-specific HTML
+  const html = await fetchHtml(urlWithDates(cleanUrl, parsed.source, dates));
 
   const result = {
     name: null, area: 'Los Angeles area', photos: [],
@@ -1764,6 +1782,14 @@ async function scrapeListingDetails(cleanUrl, parsed) {
   // og:image as first photo
   const ogImg = ogTag(html, 'image');
   if (ogImg && !result.photos.includes(ogImg)) result.photos.push(ogImg);
+
+  // Best-effort availability for the requested dates. We fetched with the trip's
+  // dates baked in, so a clear "not available for these dates" signal means the
+  // home is booked for the window. Conservative: only flag a definite NO; leave
+  // it undefined (unknown) otherwise so we never wrongly claim availability.
+  if (/these dates are not available|not available for (?:your|these) (?:dates|selected dates)|dates are no longer available|listing is no longer available|this property is not available/i.test(html)) {
+    result.available = false;
+  }
 
   // og:description / meta description for additional clues
   const desc = ogTag(html, 'description') || metaTag(html, 'description') || '';
@@ -1878,14 +1904,14 @@ async function scrapeListingDetails(cleanUrl, parsed) {
       result.priceIsBaseOnly = apiResult.type === 'nightly_only';
     } else {
       // 2. Playwright: render the full page with real headless Chrome so JS/GraphQL executes
-      const pwResult = await fetchPriceWithPlaywright(cleanUrl, parsed.source);
+      const pwResult = await fetchPriceWithPlaywright(cleanUrl, parsed.source, dates);
       if (pwResult) {
         result.displayed_5n    = pwResult.price;
         // nightly_only = a base nightly rate × nights, so cleaning/tax get added downstream.
         result.priceIsBaseOnly = pwResult.type === 'nightly_only';
       } else {
         // 3. Last resort: Firecrawl LLM extraction (uses Firecrawl's managed browser)
-        const fcResult = await fetchPriceViaFirecrawl(urlWithDates(cleanUrl, parsed.source));
+        const fcResult = await fetchPriceViaFirecrawl(urlWithDates(cleanUrl, parsed.source, dates));
         if (fcResult) {
           result.displayed_5n    = fcResult.price;
           result.priceIsBaseOnly = false;
@@ -2184,7 +2210,7 @@ async function createSubmission(tripId, url, manual_price, user, opts = {}) {
     return { code: 409, body: { error: 'Already in the main list' } };
 
   const cleanUrl = url.split('?')[0];
-  const scraped  = await scrapeListingDetails(cleanUrl, parsed);
+  const scraped  = await scrapeListingDetails(cleanUrl, parsed, tripDates(getTrip(tripId)));
   const by       = (user.name || user.email?.split('@')[0] || 'member').slice(0, 60);
 
   // Manual price overrides auto-detection
@@ -2239,6 +2265,7 @@ async function createSubmission(tripId, url, manual_price, user, opts = {}) {
     est_5n:        est5n,
     est_4n:        est5n ? Math.round(est5n * 0.8) : null,
     budget,
+    available:     scraped.available === false ? false : undefined,
     check_manual:  true,
     photos:        scraped.photos,
     submitted_by:  by,
@@ -3015,7 +3042,7 @@ app.post('/api/admin/refetch-photos', requireAdmin, async (req, res) => {
     const parsed = l.url ? parseListingUrl(l.url) : null;
     if (!parsed) { out.push({ id: l.id, before, after: before, note: 'no url' }); continue; }
     try {
-      const scraped = await scrapeListingDetails(l.url.split('?')[0], parsed);
+      const scraped = await scrapeListingDetails(l.url.split('?')[0], parsed, tripDates(getTrip(tripId)));
       if (scraped.photos && scraped.photos.length > before) l.photos = scraped.photos;
       out.push({ id: l.id, before, after: (l.photos || []).length });
     } catch (e) { out.push({ id: l.id, before, after: before, error: e.message }); }
@@ -3198,13 +3225,13 @@ app.get('/api/me/trips', requireAuth, (req, res) => {
 
 // Create a new trip; the caller becomes the organizer.
 app.post('/api/trips', requireAuth, (req, res) => {
-  const { name, destination, checkin, checkout_5n, adults, budget, bedrooms, home_type, itinerary } =
+  const { name, destination, checkin, checkout_5n, adults, budget, bedrooms, home_type, flex_days, itinerary } =
     req.body || {};
   if (!destination || !String(destination).trim())
     return res.status(400).json({ error: 'Destination is required.' });
   if (!checkin || !checkout_5n)
     return res.status(400).json({ error: 'Check-in and check-out dates are required.' });
-  const trip = createTrip(req.user, { name, destination, checkin, checkout_5n, adults, budget, bedrooms, home_type });
+  const trip = createTrip(req.user, { name, destination, checkin, checkout_5n, adults, budget, bedrooms, home_type, flex_days });
   // Optional itinerary posted at create time — saved before the search so it can
   // inform the reference points, and so AI compare has it from the start.
   const itinText = String(itinerary || '').slice(0, 8000).trim();
@@ -3317,6 +3344,7 @@ app.patch('/api/trips/:tripId', requireTripOwner, (req, res) => {
   if (has('budget')) trip.budget = Math.max(0, Number(b.budget) || 0);
   if (has('home_type')) trip.home_type = String(b.home_type || 'Any');
   if (has('bedrooms')) trip.bedrooms = b.bedrooms == null || b.bedrooms === '' ? null : Math.max(1, Number(b.bedrooms));
+  if (has('flex_days')) trip.flex_days = Math.min(14, Math.max(0, Number(b.flex_days) || 0));
   if (has('voting_closed')) trip.voting_closed = !!b.voting_closed;
   saveTrips(trips);
   res.json(tripView(trip, req.user));

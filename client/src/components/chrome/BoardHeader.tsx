@@ -42,7 +42,7 @@ export function BoardHeader() {
       <div>
         <h1>{trip.name}</h1>
         <div className="meta">
-          {range && <span className="mi"><Icon icon={Calendar} className="ico" /> {range}</span>}
+          {range && <span className="mi"><Icon icon={Calendar} className="ico" /> {range}{trip.flex_days ? <span className="flex-chip"> ± {trip.flex_days}d</span> : null}</span>}
           <span className="mi"><Icon icon={Users} className="ico" /> {trip.adults} guests</span>
           {trip.budget > 0 && (
             <span className="mi"><Icon icon={Wallet} className="ico" /> <span className="hl tnum">${trip.budget.toLocaleString()}</span> budget</span>

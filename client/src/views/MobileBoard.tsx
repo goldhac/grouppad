@@ -221,7 +221,7 @@ export function MobileBoard() {
           <MobilePhotoCarousel photos={l.photos} alt={l.name}>
             {isOff
               ? <span className="ribbon"><Icon icon={BadgeCheck} className="ico" /> Official pick</span>
-              : <div className="tagL"><span className={`pchip ${b}`}><Icon icon={b === 'under' ? Check : b === 'over' ? TrendingUp : b === 'unknown' ? HelpCircle : Minus} className="ico" /> {B_SHORT[b]}</span></div>}
+              : <div className="tagL"><span className={`pchip ${b}`}><Icon icon={b === 'under' ? Check : b === 'over' ? TrendingUp : b === 'unknown' ? HelpCircle : Minus} className="ico" /> {B_SHORT[b]}</span>{l.available === false && <span className="pchip unavail"><Icon icon={X} className="ico" /> Unavailable</span>}</div>}
             {!opts.compact && (
               <button className={cn('save', final.myPick === l.id && 'on gold')} style={{ right: 92 }} onClick={(e) => { e.stopPropagation(); if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }} aria-label="Top choice" title="Make my top choice">
                 <Icon icon={Star} className="ico" />

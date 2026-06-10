@@ -183,6 +183,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
         <div className="card-badges">
           {primaryBadge}
           <span className={`badge badge-${l.budget ?? 'unknown'}`}>{BUDGET_LABEL[l.budget ?? 'unknown']}</span>
+          {l.available === false && <span className="badge badge-unavailable">Not available for your dates</span>}
         </div>
       </div>
       <div className="body">

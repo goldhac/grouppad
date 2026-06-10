@@ -18,7 +18,7 @@ export function CreateTripView() {
 
   const [form, setForm] = useState({
     dest: '', cin: '', cout: '', guests: '8',
-    name: '', beds: '', budget: '', type: 'Any', itin: '',
+    name: '', beds: '', budget: '', type: 'Any', flex: '0', itin: '',
   });
   const [invalid, setInvalid] = useState<Set<SegKey>>(new Set());
   const [focus, setFocus] = useState<SegKey | null>(null);
@@ -77,6 +77,7 @@ export function CreateTripView() {
         budget: Number(form.budget) || 0,
         bedrooms: form.beds ? Number(form.beds) : null,
         home_type: form.type,
+        flex_days: Number(form.flex) || 0,
         itinerary: form.itin.trim() || undefined,
       });
       // The board owns the SEARCHING state and auto-fires the capped search.
@@ -178,6 +179,20 @@ export function CreateTripView() {
                     </select>
                     <ChevronDown className="chev" />
                   </div>
+                </div>
+                <div className="ct-field">
+                  <label>Date flexibility</label>
+                  <div className="sel">
+                    <select className="field" name="flex" value={form.flex} onChange={set('flex')}>
+                      <option value="0">Exact dates</option>
+                      <option value="1">± 1 day</option>
+                      <option value="2">± 2 days</option>
+                      <option value="3">± 3 days</option>
+                      <option value="7">± 1 week</option>
+                    </select>
+                    <ChevronDown className="chev" />
+                  </div>
+                  <span className="sub">We check availability across this window.</span>
                 </div>
                 <div className="ct-field full">
                   <label>Itinerary <span className="hint">(optional)</span></label>

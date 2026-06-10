@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Sparkles, MapPin, Users, Pencil, BedDouble, Wallet, Home, ChevronDown, Info, Check, CheckCircle2, AlertCircle, Search } from 'lucide-react';
+import { ArrowLeft, Sparkles, MapPin, Users, Pencil, BedDouble, Wallet, Home, ChevronDown, Info, Check, CheckCircle2, AlertCircle, Search, Calendar } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 
-type Form = { dest: string; cin: string; cout: string; guests: string; name: string; beds: string; budget: string; type: string; itin: string };
+type Form = { dest: string; cin: string; cout: string; guests: string; name: string; beds: string; budget: string; type: string; flex: string; itin: string };
 const HOME_TYPES = ['Any', 'House', 'Apartment', 'Villa', 'Cabin'];
 
 export function MobileCreate() {
   const { createTrip, requireSignIn } = useApp();
   const navigate = useNavigate();
-  const [f, setF] = useState<Form>({ dest: '', cin: '', cout: '', guests: '8', name: '', beds: '', budget: '', type: 'Any', itin: '' });
+  const [f, setF] = useState<Form>({ dest: '', cin: '', cout: '', guests: '8', name: '', beds: '', budget: '', type: 'Any', flex: '0', itin: '' });
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
   const [focus, setFocus] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -43,6 +43,7 @@ export function MobileCreate() {
         budget: Number(f.budget) || 0,
         bedrooms: f.beds ? Number(f.beds) : null,
         home_type: f.type,
+        flex_days: Number(f.flex) || 0,
         itinerary: f.itin.trim() || undefined,
       });
       navigate(`/t/${trip.id}/board`);
@@ -52,7 +53,7 @@ export function MobileCreate() {
     }
   };
 
-  const field = (key: keyof Form, label: string, opts: { icon?: typeof MapPin; type?: string; ph?: string; hint?: string; sign?: string; min?: number; max?: number; sub?: string; subicon?: typeof Info; select?: string[] } = {}) => {
+  const field = (key: keyof Form, label: string, opts: { icon?: typeof MapPin; type?: string; ph?: string; hint?: string; sign?: string; min?: number; max?: number; sub?: string; subicon?: typeof Info; select?: string[]; selectOpts?: { value: string; label: string }[] } = {}) => {
     const cls = `bfield${invalid.has(key) ? ' invalid' : ''}${focus === key ? ' focus' : ''}`;
     return (
       <div className={cls} onFocus={() => setFocus(key)} onBlur={() => setFocus((x) => (x === key ? null : x))}>
@@ -60,9 +61,13 @@ export function MobileCreate() {
         <div className="inp">
           {opts.icon && <span className="lead"><Icon icon={opts.icon} className="ico" /></span>}
           {opts.sign && <span className="sign">{opts.sign}</span>}
-          {opts.select ? (
+          {opts.select || opts.selectOpts ? (
             <>
-              <select value={f[key]} onChange={(e) => set(key, e.target.value)}>{opts.select.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+              <select value={f[key]} onChange={(e) => set(key, e.target.value)}>
+                {opts.selectOpts
+                  ? opts.selectOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
+                  : opts.select!.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
               <span className="chev"><Icon icon={ChevronDown} className="ico" /></span>
             </>
           ) : opts.type === 'textarea' ? (
@@ -106,6 +111,13 @@ export function MobileCreate() {
                 {field('budget', 'Budget', { icon: Wallet, sign: '$', type: 'number', ph: '7,000' })}
               </div>
               {field('type', 'Home type', { icon: Home, select: HOME_TYPES })}
+              {field('flex', 'Date flexibility', { icon: Calendar, selectOpts: [
+                { value: '0', label: 'Exact dates' },
+                { value: '1', label: '± 1 day' },
+                { value: '2', label: '± 2 days' },
+                { value: '3', label: '± 3 days' },
+                { value: '7', label: '± 1 week' },
+              ], sub: 'We check availability across this window.', subicon: Info })}
               {field('itin', 'Itinerary', { hint: '(optional)', type: 'textarea', ph: 'Rough plans help tailor the search, e.g. Fri: arrive + dinner. Sat: pool day…', sub: 'Helps pick nearby reference points and powers Scout, our AI.', subicon: Info })}
             </div>
             <div style={{ height: 30 }} />

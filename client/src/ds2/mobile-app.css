@@ -525,6 +525,7 @@
 
 .gp-mobile .pchip { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 5px 9px; border-radius: var(--r-pill); backdrop-filter: blur(6px); box-shadow: var(--shadow-sm); }
 .gp-mobile .pchip .ico { width: 12px; height: 12px; }
+.gp-mobile .pchip.unavail { background: color-mix(in srgb, var(--over-bg) 94%, transparent); color: var(--over); margin-left: 6px; }
 .gp-mobile .pchip.under { background: color-mix(in srgb, var(--under-bg) 92%, transparent); color: var(--under); }
 .gp-mobile .pchip.marginal { background: color-mix(in srgb, var(--marginal-bg) 92%, transparent); color: var(--marginal); }
 .gp-mobile .pchip.over { background: color-mix(in srgb, var(--over-bg) 92%, transparent); color: var(--over); }

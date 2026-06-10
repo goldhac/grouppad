@@ -148,6 +148,8 @@ code.tok {
 .badge-marginal { background: var(--marginal-bg); color: var(--marginal); border-color: var(--marginal-border); }
 .badge-over     { background: var(--over-bg);     color: var(--over);     border-color: var(--over-border); }
 .badge-unknown  { background: var(--unknown-bg);  color: var(--unknown);  border-color: var(--unknown-border); }
+.badge-unavailable { background: var(--over-bg); color: var(--over); border-color: var(--over-border); }
+.b-title .meta .flex-chip { color: var(--text-muted); font-weight: 600; }
 
 .badge-rank      { background: var(--rank); color: var(--rank-fg); border-color: transparent; font-weight: 700; }
 .badge-rank-soft { background: var(--rank-soft-bg); color: var(--rank-soft-fg); border-color: transparent; font-weight: 700; }
