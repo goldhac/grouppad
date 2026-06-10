@@ -190,14 +190,14 @@ export function BoardView() {
   const topHomes = topAll ? mainGrid : mainGrid.slice(0, 10);
 
   const perPersonAvg = useMemo(() => {
-    const first = listings.find((l) => (l.budget === 'under' || l.budget === 'marginal') && l.est_5n);
+    const first = recommendedPool.find((l) => l.est_5n);
     return first?.est_5n ? Math.ceil(first.est_5n / split) : null;
-  }, [listings, split]);
+  }, [recommendedPool, split]);
 
   const showJoin = trip && !trip.isMember && !trip.isOwner;
 
   const TABS: { key: Tab; label: string; icon: typeof LayoutGrid; pip?: number }[] = [
-    { key: 'all', label: 'Recommended', icon: LayoutGrid, pip: listings.length },
+    { key: 'all', label: 'Recommended', icon: LayoutGrid, pip: recommendedPool.length },
     { key: 'shortlist', label: 'Shortlist', icon: Heart, pip: shortlistIds.size },
     { key: 'saved', label: 'Saved', icon: Bookmark, pip: favoriteIds.size },
     { key: 'decision', label: 'Decision', icon: Trophy },
@@ -248,7 +248,7 @@ export function BoardView() {
               </div>
             ))}
           </div>
-          <AddToolbar onOpenFilters={() => setSheet('filters')} filterCount={activeFilterCount} shown={mainGrid.length} total={listings.length} onTour={() => { setTab('all'); setTourOpen(true); }} />
+          <AddToolbar onOpenFilters={() => setSheet('filters')} filterCount={activeFilterCount} shown={mainGrid.length} total={recommendedPool.length} onTour={() => { setTab('all'); setTourOpen(true); }} />
         </div>
 
         {/* Mobile-only quick filter scroller (container-query gated to ≤860px) */}
@@ -373,7 +373,7 @@ export function BoardView() {
               </div>
             </div>
             <div className="filt-foot">
-              <span>Showing <span className="tnum">{mainGrid.length}</span> of <span className="tnum">{listings.length}</span></span>
+              <span>Showing <span className="tnum">{mainGrid.length}</span> of <span className="tnum">{recommendedPool.length}</span></span>
               <button className="btn btn-primary btn-sm" onClick={() => setSheet(null)}>Done</button>
             </div>
           </div>

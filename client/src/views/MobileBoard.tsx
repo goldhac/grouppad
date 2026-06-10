@@ -4,9 +4,11 @@ import {
   ChevronLeft, ChevronRight, Crown, Settings, Bookmark, Moon, Sun, Star,
   SlidersHorizontal, Check, Home,
   BadgeCheck, MessageSquare, Plus, Sparkles, Swords, Users,
-  HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus,
+  HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus, RotateCw, Pencil,
 } from 'lucide-react';
 import { useApp, isDeadListing } from '@/store/AppContext';
+import { api } from '@/lib/api';
+import { Markdown } from '@/components/Markdown';
 import { useCompare } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
@@ -38,8 +40,9 @@ export function MobileBoard() {
   const {
     trip, submitted, pipeline, votes, final, caveats, isOwner, split,
     favoriteIds, shortlistIds, itinerary, aiRankIndex, aiWhy, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
-    user, openAuth, joinTrip, findListing,
+    user, openAuth, joinTrip, findListing, insights,
     toggleFavorite, toggleFinalPick, setDecision, openDetail, requireSignIn, postCaveat,
+    approveCaveat, deleteCaveat, saveItinerary,
     submitListing, toast, selected, toggleSelect, clearSelection, setSplit, startOnboarding,
   } = useApp();
   const compare = useCompare();
@@ -63,6 +66,17 @@ export function MobileBoard() {
   const [addUrl, setAddUrl] = useState('');
   const [addPrice, setAddPrice] = useState('');
   const [adding, setAdding] = useState(false);
+  const [seeAllRec, setSeeAllRec] = useState(false);
+  const [itinEditOpen, setItinEditOpen] = useState(false);
+  const [itinDraft, setItinDraft] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshHomes = async () => {
+    if (!trip || refreshing) return;
+    setRefreshing(true);
+    try { await api.refreshListings(trip.id); toast('Refreshing listings — fresh homes appear in about a minute.', 'success'); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Could not refresh right now.', 'error'); }
+    finally { setRefreshing(false); }
+  };
 
   const openAdd = () => { if (requireSignIn('add a home')) setSheet('add'); };
   const addHome = async () => {
@@ -230,9 +244,23 @@ export function MobileBoard() {
       <div className="sec">
         <div className="sec-h"><span className="t">Recommended</span><span className="c tnum">Top {Math.min(10, visible.length)}</span></div>
         <div className="sec-sub">{aiRankLoading ? 'Scout is ranking these for your group…' : aiRankIndex.size ? 'Ranked by Scout across all sources · within budget · tap a home for the breakdown' : 'Ranked for your group · within budget · tap a home for the breakdown'}</div>
-        {visible.length
-          ? <div className="list">{visible.slice(0, 10).map((l) => mcard(l))}</div>
-          : <div className="empty"><div className="ec"><Icon icon={Home} className="ico" /></div><h3>No homes match</h3><p>Loosen the filters to see more.</p><button className="btn btn-ghost" onClick={() => setFilters(DEFAULT_FILTERS)}>Clear filters</button></div>}
+        {visible.length ? (
+          <>
+            <div className="list">{(seeAllRec ? visible : visible.slice(0, 10)).map((l) => mcard(l))}</div>
+            {visible.length > 10 && (
+              <button className="btn btn-ghost" style={{ width: '100%', marginTop: 4 }} onClick={() => setSeeAllRec((v) => !v)}>
+                {seeAllRec ? 'Show top 10' : `See all ${visible.length}`}
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="empty"><div className="ec"><Icon icon={Home} className="ico" /></div><h3>No homes match</h3><p>Loosen the filters to see more.</p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button className="btn btn-ghost" onClick={() => setFilters(DEFAULT_FILTERS)}>Clear filters</button>
+              {isOwner && <button className="btn btn-primary" disabled={refreshing} onClick={() => void refreshHomes()}><Icon icon={RotateCw} className="ico" /> {refreshing ? 'Searching…' : 'Search rentals'}</button>}
+            </div>
+          </div>
+        )}
       </div>
       {communityItems.length > 0 && (
         <div className="sec">
@@ -276,6 +304,16 @@ export function MobileBoard() {
       <div className="sec-h"><span className="t">Group's Shortlist</span><span className="c tnum">{shortlist.length}</span></div>
       <div className="sec-sub">Net-likes ≥ 1 · rises automatically from the group's votes</div>
       {aiCard}
+      {/* Scout's persisted whole-shortlist analysis — same data the desktop
+          Insights drawer shows, so the group's verdict isn't desktop-only. */}
+      {insights?.analysis && (
+        <details style={{ marginTop: 12, background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '12px 15px' }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <Icon icon={Sparkles} className="ico" style={{ color: 'var(--accent-text)' }} /> Scout's last analysis
+          </summary>
+          <div style={{ marginTop: 8, fontSize: 13.5, lineHeight: 1.55, color: 'var(--text-2)' }}><Markdown text={insights.analysis} /></div>
+        </details>
+      )}
       {shortlist.length
         ? <div className="list" style={{ marginTop: 16 }}>{shortlist.map((l) => mcard(l))}</div>
         : <div className="empty"><div className="ec"><Icon icon={Star} className="ico" /></div><h3>No finalists yet</h3><p>Homes rise here once they reach <b>net +1</b> likes.</p><button className="btn btn-primary" onClick={() => setView('home')}><Icon icon={Home} className="ico" /> Browse homes</button></div>}
@@ -346,17 +384,51 @@ export function MobileBoard() {
       <div className="sec-sub">Must-haves &amp; dealbreakers — these feed Scout's ranking</div>
       <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', margin: '8px 0 4px' }} onClick={() => startOnboarding(true)}><Icon icon={HelpCircle} className="ico" /> Show me around — replay the tour</button>
       <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '4px 15px', marginTop: 4 }}>
-        {caveats.map((c) => (
-          <div key={c.id} className="cv"><span className="av">{(c.name || '?').slice(0, 1)}</span>
-            <div style={{ flex: 1, minWidth: 0 }}><div className="who">{c.name}</div><div className="txt">{c.text}</div></div></div>
-        ))}
+        {caveats.map((c) => {
+          const pending = (c.status ?? 'approved') !== 'approved';
+          return (
+            <div key={c.id} className="cv"><span className="av">{(c.name || '?').slice(0, 1)}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="who">{c.name}{pending && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--star-strong, #b8860b)', background: 'var(--star-bg)', padding: '2px 7px', borderRadius: 'var(--r-pill)' }}>Pending</span>}</div>
+                <div className="txt">{c.text}</div>
+              </div>
+              {pending && isOwner && (
+                <span style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+                  <button className="iconbtn" style={{ width: 32, height: 32 }} aria-label="Approve" title="Approve — Scout will weigh it" onClick={() => void approveCaveat(c.id)}><Icon icon={Check} className="ico" style={{ color: 'var(--under)' }} /></button>
+                  <button className="iconbtn" style={{ width: 32, height: 32 }} aria-label="Reject" title="Reject" onClick={() => void deleteCaveat(c.id)}><Icon icon={X} className="ico" style={{ color: 'var(--over)' }} /></button>
+                </span>
+              )}
+            </div>
+          );
+        })}
         {!caveats.length && <div className="txt" style={{ padding: '12px 0', color: 'var(--text-muted)' }}>No criteria yet — add the group's must-haves below.</div>}
       </div>
       <div className="cv-post">
         <input className="field" placeholder="Add a must-have or dealbreaker…" value={draft} onChange={(e) => setDraft(e.target.value)} />
         <button className="btn btn-primary btn-icon" onClick={() => { if (draft.trim() && requireSignIn('post')) { void postCaveat(draft.trim()); setDraft(''); } }}><Icon icon={Send} className="ico" /></button>
       </div>
-      {itinerary?.text && (<><div className="sec-h" style={{ marginTop: 24 }}><span className="t">Trip itinerary</span></div><ItineraryCard /></>)}
+      {(itinerary?.text || isOwner) && (
+        <>
+          <div className="sec-h" style={{ marginTop: 24 }}><span className="t">Trip itinerary</span>
+            {isOwner && <button className="iconbtn" style={{ marginLeft: 'auto', width: 32, height: 32 }} aria-label="Edit itinerary" onClick={() => { setItinDraft(itinerary?.text || ''); setItinEditOpen((v) => !v); }}><Icon icon={Pencil} className="ico" /></button>}
+          </div>
+          <ItineraryCard />
+          {isOwner && (itinEditOpen || !itinerary?.text) && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <textarea
+                className="field"
+                rows={5}
+                style={{ width: '100%', resize: 'vertical', minHeight: 96 }}
+                placeholder="Post the one canonical itinerary, e.g. Day 1: arrive, dinner in Santa Monica…"
+                value={itinEditOpen ? itinDraft : itinDraft || ''}
+                onFocus={() => { if (!itinEditOpen) { setItinDraft(itinerary?.text || ''); setItinEditOpen(true); } }}
+                onChange={(e) => setItinDraft(e.target.value.slice(0, 8000))}
+              />
+              <button className="btn btn-primary btn-sm" style={{ alignSelf: 'flex-end' }} onClick={() => { void saveItinerary(itinDraft); setItinEditOpen(false); }}>Save itinerary</button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 
@@ -386,6 +458,7 @@ export function MobileBoard() {
           </div>
           <span className="spacer" />
           {isOwner && <span className="role-pill"><Icon icon={Crown} className="ico" /> Host</span>}
+          {isOwner && <button className="iconbtn" disabled={refreshing} onClick={() => void refreshHomes()} aria-label="Refresh listings" title="Refresh the live listings"><Icon icon={RotateCw} className="ico" style={refreshing ? { animation: 'spin 1s linear infinite' } : undefined} /></button>}
           {isOwner && <button className="iconbtn" onClick={() => trip && navigate(`/t/${trip.id}/manage`)} aria-label="Manage"><Icon icon={Settings} className="ico" /></button>}
           <button className={cn('iconbtn', view === 'saved' && 'on')} onClick={() => setView('saved')} aria-label="Saved"><Icon icon={Bookmark} className="ico" />{favoriteIds.size > 0 && <span className="hbadge tnum">{favoriteIds.size}</span>}</button>
           <button className="iconbtn" onClick={toggleTheme} aria-label="Theme"><Icon icon={theme === 'dark' ? Sun : Moon} className="ico" /></button>

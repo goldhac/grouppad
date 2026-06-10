@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ChevronLeft, Bookmark, Share2, ThumbsUp, ThumbsDown, Star, BadgeCheck, Award,
-  Waves, SquareParking, Bath, HelpCircle, X, Sparkles, ExternalLink, MapPin, Scale, Check,
+  Waves, SquareParking, Bath, HelpCircle, X, Sparkles, ExternalLink, MapPin, Scale, Check, Clapperboard, Lock, Trash2,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
@@ -14,7 +14,7 @@ import { cn } from '@/lib/cn';
 const B_LABEL: Record<string, string> = { under: 'Under budget', marginal: 'Marginal', over: 'Over budget', unknown: 'Price TBD' };
 
 export function MobileDetail() {
-  const { detailId, tripId, findListing, closeDetail, user, votes, split, isOwner, final, favoriteIds, reviewsMap, loadReviewsFor, selected, toggleSelect, castVote, toggleFavorite, toggleFinalPick, setDecision, requireSignIn, toast, aiWhy } = useApp();
+  const { detailId, tripId, findListing, closeDetail, user, votes, split, isOwner, final, favoriteIds, reviewsMap, loadReviewsFor, selected, toggleSelect, castVote, toggleFavorite, toggleFinalPick, setDecision, requireSignIn, toast, aiWhy, toursMap, generateTour, deleteListing } = useApp();
   const [lightbox, setLightbox] = useState<number | null>(null);
   const l = detailId ? findListing(detailId) : null;
   useEffect(() => { if (l && user && !reviewsMap[`${l.source}:${l.id}`]) void loadReviewsFor(l); /* eslint-disable-next-line */ }, [detailId, user]);
@@ -28,6 +28,8 @@ export function MobileDetail() {
   const isMyPick = final.myPick === l.id;
   const isSaved = favoriteIds.has(l.id);
   const rev = reviewsMap[`${l.source}:${l.id}`];
+  const tour = toursMap[l.id];
+  const tourClip = tour?.status === 'ready' ? tour.clips.find((c) => c.videoUrl) : undefined;
   const dists = l.distances ?? [];
 
   const amen: { yes?: boolean; no?: boolean; unk?: boolean; icon: typeof Waves; label: string }[] = [
@@ -113,9 +115,28 @@ export function MobileDetail() {
                 ))}
               </div>
             )}
+            {/* AI walkthrough tour — parity with the desktop detail modal */}
+            {(tourClip || tour?.status === 'generating' || isOwner) && (
+              <div style={{ marginTop: 8 }}>
+                <div className="d-seclabel"><Icon icon={Clapperboard} className="ico" /> Walkthrough tour</div>
+                {tourClip ? (
+                  <video controls playsInline preload="metadata" poster={tourClip.photo || undefined} src={tourClip.videoUrl!} style={{ width: '100%', borderRadius: 12, border: '1px solid var(--border)', background: '#000' }} />
+                ) : tour?.status === 'generating' ? (
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}><Icon icon={Sparkles} className="ico" /> Generating a walkthrough of the best spaces… (~a minute)</p>
+                ) : (
+                  <button className="btn btn-ghost btn-sm" onClick={() => void generateTour(l.id)}><Icon icon={Clapperboard} className="ico" /> Generate walkthrough tour</button>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 2 }}>
               <button className="source-link" onClick={() => { toggleSelect(l.id); toast(selected.has(l.id) ? 'Removed from compare.' : 'Added to compare — pick another and tap Compare.', 'success'); }} style={{ fontSize: 13.5, fontWeight: 600, color: selected.has(l.id) ? 'var(--accent-text)' : 'var(--link)', background: 'none', border: 0, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><Icon icon={Scale} className="ico" /> {selected.has(l.id) ? 'In compare' : 'Add to compare'}</button>
               <a className="source-link" href={l.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--link)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{l.check_manual ? 'Check manually' : `View on ${l.source}`} <Icon icon={ExternalLink} className="ico" /></a>
+              {isOwner && l.last_seen == null && (
+                <button className="source-link" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--over)', background: 'none', border: 0, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={() => { if (confirm('Remove this listing for everyone?')) { void deleteListing(l.id, !!l.submitted_by); closeDetail(); } }}>
+                  <Icon icon={Trash2} className="ico" /> Remove
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -125,9 +146,25 @@ export function MobileDetail() {
             <span className={cn('net', net > 0 && 'pos', net < 0 && 'neg', 'tnum')}>{net > 0 ? `+${net}` : net}</span>
             <button className={cn('vote down', tally.mine === 'down' && 'on')} onClick={() => { if (requireSignIn('vote')) void castVote(l.id, 'down'); }} aria-label="Dislike"><Icon icon={ThumbsDown} className="ico" /></button>
           </div>
-          {isOwner && !isOff
-            ? <button className="btn btn-primary" onClick={() => void setDecision(l.id)}><Icon icon={BadgeCheck} className="ico" /> Make official</button>
-            : <button className={cn('btn', isMyPick ? 'btn-primary' : 'btn-ghost')} onClick={() => { if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }}><Icon icon={Star} className="ico" /> {isMyPick ? 'Top choice' : 'Make top choice'}</button>}
+          {isOwner && !isOff ? (
+            <>
+              {/* The organizer votes too — star = their personal top choice. */}
+              <button
+                className={cn('btn', isMyPick ? 'btn-primary' : 'btn-ghost')}
+                style={{ flex: '0 0 auto', paddingLeft: 14, paddingRight: 14 }}
+                onClick={() => { if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }}
+                aria-label={isMyPick ? 'Your top choice' : 'Make this your top choice'}
+                title="My top choice"
+              >
+                <Icon icon={Star} className="ico" />
+              </button>
+              <button className="btn btn-primary" onClick={() => void setDecision(l.id)}><Icon icon={BadgeCheck} className="ico" /> Make official</button>
+            </>
+          ) : isOwner && isOff ? (
+            <button className="btn btn-ghost" onClick={() => void setDecision(null)}><Icon icon={Lock} className="ico" /> Unlock the pick</button>
+          ) : (
+            <button className={cn('btn', isMyPick ? 'btn-primary' : 'btn-ghost')} onClick={() => { if (requireSignIn('cast your top choice')) void toggleFinalPick(l.id); }}><Icon icon={Star} className="ico" /> {isMyPick ? 'Top choice' : 'Make top choice'}</button>
+          )}
         </div>
       </div>
       {lightbox != null && photos.length > 0 && <PhotoLightbox photos={photos} start={lightbox} onClose={() => setLightbox(null)} />}
