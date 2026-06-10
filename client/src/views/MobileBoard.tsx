@@ -6,7 +6,7 @@ import {
   BadgeCheck, MessageSquare, Plus, Sparkles, Swords, Users,
   HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus,
 } from 'lucide-react';
-import { useApp } from '@/store/AppContext';
+import { useApp, isDeadListing } from '@/store/AppContext';
 import { useCompare } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
@@ -36,9 +36,9 @@ function rangeLabel(a?: string, b?: string) {
 
 export function MobileBoard() {
   const {
-    trip, listings, submitted, pipeline, votes, final, caveats, isOwner, split,
-    favoriteIds, shortlistIds, itinerary, aiRankIndex, aiWhy, aiRankLoading, recommendedPool, suppressedIds,
-    user, openAuth, joinTrip,
+    trip, submitted, pipeline, votes, final, caveats, isOwner, split,
+    favoriteIds, shortlistIds, itinerary, aiRankIndex, aiWhy, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
+    user, openAuth, joinTrip, findListing,
     toggleFavorite, toggleFinalPick, setDecision, openDetail, requireSignIn, postCaveat,
     submitListing, toast, selected, toggleSelect, clearSelection, setSplit, startOnboarding,
   } = useApp();
@@ -85,7 +85,7 @@ export function MobileBoard() {
     if (filters.parking && l.parking !== 'yes') return false;
     if (filters.hottub && l.hot_tub !== 'yes') return false;
     if (filters.sleeps && (l.sleeps ?? 0) < filters.sleeps) return false;
-    if (!filters.manual && l.budget === 'unknown') return false;
+    if (!filters.manual && l.check_manual) return false; // same rule as the desktop board
     return true;
   };
   // Recommended = the cross-pool, budget-safe, Scout-ranked set (top 10), with
@@ -94,16 +94,28 @@ export function MobileBoard() {
     return recommendedPool.filter((l) => !shortlistIds.has(l.id) && passes(l));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recommendedPool, shortlistIds, filters]);
-  // Shortlist = liked homes still in the running — the locked official pick drops
-  // out (it's decided; it lives in the Decision tab + the leader strip now).
+  // Shortlist = liked homes still in the running — drawn from the FULL deduped
+  // pool (community + live + curated), minus the locked official pick (it's
+  // decided; it lives in the Decision tab + the leader strip now).
   const shortlist = useMemo(
-    () => [...listings, ...submitted].filter((l) => shortlistIds.has(l.id) && final.decision?.listing_id !== l.id),
-    [listings, submitted, shortlistIds, final.decision],
+    () => pooledListings.filter((l) => shortlistIds.has(l.id) && final.decision?.listing_id !== l.id),
+    [pooledListings, shortlistIds, final.decision],
   );
-  const savedItems = useMemo(() => [...listings, ...submitted, ...pipeline].filter((l) => favoriteIds.has(l.id)), [listings, submitted, pipeline, favoriteIds]);
+  const savedItems = useMemo(() => pooledListings.filter((l) => favoriteIds.has(l.id)), [pooledListings, favoriteIds]);
   // Browse rows exclude cross-source duplicates already shown elsewhere.
   const communityItems = useMemo(() => submitted.filter((l) => !suppressedIds.has(l.id)), [submitted, suppressedIds]);
   const liveItems = useMemo(() => pipeline.filter((l) => !suppressedIds.has(l.id)), [pipeline, suppressedIds]);
+  // Over-budget / unpriced homes can't be recommended but must stay browsable.
+  // Community + live rows already show their own (all budgets), so this row only
+  // covers the leftovers those rows don't render — i.e. curated homes.
+  const beyondBudget = useMemo(() => {
+    const inRec = new Set(recommendedPool.map((l) => l.id));
+    const shownElsewhere = new Set([...submitted, ...pipeline].map((l) => l.id));
+    const decided = final.decision?.listing_id;
+    return pooledListings
+      .filter((l) => !inRec.has(l.id) && !shownElsewhere.has(l.id) && !shortlistIds.has(l.id) && l.id !== decided && !isDeadListing(l))
+      .sort((a, b) => (a.est_5n ?? Number.MAX_SAFE_INTEGER) - (b.est_5n ?? Number.MAX_SAFE_INTEGER));
+  }, [pooledListings, recommendedPool, submitted, pipeline, shortlistIds, final.decision]);
 
   const groupTotal = trip?.adults || trip?.memberCount || 14;
   const votedCount = useMemo(() => {
@@ -112,10 +124,13 @@ export function MobileBoard() {
     return s.size;
   }, [votes]);
   const leader = useMemo(() => {
-    const pool = shortlist.length ? shortlist : listings;
+    const pool = shortlist.length ? shortlist : pooledListings;
     return pool.slice().sort((a, b) => ((final.counts?.[b.id] || 0) - (final.counts?.[a.id] || 0)) || (netOf(b) - netOf(a)))[0];
-  }, [shortlist, listings, final.counts, votes]);
-  const official = final.decision?.listing_id ? listings.find((l) => l.id === final.decision!.listing_id) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shortlist, pooledListings, final.counts, votes]);
+  // findListing is alias-aware and searches all three pools, so a decision
+  // locked on a community/live home (or a deduped duplicate) still resolves.
+  const official = final.decision?.listing_id ? findListing(final.decision.listing_id) ?? null : null;
   const pct = Math.round((votedCount / Math.max(1, groupTotal)) * 100);
 
   const toggleTheme = () => {
@@ -226,6 +241,13 @@ export function MobileBoard() {
           <div className="hrow">{communityItems.map((l) => mcard(l, { compact: true, by: true }))}</div>
         </div>
       )}
+      {beyondBudget.length > 0 && (
+        <div className="sec">
+          <div className="sec-h"><span className="t">Beyond the budget</span><span className="c tnum">{beyondBudget.length}</span></div>
+          <div className="sec-sub">Over budget or unpriced · still worth a look · swipe →</div>
+          <div className="hrow">{beyondBudget.map((l) => mcard(l, { compact: true }))}</div>
+        </div>
+      )}
       {liveItems.length > 0 && (
         <div className="sec">
           <div className="sec-h"><span className="t">More LA homes</span><span className="c tnum">{liveItems.length}</span></div>
@@ -297,7 +319,7 @@ export function MobileBoard() {
           <div className="lb-prog"><span><Icon icon={Users} className="ico" /> Top-choice votes in</span><b className="tnum">{votedCount} of {groupTotal}</b></div>
           <div className="ptrack"><div className="pfill" style={{ width: `${pct}%` }} /></div>
           <div style={{ marginTop: 6 }}>
-            {(shortlist.length ? shortlist : listings.slice(0, 4)).slice(0, 4).sort((a, b) => (final.counts?.[b.id] || 0) - (final.counts?.[a.id] || 0)).map((l, i) => {
+            {(shortlist.length ? shortlist : pooledListings).slice().sort((a, b) => (final.counts?.[b.id] || 0) - (final.counts?.[a.id] || 0)).slice(0, 4).map((l, i) => {
               const tv = final.counts?.[l.id] || 0; const max = Math.max(5, ...shortlist.map((x) => final.counts?.[x.id] || 0));
               return (
                 <div key={l.id} className={cn('lb-bar', i === 0 && 'lead')}>

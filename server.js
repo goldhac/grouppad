@@ -848,11 +848,14 @@ async function apifyGuard(context) {
     for (let i = 0; i < APIFY_KEYS.length; i++) {
       const key = APIFY_KEYS[i];
       const s = await fetchApifySummary(key);
+      // Revoked/invalid key — skip it so a dead primary can't pin _activeApify
+      // while valid stacked backups sit unused.
+      if (s && s.invalid) { console.warn(`[apify-guard] key #${i + 1} is invalid (401) — skipping`); continue; }
       if (_apifyHasRoom(s)) {
         if (_activeApify !== key && i > 0) {
           console.warn(`[apify-guard] swapped to stacked key #${i + 1} for ${context}`);
           sendManagerEmail('GroupPad: switched to a backup Apify key',
-            `<p>An earlier Apify key was near its monthly limit, so GroupPad switched to stacked key #${i + 1} to keep ${context} running — no action needed right now. Top up the earlier keys when you can.</p>`).catch(() => {});
+            `<p>An earlier Apify key was near its limit or invalid, so GroupPad switched to stacked key #${i + 1} to keep ${context} running — no action needed right now. Replace the earlier keys when you can.</p>`).catch(() => {});
         }
         _activeApify = key;
         return true;
@@ -1423,25 +1426,28 @@ async function fetchPriceWithPlaywright(cleanUrl, source) {
       return { price: htmlPrice, type: 'full' };
     }
 
-    // Nightly-rate fallback (boutique sites that only show "$X / night"): take the
-    // lowest plausible nightly rate × 5 nights as a BASE estimate (cleaning + tax
-    // added downstream). Lowest avoids picking an inflated peak/holiday rate.
-    const nightly = [];
+    // Nightly-rate fallback (boutique sites that only show "$X / night"): take
+    // the FIRST plausible rate in document order — the listing's own rate
+    // renders above footer cross-sells — and skip "from $X/night" marketing
+    // strings, which are teaser prices for OTHER homes. (A global minimum here
+    // previously let a "similar homes from $180/night" widget beat the real rate.)
     const nightlyRe = [
       /\$\s*([\d,]+(?:\.\d{2})?)\s*(?:\/|per\s+)\s*night/ig,
       /\$\s*([\d,]+(?:\.\d{2})?)\s*(?:nightly|\/\s*nt|a\s+night)\b/ig,
     ];
+    let nightlyPick = null;
     for (const re of nightlyRe) {
       let m;
       while ((m = re.exec(allText))) {
         const v = parseFloat(m[1].replace(/,/g, ''));
-        if (v >= 150 && v <= 40000) nightly.push(v);
+        if (!(v >= 100 && v <= 40000)) continue;
+        if (/from\s*$/i.test(allText.slice(Math.max(0, m.index - 12), m.index))) continue;
+        if (nightlyPick == null || m.index < nightlyPick.index) nightlyPick = { v, index: m.index };
       }
     }
-    if (nightly.length) {
-      const rate = Math.min(...nightly);
-      const total = Math.round(rate * 5);
-      console.log('[Playwright] nightly rate', rate, '→ 5-night base', total);
+    if (nightlyPick) {
+      const total = Math.round(nightlyPick.v * 5);
+      console.log('[Playwright] nightly rate', nightlyPick.v, '→ 5-night base', total);
       return { price: total, type: 'nightly_only' };
     }
 
@@ -2418,8 +2424,12 @@ const hAiRank = async (req, res) => {
   if (cached && cached.hash === hash && req.query.force !== '1') {
     return res.json({ order: cached.order, ranked_at: cached.ranked_at, cached: true });
   }
-  // Only an authed member under the cost cap triggers a fresh Gemini spend.
-  if (!GEMINI_API_KEY || !req.user || !geminiGuard()) {
+  // Only an authed MEMBER of this trip (or its owner) under the cost cap may
+  // trigger a fresh Gemini spend / overwrite the shared cache — otherwise any
+  // signed-in account could drain the budget or poison another trip's ranking.
+  const isMember = !!req.user && !!req.trip
+    && (req.trip.owner_id === req.user.id || (req.trip.members || []).includes(req.user.id) || isSuperAdmin(req.user));
+  if (!GEMINI_API_KEY || !isMember || !geminiGuard()) {
     return res.json({ order: heuristicRankOrder(all), ranked_at: null, fallback: true });
   }
 
@@ -2791,6 +2801,9 @@ async function fetchApifySummary(token = _activeApify) {
       fetch(`https://api.apify.com/v2/users/me/limits?token=${token}`),
       fetch(`https://api.apify.com/v2/actor-runs?token=${token}&limit=8&desc=1`),
     ]);
+    // A revoked/invalid key answers 401/403 — surface that explicitly so the
+    // guard can SKIP it and rotate, instead of reading null usage as headroom.
+    if (limitsR.status === 401 || limitsR.status === 403) return { invalid: true };
     const limits = await limitsR.json();
     const runs   = await runsR.json();
     const usageUsd = limits?.data?.current?.monthlyUsageUsd ?? limits?.data?.monthlyUsageUsd ?? null;

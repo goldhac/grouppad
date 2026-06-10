@@ -22,6 +22,7 @@ import { SavedSection } from '@/components/board/SavedSection';
 import { SubmittedSection } from '@/components/board/SubmittedSection';
 import { CaveatsSection } from '@/components/board/CaveatsSection';
 import { PipelineSection } from '@/components/board/PipelineSection';
+import { BeyondBudgetSection } from '@/components/board/BeyondBudgetSection';
 import { CompareDock } from '@/components/board/CompareDock';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { Button } from '@/components/ui/Button';
@@ -307,6 +308,7 @@ export function BoardView() {
             </section>
             <SubmittedSection view={view} />
             <PipelineSection filters={filters} view={view} />
+            <BeyondBudgetSection view={view} />
           </>
         )}
 

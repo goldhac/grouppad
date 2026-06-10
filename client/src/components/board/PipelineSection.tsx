@@ -23,6 +23,7 @@ export function PipelineSection({ filters, view = 'grid' }: { filters: Filters; 
       if (filters.parking && l.parking !== 'yes') return false;
       if (filters.hottub && l.hot_tub !== 'yes') return false;
       if (filters.sleeps && (l.sleeps ?? 0) < filters.sleeps) return false;
+      if (!filters.manual && l.check_manual) return false; // same rule as the main grid
       return true;
     });
     return filtered.sort((a, b) => mansionScore(b) - mansionScore(a));

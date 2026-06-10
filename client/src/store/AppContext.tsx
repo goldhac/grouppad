@@ -84,6 +84,8 @@ interface AppState {
   // Cross-pool recommendation set + suppressed duplicate ids
   recommendedPool: Listing[];
   suppressedIds: ReadonlySet<string>;
+  /** All distinct homes across community + live + curated (deduped). */
+  pooledListings: Listing[];
 }
 
 interface AppActions {
@@ -157,7 +159,8 @@ function propKey(l: Listing): string {
   return `nm:${raw.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 32)}`;
 }
 const dataScore = (l: Listing) => (l.est_5n ? 4 : 0) + ((l.photos?.length ?? 0) ? 2 : 0) + ((l.distances?.length ?? 0) ? 1 : 0);
-const isDeadListing = (l: Listing) => /\b(delisted|de-listed|test listing|placeholder|example)\b/i.test(l.name || '');
+// eslint-disable-next-line react-refresh/only-export-components
+export const isDeadListing = (l: Listing) => /\b(delisted|de-listed|test listing|placeholder|example)\b/i.test(l.name || '');
 
 export function AppProvider({ children }: { children: ReactNode }) {
   // global account
@@ -465,18 +468,53 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const openDetail = useCallback((id: string) => setDetailId(id), []);
   const closeDetail = useCallback(() => setDetailId(null), []);
 
+  // Pool every candidate (community + live + curated) and dedupe at the property
+  // level — the same villa from two sources collapses to one card (we keep the
+  // richest copy). `aliasToCanon` maps every dropped duplicate's id to the kept
+  // copy's id, so votes/picks/links cast on either copy land on the merged card.
+  const { pooledListings, suppressedIds, aliasToCanon } = useMemo(() => {
+    const union = [...submitted, ...pipeline, ...listings];
+    const best = new Map<string, Listing>();
+    const keyOf = new Map<string, string>();
+    // Same distinctive name in two DIFFERENT areas = two different homes — never
+    // merge those (guards against false merges like two "Sunset Retreat"s).
+    const areaTok = (l: Listing) => (l.area || '').split(/[·,]/)[0].trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+    for (const l of union) {
+      let k = propKey(l);
+      const cur = best.get(k);
+      if (cur && k.startsWith('nm:')) {
+        const a = areaTok(cur), b = areaTok(l);
+        if (a && b && a !== b) k = `id:${l.source}:${l.id}`;
+      }
+      keyOf.set(l.id, k);
+      const champ = best.get(k);
+      if (!champ || dataScore(l) > dataScore(champ)) best.set(k, l);
+    }
+    const alias = new Map<string, string>();
+    for (const l of union) {
+      const kept = best.get(keyOf.get(l.id)!)!;
+      if (kept.id !== l.id) alias.set(l.id, kept.id);
+    }
+    return { pooledListings: [...best.values()], suppressedIds: new Set(alias.keys()), aliasToCanon: alias };
+  }, [submitted, pipeline, listings]);
+
   const findListing = useCallback(
     (id: string): Listing | undefined => {
-      // A listing can appear in more than one pool (e.g. curated + live pipeline);
-      // prefer the copy that carries the distance chips, else the first match.
-      const matches = [
-        submitted.find((l) => l.id === id),
-        pipeline.find((l) => l.id === id),
-        listings.find((l) => l.id === id),
-      ].filter(Boolean) as Listing[];
-      return matches.find((l) => l.distances?.length) ?? matches[0];
+      const lookup = (x: string) => {
+        // A listing can appear in more than one pool (e.g. curated + live pipeline);
+        // prefer the copy that carries the distance chips, else the first match.
+        const matches = [
+          submitted.find((l) => l.id === x),
+          pipeline.find((l) => l.id === x),
+          listings.find((l) => l.id === x),
+        ].filter(Boolean) as Listing[];
+        return matches.find((l) => l.distances?.length) ?? matches[0];
+      };
+      // Resolve a suppressed duplicate's id to the displayed (canonical) copy,
+      // so deep links / old votes still open the merged card.
+      return lookup(aliasToCanon.get(id) ?? id) ?? lookup(id);
     },
-    [submitted, pipeline, listings],
+    [submitted, pipeline, listings, aliasToCanon],
   );
 
   // ── Votes / picks ────────────────────────────────────────────────────────────
@@ -665,30 +703,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const clearSelection = useCallback(() => setSelected(new Set()), []);
 
+  // Votes/picks/favorites are stored server-side under whichever copy's id the
+  // member happened to act on. Fold every alias onto the displayed (canonical)
+  // copy so a vote on the villaway copy still counts on the merged card.
+  const canonVotes = useMemo(() => {
+    if (!aliasToCanon.size) return votes;
+    const out: VotesMap = {};
+    for (const [lid, users] of Object.entries(votes)) {
+      const cid = aliasToCanon.get(lid) ?? lid;
+      // a vote cast directly on the canonical id wins a per-user collision
+      out[cid] = lid === cid ? { ...(out[cid] ?? {}), ...users } : { ...users, ...(out[cid] ?? {}) };
+    }
+    return out;
+  }, [votes, aliasToCanon]);
+
+  const canonFinal = useMemo(() => {
+    if (!aliasToCanon.size) return final;
+    const counts: Record<string, number> = {};
+    for (const [lid, n] of Object.entries(final.counts ?? {})) {
+      const cid = aliasToCanon.get(lid) ?? lid;
+      counts[cid] = (counts[cid] ?? 0) + n;
+    }
+    return {
+      ...final,
+      counts,
+      myPick: final.myPick ? aliasToCanon.get(final.myPick) ?? final.myPick : final.myPick,
+      decision: final.decision
+        ? { ...final.decision, listing_id: aliasToCanon.get(final.decision.listing_id) ?? final.decision.listing_id }
+        : final.decision,
+    };
+  }, [final, aliasToCanon]);
+
+  const canonFavoriteIds = useMemo(() => {
+    if (!aliasToCanon.size) return favoriteIds;
+    const s = new Set<string>();
+    for (const id of favoriteIds) s.add(aliasToCanon.get(id) ?? id);
+    return s;
+  }, [favoriteIds, aliasToCanon]);
+
+  // Liked homes — computed over the deduped pool with merged votes, so a
+  // suppressed duplicate can never re-enter the shortlist under its own id.
   const shortlistIds = useMemo(() => {
     const ids = new Set<string>();
-    for (const pool of [submitted, pipeline, listings]) {
-      for (const l of pool) if (!ids.has(l.id) && netVotes(votes, l.id) >= 1) ids.add(l.id);
-    }
+    for (const l of pooledListings) if (netVotes(canonVotes, l.id) >= 1) ids.add(l.id);
     return ids;
-  }, [submitted, pipeline, listings, votes]);
-
-  // Pool every candidate (community + live + curated) and dedupe at the property
-  // level — the same villa from two sources collapses to one card (we keep the
-  // richest copy). `suppressedIds` are the dropped duplicates, hidden everywhere.
-  const { pooledListings, suppressedIds } = useMemo(() => {
-    const union = [...submitted, ...pipeline, ...listings];
-    const best = new Map<string, Listing>();
-    for (const l of union) {
-      const k = propKey(l);
-      const cur = best.get(k);
-      if (!cur || dataScore(l) > dataScore(cur)) best.set(k, l);
-    }
-    const keep = new Set([...best.values()].map((l) => l.id));
-    const suppressed = new Set<string>();
-    for (const l of union) if (!keep.has(l.id)) suppressed.add(l.id);
-    return { pooledListings: [...best.values()], suppressedIds: suppressed };
-  }, [submitted, pipeline, listings]);
+  }, [pooledListings, canonVotes]);
 
   // Rank index for O(1) "where does this home sit in the AI order" lookups.
   const aiRankIndex = useMemo(() => {
@@ -703,14 +762,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // listings can never be recommended. Ordered by Scout's ranking.
   const recommendedPool = useMemo(() => {
     const BIG = Number.MAX_SAFE_INTEGER;
-    const decided = final.decision?.listing_id;
+    const decided = canonFinal.decision?.listing_id;
     return pooledListings
       .filter((l) => (l.budget === 'under' || l.budget === 'marginal') && !isDeadListing(l) && l.id !== decided)
       .map((l, i) => ({ l, i, r: aiRankIndex.get(l.id) ?? BIG }))
       .sort((a, b) => a.r - b.r || a.i - b.i)
       .map((x) => x.l);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pooledListings, aiRankIndex, final.decision]);
+  }, [pooledListings, aiRankIndex, canonFinal.decision]);
 
   // Fetch the AI ranking whenever the candidate set (or itinerary/caveats) changes.
   // Server caches by content hash, so repeat loads are free; only a real change
@@ -721,11 +780,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   useEffect(() => {
     const id = tripIdRef.current;
-    if (!id || pooledListings.length < 2) { setAiOrder([]); setAiWhy({}); return; }
+    if (!id || pooledListings.length < 2) { setAiOrder([]); setAiWhy({}); setAiRankLoading(false); return; }
     let cancelled = false;
     setAiRankLoading(true);
+    // Project to just the fields the ranker reads — full Listing objects carry
+    // 16-photo URL arrays that can blow past the server's JSON body cap.
+    const compact = pooledListings.map((l) => ({
+      id: l.id, name: l.name, source: l.source, bd: l.bd, ba: l.ba, sleeps: l.sleeps,
+      area: l.area, distance_mi: l.distance_mi, est_5n: l.est_5n, budget: l.budget,
+      pool: l.pool, hot_tub: l.hot_tub, parking: l.parking, rating: l.rating,
+      reviews: l.reviews, submitted_by: l.submitted_by,
+    }));
     const handle = setTimeout(() => {
-      api.aiRank(id, pooledListings)
+      api.aiRank(id, compact)
         .then((res) => {
           if (cancelled || tripIdRef.current !== id) return;
           setAiOrder(res.order.map((o) => o.id));
@@ -744,10 +811,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => ({
       user, myTrips, accountLoading,
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
-      listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
+      // Expose the CANONICAL votes/final/favorites — alias ids merged onto the
+      // displayed copy — so every consumer reads merged tallies automatically.
+      listings, votes: canonVotes, submitted, pipeline, itinerary, caveats, insights, final: canonFinal, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
-      aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds,
-      favoriteIds, toggleFavorite,
+      aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
+      favoriteIds: canonFavoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
@@ -757,10 +826,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
-      listings, votes, submitted, pipeline, itinerary, caveats, insights, final, reviewsMap, toursMap,
+      listings, canonVotes, submitted, pipeline, itinerary, caveats, insights, canonFinal, reviewsMap, toursMap,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
-      aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds,
-      favoriteIds, toggleFavorite,
+      aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
+      canonFavoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, openDetail, closeDetail, findListing,

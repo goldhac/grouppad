@@ -670,7 +670,12 @@
 .gp-mobile .detail .d-scroll::-webkit-scrollbar { display: none; }
 .gp-mobile .d-hero { position: relative; aspect-ratio: 20 / 16; background: var(--surface-sunken); }
 .gp-mobile .d-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.gp-mobile .d-hero .bar { position: absolute; top: 0; left: 0; right: 0; padding: 14px 14px 0; display: flex; gap: 9px; align-items: center; z-index: 3; }
+/* pointer-events:none lets swipes/taps in the bar's empty span (incl. the big
+   flexible spacer) fall through to the photo carousel beneath; the buttons
+   themselves re-enable hits. Without this the full-width strip ate the top
+   ~50px of every swipe and tap-to-zoom. */
+.gp-mobile .d-hero .bar { position: absolute; top: 0; left: 0; right: 0; padding: 14px 14px 0; display: flex; gap: 9px; align-items: center; z-index: 3; pointer-events: none; }
+.gp-mobile .d-hero .bar .gbtn { pointer-events: auto; }
 .gp-mobile .d-hero .bar .spacer { margin-left: auto; }
 .gp-mobile .d-hero .gbtn { width: 38px; height: 38px; border-radius: 50%; background: var(--surface-overlay); backdrop-filter: blur(8px); border: 1px solid var(--photo-border); display: flex; align-items: center; justify-content: center; color: var(--text); box-shadow: var(--shadow-sm); cursor: pointer; }
 .gp-mobile .d-hero .gbtn .ico { width: 18px; height: 18px; }

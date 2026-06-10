@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useApp } from '@/store/AppContext';
+import { ApiError } from '@/lib/api';
 import type { CompareListingInput, Listing } from '@/types';
 
 export function toInput(l: Listing): CompareListingInput {
@@ -44,7 +45,7 @@ export interface CompareController {
 
 /** Single source of truth for the AI compare panel + selection-based compares. */
 export function useCompare(): CompareController {
-  const { selected, findListing, runCompare, clearSelection, toast } = useApp();
+  const { selected, findListing, runCompare, clearSelection, toast, user, openAuth } = useApp();
   const [panelOpen, setPanelOpen] = useState(false);
   const [criteria, setCriteria] = useState('');
   const [result, setResult] = useState<string | null>(null);
@@ -55,6 +56,9 @@ export function useCompare(): CompareController {
 
   const runWhole = useCallback(
     async (items: Listing[]) => {
+      // Compare costs AI spend, so the server requires auth — route guests to
+      // the sign-in modal instead of letting the request die in a 401 toast.
+      if (!user) { openAuth('compare with Scout'); return; }
       if (items.length < 2) {
         setError('Add at least 2 homes to compare.');
         toast('Add at least 2 homes to compare.', 'error');
@@ -72,19 +76,22 @@ export function useCompare(): CompareController {
         setResult(analysis);
         setPanelOpen(false);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Compare failed.');
         setComparedListings(null);
         setResultMode(null);
+        // Expired session mid-compare → sign-in modal, not a dead-end toast.
+        if (e instanceof ApiError && e.status === 401) { openAuth('compare with Scout'); return; }
+        setError(e instanceof Error ? e.message : 'Compare failed.');
         toast('Compare failed.', 'error');
       } finally {
         setRunning(false);
       }
     },
-    [criteria, runCompare, toast],
+    [criteria, runCompare, toast, user, openAuth],
   );
 
   const runSelected = useCallback(
     async (mode: 'multi' | '1v1') => {
+      if (!user) { openAuth('compare with Scout'); return; }
       const items = [...selected].map((id) => findListing(id)).filter(Boolean) as Listing[];
       if (mode === '1v1' && items.length !== 2) {
         setError('Pick exactly 2 homes for a 1v1.');
@@ -107,15 +114,16 @@ export function useCompare(): CompareController {
         );
         setResult(analysis);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Compare failed.');
         setComparedListings(null);
         setResultMode(null);
+        if (e instanceof ApiError && e.status === 401) { openAuth('compare with Scout'); return; }
+        setError(e instanceof Error ? e.message : 'Compare failed.');
         toast('Compare failed.', 'error');
       } finally {
         setRunning(false);
       }
     },
-    [selected, findListing, runCompare, criteria, toast],
+    [selected, findListing, runCompare, criteria, toast, user, openAuth],
   );
 
   const dismissResult = useCallback(() => {

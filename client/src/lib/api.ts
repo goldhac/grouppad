@@ -152,7 +152,7 @@ export const api = {
       method: 'POST',
       body: { listings, criteria, ...(mode ? { mode } : {}) },
     }),
-  aiRank: (tripId: string, listings: Listing[]) =>
+  aiRank: (tripId: string, listings: Partial<Listing>[]) =>
     request<{ order: { id: string; why: string | null }[]; ranked_at: string | null; fallback?: boolean; cached?: boolean }>(
       `${t(tripId)}/ai-rank`,
       { method: 'POST', body: { listings } },

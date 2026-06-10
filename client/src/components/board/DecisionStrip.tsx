@@ -16,11 +16,13 @@ export function DecisionStrip({
   onLeaderboard: () => void;
   onCompare: () => void;
 }) {
-  const { trip, listings, submitted, votes, final, split, openDetail } = useApp();
+  const { trip, pooledListings, votes, final, split, openDetail, findListing } = useApp();
   if (!trip) return null;
 
-  const all = useMemo(() => [...listings, ...submitted], [listings, submitted]);
-  const find = (id: string): Listing | undefined => all.find((l) => l.id === id);
+  // Full deduped pool (community + live + curated) — a leader or locked pick on
+  // a pipeline home must resolve too. findListing is alias-aware for old ids.
+  const all = pooledListings;
+  const find = (id: string): Listing | undefined => findListing(id);
 
   // Group size = guests; voted = people who cast a top choice (one each → final.total).
   const groupSize = Math.max(trip.adults || trip.memberCount || 1, 1);
