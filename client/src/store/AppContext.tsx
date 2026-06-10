@@ -29,6 +29,12 @@ import type {
 
 const ADMIN_KEY_LS = 'admin_key';
 const ONBOARDED_LS = 'gp_onboarded';
+// Per-trip group size for the per-person split — persisted so it survives a refresh.
+const splitKey = (tripId?: string | null) => `gp_split_${tripId || ''}`;
+function readSplit(tripId?: string | null): number | null {
+  try { const v = Number(localStorage.getItem(splitKey(tripId))); return Number.isFinite(v) && v > 0 ? v : null; }
+  catch { return null; }
+}
 
 export interface Toast {
   id: number;
@@ -197,7 +203,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ui
   const [adminKey, setAdminKeyState] = useState<string | null>(() => localStorage.getItem(ADMIN_KEY_LS));
-  const [split, setSplit] = useState(14);
+  const [split, setSplitState] = useState(14);
+  // Persist the split per trip so it survives a refresh (instead of snapping
+  // back to the trip's guest count / default).
+  const setSplit = useCallback((n: number) => {
+    setSplitState(n);
+    try { localStorage.setItem(splitKey(tripIdRef.current), String(n)); } catch { /* ignore */ }
+  }, []);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [authModal, setAuthModal] = useState<AuthModalState>({ open: false });
@@ -299,6 +311,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, favRes, revRes, tourRes] = bundle;
       if (token !== loadTokenRef.current) return; // a newer enterTrip superseded us
       setTrip(tripView);
+      // Restore the saved per-trip split, else default to the trip's guest count.
+      setSplitState(readSplit(id) ?? tripView.adults ?? 14);
       setListings(listRes.listings);
       setVotes(votesRes);
       setSubmitted(subRes);
