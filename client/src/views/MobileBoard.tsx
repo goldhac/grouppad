@@ -237,10 +237,25 @@ export function MobileBoard() {
     );
   }
 
+  // Always-visible split control — every card shows a /person price, so the
+  // group size shouldn't be buried in the filter sheet.
+  const splitBar = (
+    <div className="splitbar">
+      <span className="sb-lab"><Icon icon={Users} className="ico" /> Splitting between</span>
+      <div className="sb-step">
+        <button aria-label="Fewer people" onClick={() => setSplit(Math.max(2, split - 1))} disabled={split <= 2}><Icon icon={Minus} className="ico" /></button>
+        <span className="sb-n tnum">{split}</span>
+        <button aria-label="More people" onClick={() => setSplit(Math.min(30, split + 1))} disabled={split >= 30}><Icon icon={Plus} className="ico" /></button>
+      </div>
+      <span className="sb-hint">sets every /person price</span>
+    </div>
+  );
+
   // ---- views ----
   const homeView = (
     <>
       {pulse}
+      {splitBar}
       <div className="sec">
         <div className="sec-h"><span className="t">Recommended</span><span className="c tnum">Top {Math.min(10, visible.length)}</span></div>
         <div className="sec-sub">{aiRankLoading ? 'Scout is ranking these for your group…' : aiRankIndex.size ? 'Ranked by Scout across all sources · within budget · tap a home for the breakdown' : 'Ranked for your group · within budget · tap a home for the breakdown'}</div>
@@ -530,7 +545,6 @@ export function MobileBoard() {
               ))}
             </div></div>
             <div className="sh-sec"><div className="lbl">Sleeps at least</div><div className="split-row"><input type="range" min={0} max={20} value={filters.sleeps} onChange={(e) => setFilters((f) => ({ ...f, sleeps: Number(e.target.value) }))} /><span className="val tnum">{filters.sleeps || 'any'}</span></div></div>
-            <div className="sh-sec"><div className="lbl">Split cost between</div><div className="split-row"><input type="range" min={2} max={20} value={split} onChange={(e) => setSplit(Number(e.target.value))} /><span className="val tnum">{split} people</span></div></div>
             <div className="sh-foot"><button className="btn btn-ghost" onClick={() => { setFilters(DEFAULT_FILTERS); }}>Reset</button><button className="btn btn-primary" onClick={() => setSheet(null)}>Show {Math.min(10, visible.length)} homes</button></div>
           </div>
         </>

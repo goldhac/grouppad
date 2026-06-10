@@ -272,6 +272,18 @@
 }
 .gp-mobile .filterbar .count { margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--text-muted); }
 
+/* Always-visible per-person split control (top of the home view) */
+.gp-mobile .splitbar { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; padding: 9px 12px; border-radius: var(--r-lg); background: var(--surface-raised); border: 1px solid var(--border); }
+.gp-mobile .splitbar .sb-lab { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 650; color: var(--text); white-space: nowrap; }
+.gp-mobile .splitbar .sb-lab .ico { width: 15px; height: 15px; color: var(--accent-text); }
+.gp-mobile .splitbar .sb-step { display: inline-flex; align-items: center; gap: 2px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 2px; }
+.gp-mobile .splitbar .sb-step button { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; color: var(--accent-text); border-radius: 50%; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.gp-mobile .splitbar .sb-step button:active { background: var(--accent-tint); }
+.gp-mobile .splitbar .sb-step button:disabled { color: var(--text-faint); opacity: 0.5; }
+.gp-mobile .splitbar .sb-step button .ico { width: 16px; height: 16px; }
+.gp-mobile .splitbar .sb-n { min-width: 22px; text-align: center; font-size: 15px; font-weight: 800; color: var(--text); }
+.gp-mobile .splitbar .sb-hint { margin-left: auto; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+
 .gp-mobile .sec-head { display: flex; align-items: center; gap: 11px; cursor: pointer; padding: 12px 4px; user-select: none; }
 .gp-mobile .sec-head .chev { color: var(--text-muted); transition: transform var(--dur-base) var(--ease-standard); }
 .gp-mobile .sec-head.collapsed .chev { transform: rotate(-90deg); }
