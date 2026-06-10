@@ -38,6 +38,8 @@ export interface TripView extends Trip {
   id: string;
   name: string;
   isOwner: boolean;
+  /** The original creator: can delete the trip and manage organizers. */
+  isCreator?: boolean;
   isMember: boolean;
   memberCount: number;
   created_at?: string;
@@ -46,6 +48,7 @@ export interface TripView extends Trip {
   // organizer-only fields
   join_code?: string;
   members?: string[];
+  organizers?: string[];
   owner_id?: string;
 }
 
@@ -67,6 +70,8 @@ export interface TripMember {
   email: string;
   avatar?: string | null;
   role: 'organizer' | 'member';
+  /** The original creator (cannot be demoted or removed). */
+  isCreator?: boolean;
   isYou: boolean;
 }
 

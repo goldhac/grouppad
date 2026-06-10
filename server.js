@@ -317,21 +317,31 @@ function addMember(tripId, userId) {
   if (!t.members.includes(userId)) { t.members.push(userId); saveTrips(trips); }
   return t;
 }
-function isOwner(trip, user)  { return !!user && !!trip && trip.owner_id === user.id; }
+// The trip CREATOR (can delete the trip + manage organizers). Stays fixed.
+function isCreator(trip, user) { return !!user && !!trip && trip.owner_id === user.id; }
+// An ORGANIZER = the creator OR anyone the creator/another organizer promoted.
+// Organizers share every board power except deleting the trip.
+function isOrganizer(trip, user) {
+  return !!user && !!trip && (trip.owner_id === user.id || (Array.isArray(trip.organizers) && trip.organizers.includes(user.id)) || isSuperAdmin(user));
+}
+function isOwner(trip, user)  { return isOrganizer(trip, user); } // back-compat: "owner" UI = organizer powers
 function isMember(trip, user) { return !!user && !!trip && Array.isArray(trip.members) && trip.members.includes(user.id); }
 // A member-safe public view of a trip for a given caller (never leaks join_code
 // unless the caller is the owner).
 function tripView(trip, user) {
   if (!trip) return null;
-  const { join_code, members, owner_id, ...rest } = trip;
-  const owner = isOwner(trip, user);
+  const { join_code, members, organizers, owner_id, ...rest } = trip;
+  const organizer = isOrganizer(trip, user);
   return {
     ...rest,
-    isOwner: owner,
+    // isOwner stays the "organizer powers" flag the client gates on; isCreator
+    // is the narrower creator-only flag (delete trip, manage organizers).
+    isOwner: organizer,
+    isCreator: isCreator(trip, user),
     isMember: isMember(trip, user),
     memberCount: Array.isArray(members) ? members.length : 0,
-    // Only the organizer sees the invite code, the member list, and owner id.
-    ...(owner ? { join_code, members, owner_id } : {}),
+    // Organizers see the invite code, member list, owner id, and organizer list.
+    ...(organizer ? { join_code, members, organizers: organizers || [], owner_id } : {}),
   };
 }
 
@@ -427,7 +437,16 @@ function requireTripOwner(req, res, next) {
   const trip = getTrip(req.params.tripId);
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
   if (!req.user) return res.status(401).json({ error: 'Sign in to do that.' });
-  if (trip.owner_id !== req.user.id) return res.status(403).json({ error: 'Only the trip organizer can do that.' });
+  if (!isOrganizer(trip, req.user)) return res.status(403).json({ error: 'Only a trip organizer can do that.' });
+  req.trip = trip;
+  next();
+}
+// Stricter gate for creator-only actions (delete the trip, manage organizers).
+function requireTripCreator(req, res, next) {
+  const trip = req.trip || getTrip(req.params.tripId);
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  if (!req.user) return res.status(401).json({ error: 'Sign in to do that.' });
+  if (!isCreator(trip, req.user) && !isSuperAdmin(req.user)) return res.status(403).json({ error: 'Only the trip creator can do that.' });
   req.trip = trip;
   next();
 }
@@ -3254,20 +3273,24 @@ app.post('/api/trips/:tripId/invite', requireTripOwner, rateLimit({ windowMs: 60
 app.get('/api/trips/:tripId/members', requireTripOwner, (req, res) => {
   const trip = req.trip;
   const users = loadUsers();
+  const orgs = Array.isArray(trip.organizers) ? trip.organizers : [];
   const list = (trip.members || []).map((id) => {
     const u = users[id] || {};
+    const creator = id === trip.owner_id;
     return {
       id,
       name: u.name || (u.email ? u.email.split('@')[0] : 'Member'),
       email: u.email || '',
       avatar: u.avatar || null,
-      role: id === trip.owner_id ? 'organizer' : 'member',
+      role: creator || orgs.includes(id) ? 'organizer' : 'member',
+      isCreator: creator,
       isYou: id === req.user.id,
     };
   });
-  // organizer first, then alphabetical
-  list.sort((a, b) => (a.role === 'organizer' ? -1 : b.role === 'organizer' ? 1 : a.name.localeCompare(b.name)));
-  res.json({ members: list });
+  // creator first, then other organizers, then members alphabetical
+  const rank = (m) => (m.isCreator ? 0 : m.role === 'organizer' ? 1 : 2);
+  list.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+  res.json({ members: list, canManageOrganizers: isCreator(trip, req.user) });
 });
 
 // Organizer: edit trip settings. Members keep their votes.
@@ -3299,27 +3322,65 @@ app.patch('/api/trips/:tripId', requireTripOwner, (req, res) => {
   res.json(tripView(trip, req.user));
 });
 
-// Organizer: hand the organizer role to another member.
-app.post('/api/trips/:tripId/transfer', requireTripOwner, (req, res) => {
+// Creator: hand the CREATOR role to another member (full handover). The old
+// creator stays on as a co-organizer so they keep their powers.
+app.post('/api/trips/:tripId/transfer', requireTripCreator, (req, res) => {
   const trips = loadTrips();
   const trip = trips[req.params.tripId];
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
   const userId = String((req.body && req.body.userId) || '');
   if (!userId || !(trip.members || []).includes(userId))
     return res.status(400).json({ error: 'That person is not a member of this trip.' });
+  const prevCreator = trip.owner_id;
+  trip.organizers = (trip.organizers || []).filter((id) => id !== userId); // new creator no longer needs to be listed
+  if (prevCreator && prevCreator !== userId && !trip.organizers.includes(prevCreator)) trip.organizers.push(prevCreator);
   trip.owner_id = userId;
   saveTrips(trips);
   res.json(tripView(trip, req.user));
 });
 
-// Organizer: remove a member from the trip (cannot remove the organizer).
+// Organizer: promote a member to co-organizer (organizers can create organizers).
+app.post('/api/trips/:tripId/organizers', requireTripOwner, (req, res) => {
+  const trips = loadTrips();
+  const trip = trips[req.params.tripId];
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const userId = String((req.body && req.body.userId) || '');
+  if (!userId || !(trip.members || []).includes(userId))
+    return res.status(400).json({ error: 'That person needs to join the trip first.' });
+  if (userId === trip.owner_id) return res.status(400).json({ error: 'The creator is already an organizer.' });
+  trip.organizers = trip.organizers || [];
+  if (!trip.organizers.includes(userId)) trip.organizers.push(userId);
+  saveTrips(trips);
+  res.json(tripView(trip, req.user));
+});
+
+// Demote a co-organizer back to member. The creator can demote anyone; an
+// organizer may step themselves down. The creator can never be demoted.
+app.post('/api/trips/:tripId/organizers/remove', requireTripOwner, (req, res) => {
+  const trips = loadTrips();
+  const trip = trips[req.params.tripId];
+  if (!trip) return res.status(404).json({ error: 'Trip not found' });
+  const userId = String((req.body && req.body.userId) || '');
+  if (userId === trip.owner_id) return res.status(400).json({ error: 'The trip creator cannot be removed as organizer.' });
+  const allowed = isCreator(trip, req.user) || userId === req.user.id; // creator, or stepping down
+  if (!allowed) return res.status(403).json({ error: 'Only the trip creator can remove another organizer.' });
+  trip.organizers = (trip.organizers || []).filter((id) => id !== userId);
+  saveTrips(trips);
+  res.json(tripView(trip, req.user));
+});
+
+// Organizer: remove a member from the trip. The creator can never be removed,
+// and a co-organizer can only be removed by the creator.
 app.post('/api/trips/:tripId/members/remove', requireTripOwner, (req, res) => {
   const trips = loadTrips();
   const trip = trips[req.params.tripId];
   if (!trip) return res.status(404).json({ error: 'Trip not found' });
   const userId = String((req.body && req.body.userId) || '');
-  if (userId === trip.owner_id) return res.status(400).json({ error: 'The organizer cannot be removed.' });
+  if (userId === trip.owner_id) return res.status(400).json({ error: 'The trip creator cannot be removed.' });
+  const isOrg = Array.isArray(trip.organizers) && trip.organizers.includes(userId);
+  if (isOrg && !isCreator(trip, req.user)) return res.status(403).json({ error: 'Only the creator can remove another organizer.' });
   trip.members = (trip.members || []).filter((id) => id !== userId);
+  trip.organizers = (trip.organizers || []).filter((id) => id !== userId);
   saveTrips(trips);
   res.json({ ok: true });
 });
@@ -3406,7 +3467,7 @@ app.get('/api/trips/:tripId/search-status', loadTripOr404, (req, res) => {
 });
 
 // Delete a trip (organizer only). Removes the registry entry + all per-trip data.
-app.delete('/api/trips/:tripId', requireTripOwner, (req, res) => {
+app.delete('/api/trips/:tripId', requireTripCreator, (req, res) => {
   const id = req.params.tripId;
   if (id === LA_TRIP_ID) return res.status(400).json({ error: 'The default trip cannot be deleted.' });
   const trips = loadTrips();

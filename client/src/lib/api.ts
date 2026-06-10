@@ -110,7 +110,11 @@ export const api = {
   tripPulse: (tripId: string) => request<TripPulse>(`${t(tripId)}/pulse`),
   invite: (tripId: string, emails: string) =>
     request<{ sent: number; attempted: number }>(`${t(tripId)}/invite`, { method: 'POST', body: { emails } }),
-  members: (tripId: string) => request<{ members: TripMember[] }>(`${t(tripId)}/members`),
+  members: (tripId: string) => request<{ members: TripMember[]; canManageOrganizers: boolean }>(`${t(tripId)}/members`),
+  makeOrganizer: (tripId: string, userId: string) =>
+    request<TripView>(`${t(tripId)}/organizers`, { method: 'POST', body: { userId } }),
+  removeOrganizer: (tripId: string, userId: string) =>
+    request<TripView>(`${t(tripId)}/organizers/remove`, { method: 'POST', body: { userId } }),
   patchTrip: (tripId: string, patch: Partial<CreateTripInput> & { voting_closed?: boolean }) =>
     request<TripView>(t(tripId), { method: 'PATCH', body: patch }),
   transferOrganizer: (tripId: string, userId: string) =>

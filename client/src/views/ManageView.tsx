@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Settings, MapPin, Calendar, Users, LayoutGrid, Link2, Copy, Check, Send, ShieldCheck,
+  ArrowLeft, Settings, MapPin, Calendar, Users, LayoutGrid, Link2, Copy, Check, Send, ShieldCheck, ShieldOff, UserPlus,
   SlidersHorizontal, ChevronDown, AlertCircle, CheckCircle2, Crown, UserMinus, Activity, Home,
   ThumbsUp, Star, Info, AlertTriangle, LockOpen, Square, Trash2, BadgeCheck,
 } from 'lucide-react';
@@ -23,7 +23,7 @@ function fmtRange(a?: string | null, b?: string | null) {
   const [yb, mb, db] = b.split('-').map(Number);
   return `${s} – ${ma === mb ? db : `${MON[mb - 1]} ${db}`}, ${yb || ya}`;
 }
-type ConfirmKind = 'reset' | 'close' | 'transfer' | 'remove' | 'delete';
+type ConfirmKind = 'reset' | 'close' | 'transfer' | 'promote' | 'demote' | 'remove' | 'delete';
 interface ConfirmState { kind: ConfirmKind; member?: TripMember; }
 
 export function ManageView() {
@@ -126,7 +126,9 @@ export function ManageView() {
     try {
       if (c.kind === 'reset') { await setDecision(null); toast('Official pick reset. The group can keep deciding.', 'success'); api.tripPulse(trip!.id).then(setPulse).catch(() => {}); }
       else if (c.kind === 'close') { const next = !trip!.voting_closed; await api.patchTrip(trip!.id, { voting_closed: next }); await enterTrip(trip!.id); toast(next ? 'Voting closed. Reopen it whenever you like.' : 'Voting reopened.', 'success'); }
-      else if (c.kind === 'transfer' && c.member) { await api.transferOrganizer(trip!.id, c.member.id); toast(`${c.member.name} is now the organizer.`, 'success'); await enterTrip(trip!.id); navigate(`/t/${trip!.id}/board`); }
+      else if (c.kind === 'transfer' && c.member) { await api.transferOrganizer(trip!.id, c.member.id); toast(`${c.member.name} is now the trip creator.`, 'success'); await enterTrip(trip!.id); navigate(`/t/${trip!.id}/board`); }
+      else if (c.kind === 'promote' && c.member) { await api.makeOrganizer(trip!.id, c.member.id); setMembers((m) => m.map((x) => x.id === c.member!.id ? { ...x, role: 'organizer' } : x)); toast(`${c.member.name} is now an organizer.`, 'success'); }
+      else if (c.kind === 'demote' && c.member) { await api.removeOrganizer(trip!.id, c.member.id); setMembers((m) => m.map((x) => x.id === c.member!.id ? { ...x, role: 'member' } : x)); toast(`${c.member.name} is a member again.`, 'success'); }
       else if (c.kind === 'remove' && c.member) { await api.removeMember(trip!.id, c.member.id); setMembers((m) => m.filter((x) => x.id !== c.member!.id)); toast('Member removed from the trip.', 'success'); }
       else if (c.kind === 'delete' && typedOk) { await deleteTrip(trip!.id); toast('Trip deleted.', 'success'); navigate('/trips'); }
     } catch (e) { toast(e instanceof Error ? e.message : 'Something went wrong.', 'error'); }
@@ -180,16 +182,35 @@ export function ManageView() {
                   <div className="who">
                     <div className="nm">
                       {m.name}
-                      {m.role === 'organizer' ? <span className="role-badge org"><Icon icon={Crown} className="ico" /> Organizer</span> : <span className="role-badge mem">Member</span>}
+                      {m.isCreator
+                        ? <span className="role-badge org"><Icon icon={Crown} className="ico" /> Creator</span>
+                        : m.role === 'organizer'
+                          ? <span className="role-badge org"><Icon icon={ShieldCheck} className="ico" /> Organizer</span>
+                          : <span className="role-badge mem">Member</span>}
                     </div>
                     <div className="em">{m.email || '—'}</div>
                   </div>
-                  {m.isYou ? <span className="you-tag">That’s you</span> : m.role === 'member' ? (
-                    <div className="m-actions">
-                      <button className="icon-btn gold" title="Transfer organizer" onClick={() => setConfirm({ kind: 'transfer', member: m })}><Icon icon={Crown} className="ico" /></button>
+                  <div className="m-actions">
+                    {/* Promote a member to organizer — any organizer can do this. */}
+                    {!m.isYou && !m.isCreator && m.role === 'member' && (
+                      <button className="icon-btn gold" title="Make organizer" onClick={() => setConfirm({ kind: 'promote', member: m })}><Icon icon={UserPlus} className="ico" /></button>
+                    )}
+                    {/* Creator-only: transfer creator, demote an organizer, remove anyone. */}
+                    {trip.isCreator && !m.isYou && !m.isCreator && m.role === 'organizer' && (
+                      <button className="icon-btn" title="Remove organizer role" onClick={() => setConfirm({ kind: 'demote', member: m })}><Icon icon={ShieldOff} className="ico" /></button>
+                    )}
+                    {trip.isCreator && !m.isYou && !m.isCreator && m.role === 'member' && (
+                      <button className="icon-btn gold" title="Make trip creator" onClick={() => setConfirm({ kind: 'transfer', member: m })}><Icon icon={Crown} className="ico" /></button>
+                    )}
+                    {trip.isCreator && !m.isYou && !m.isCreator && (
                       <button className="icon-btn danger" title="Remove from trip" onClick={() => setConfirm({ kind: 'remove', member: m })}><Icon icon={UserMinus} className="ico" /></button>
-                    </div>
-                  ) : null}
+                    )}
+                    {/* Step yourself down (if you're a co-organizer, not the creator). */}
+                    {m.isYou && m.role === 'organizer' && !m.isCreator && (
+                      <button className="icon-btn" title="Step down as organizer" onClick={() => setConfirm({ kind: 'demote', member: m })}><Icon icon={ShieldOff} className="ico" /> Step down</button>
+                    )}
+                    {m.isYou && !(m.role === 'organizer' && !m.isCreator) && <span className="you-tag">That’s you</span>}
+                  </div>
                 </div>
               ))}
               {members.length === 0 && <p className="py-3 text-sm text-text-muted">Just you so far. Share the invite link to bring your group in.</p>}
@@ -298,7 +319,9 @@ function SetField({ k, label, full, invalid, err, children }: { k: string; label
 const CONFIRMS: Record<ConfirmKind, { glyph: typeof Crown; tone: string; title: string; sub: string; cta: string; btn: string; typed?: boolean }> = {
   reset: { glyph: LockOpen, tone: 'gold', title: 'Reset the official pick?', sub: 'The group can keep deciding. All votes are kept.', cta: 'Reset pick', btn: 'btn-primary' },
   close: { glyph: Square, tone: 'warn', title: 'Close voting for everyone?', sub: 'Likes and top-choices freeze. You can reopen voting anytime.', cta: 'Close voting', btn: 'btn-primary' },
-  transfer: { glyph: Crown, tone: 'gold', title: 'Transfer organizer?', sub: 'They take over managing this trip. You become a regular member.', cta: 'Transfer', btn: 'btn-primary' },
+  transfer: { glyph: Crown, tone: 'gold', title: 'Make them the trip creator?', sub: 'They take over as creator and can delete the trip. You stay on as an organizer.', cta: 'Transfer', btn: 'btn-primary' },
+  promote: { glyph: UserPlus, tone: 'gold', title: 'Make this member an organizer?', sub: 'Organizers can manage the board, lock the pick, invite people, and promote others. They cannot delete the trip.', cta: 'Make organizer', btn: 'btn-primary' },
+  demote: { glyph: ShieldOff, tone: 'warn', title: 'Remove organizer role?', sub: 'They go back to being a regular member and keep their votes.', cta: 'Remove role', btn: 'btn-primary' },
   remove: { glyph: UserMinus, tone: 'danger', title: 'Remove this member?', sub: 'They lose access to the board. They can rejoin with the invite link.', cta: 'Remove', btn: 'btn-dz' },
   delete: { glyph: Trash2, tone: 'danger', title: 'Delete this trip?', sub: 'This removes the board, listings, votes, and everything else for everyone. It can’t be undone.', cta: 'Delete trip', btn: 'btn-dz', typed: true },
 };
