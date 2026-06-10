@@ -1,17 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Swords, Heart, Lightbulb, AlertCircle, ChevronDown } from 'lucide-react';
+import { Swords, Heart, Lightbulb, AlertCircle, ChevronDown, Send, X } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
+import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
 import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
 import { ScoutThinking } from '@/components/ui/ScoutThinking';
 import { Card } from '@/components/Card';
+import { Markdown } from '@/components/Markdown';
 import { ScoutVerdict } from '@/components/board/ScoutVerdict';
+import { toInput } from '@/hooks/useCompare';
 import { netVotes, mansionScore, fmt } from '@/lib/utils';
 import type { CompareController } from '@/hooks/useCompare';
 import type { Listing } from '@/types';
 
 export function ShortlistSection({ compare }: { compare: CompareController }) {
-  const { shortlistIds, findListing, votes, selected, insights, trip, clearSelection, final } = useApp();
+  const { shortlistIds, findListing, votes, selected, insights, trip, clearSelection, final, user, openAuth } = useApp();
+
+  // Personal "ask Scout a question" lane — answered just for this member, never
+  // cached, so it never changes the group's shared analysis.
+  const [ask, setAsk] = useState('');
+  const [askBusy, setAskBusy] = useState(false);
+  const [askAns, setAskAns] = useState<string | null>(null);
+  const [askErr, setAskErr] = useState<string | null>(null);
 
   const shortlist = useMemo(() => {
     const decided = final.decision?.listing_id;
@@ -49,6 +59,22 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
     'Pool + parking',
   ];
 
+  async function askPersonal() {
+    const q = ask.trim();
+    if (!q || !trip) return;
+    if (!user) { openAuth('ask Scout'); return; }
+    setAskBusy(true); setAskErr(null);
+    try {
+      const res = await api.askScout(trip.id, shortlist.map(toInput), q);
+      setAskAns(res.answer);
+      setAsk('');
+    } catch (e) {
+      setAskErr(e instanceof Error ? e.message : 'Scout could not answer right now.');
+    } finally {
+      setAskBusy(false);
+    }
+  }
+
   if (shortlist.length === 0) {
     return (
       <section className="flex flex-col items-center gap-3 py-16 text-center">
@@ -76,7 +102,7 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
           <div className="sb-mark"><ScoutMark className="ico" /></div>
           <div className="min-w-0">
             <div className="sb-t">Ask {AI_NAME} to rank your {shortlist.length} finalists</div>
-            <div className="sb-s">Weighs budget, distance, and your group’s approved criteria, then explains the call.</div>
+            <div className="sb-s">Weighs budget, distance, and your group’s criteria, then explains the call. Or ask your own question below, just for you.</div>
           </div>
           <div className="sb-cta">
             <button className="btn btn-primary btn-sm" disabled={compare.running} onClick={() => void compare.runWhole(shortlist)}>
@@ -95,15 +121,33 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
         </div>
         <div className="sb-foot">
           <div className="sb-crit">{crit.map((c) => <span key={c} className="c">{c}</span>)}</div>
-          <input
-            type="text"
-            value={compare.criteria}
-            onChange={(e) => compare.setCriteria(e.target.value)}
-            placeholder="Add anything else to weigh…"
-            className="field"
-          />
+          <div className="sb-ask">
+            <input
+              type="text"
+              value={ask}
+              onChange={(e) => setAsk(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void askPersonal(); }}
+              placeholder="Ask Scout anything, e.g. which is closest to the beach?"
+              className="field"
+              disabled={askBusy}
+            />
+            <button className="btn btn-primary btn-sm sb-ask-send" disabled={askBusy || !ask.trim()} onClick={() => void askPersonal()} aria-label="Ask Scout">
+              {askBusy ? <ScoutThinking size="sm" /> : <><Icon icon={Send} className="ico" /> Ask</>}
+            </button>
+          </div>
         </div>
-        {compare.error && !compare.comparedListings && <p className="text-sm text-danger">{compare.error}</p>}
+        {(compare.error && !compare.comparedListings) && <p className="text-sm text-danger">{compare.error}</p>}
+        {askErr && <p className="text-sm text-danger">{askErr}</p>}
+        {askAns && (
+          <div className="sb-answer">
+            <div className="sb-answer-h">
+              <ScoutMark className="ico" /> Just for you
+              <span className="sb-answer-tag">private · not shared with the group</span>
+              <button className="sb-answer-x" onClick={() => setAskAns(null)} aria-label="Dismiss"><Icon icon={X} className="ico" /></button>
+            </div>
+            <div className="sb-answer-body"><Markdown text={askAns} /></div>
+          </div>
+        )}
       </div>
 
       {/* ── Scout's full analysis (expandable) ────────────────────────────── */}

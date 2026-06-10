@@ -618,6 +618,14 @@
 .gp-mobile .ai-card .ins b { color: var(--text); font-weight: 600; }
 .gp-mobile .ai-card .acts { display: flex; gap: 9px; margin-top: 13px; }
 .gp-mobile .ai-card .acts .btn { flex: 1; }
+.gp-mobile .ai-card .ai-ask { display: flex; gap: 8px; margin-top: 10px; }
+.gp-mobile .ai-card .ai-ask .field { flex: 1; min-width: 0; min-height: 40px; background: var(--surface-raised); }
+.gp-mobile .ai-card .ai-ask .btn { flex: none; width: 44px; padding: 0; }
+.gp-mobile .ai-card .ai-answer { margin-top: 10px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-md); padding: 11px 13px; font-size: 13px; line-height: 1.55; color: var(--text); }
+.gp-mobile .ai-card .ai-answer-h { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--accent-text); margin-bottom: 6px; }
+.gp-mobile .ai-card .ai-answer-h .ico { width: 14px; height: 14px; }
+.gp-mobile .ai-card .ai-answer-h span { font-weight: 500; color: var(--text-muted); }
+.gp-mobile .ai-card .ai-answer-h button { margin-left: auto; display: inline-flex; padding: 2px; border: none; background: transparent; color: var(--text-muted); }
 
 .gp-mobile .lb { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 16px; box-shadow: var(--shadow-sm); }
 .gp-mobile .lb-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 13px; }

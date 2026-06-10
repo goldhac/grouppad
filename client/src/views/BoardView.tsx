@@ -33,13 +33,14 @@ type Tab = 'all' | 'shortlist' | 'saved' | 'decision' | 'discussion';
 const BOARD_TOUR: TourStep[] = [
   { target: '.b-controls .tabbar', title: 'Your group’s board', body: 'Everything for this trip lives in these tabs: browse, vote, compare, and decide.' },
   { target: '.b-grid article.card .ai-why', title: 'Scout ranks every home', body: 'Homes are sorted best-to-worst for your itinerary, budget, and must-haves. This line is Scout’s reason each one ranks where it does.' },
-  { target: '.b-grid article.card .card-money', title: 'The number that ends the debate', body: 'Every home shows the all-in cost and exactly what each person pays.' },
+  { target: '.b-grid article.card .card-money', title: 'The number that ends the debate', body: 'Every home shows the all-in total and exactly what each person pays for five nights, taxes and cleaning folded in.' },
+  { target: '.b-toolbar .split-pill', title: 'Set your group size', body: 'Tap minus or plus to change how many people are splitting the cost. Every per-person price on the board updates instantly, and it remembers your number next time.' },
   { target: '.b-grid article.card .votebar', title: 'Vote in the open', body: 'Thumbs-up the ones you like. At net +1, a home rises into the group’s Shortlist.' },
   { target: '.b-grid article.card .cbx', title: 'Compare with Scout', body: 'Tick two or more homes, then Compare for a side-by-side with Scout’s verdict. Open a home for an AI video walkthrough, map, and reviews.' },
   { target: '.row-tint.community', title: 'Community submissions', body: 'Homes anyone pastes in land here. The same villa from two different sites is merged automatically.' },
   { target: '.b-grid article.card .save-btn', title: 'Save your own picks', body: 'Bookmark homes to your private Saved list that only you see. Ask Scout to rank just yours.' },
   { target: '.b-toolbar .filters-btn', title: 'Filter to what fits', body: 'Narrow by budget, pool, parking, hot tub, or a minimum sleeps. Filters stick across refreshes.' },
-  { target: '[data-tab="shortlist"]', title: 'Let Scout decide', body: 'In Shortlist, ask Scout to rank the finalists against your group’s approved criteria.' },
+  { target: '[data-tab="shortlist"]', title: 'Let Scout decide', body: 'In Shortlist, ask Scout to rank the finalists against your group’s criteria. There’s also a box to ask Scout your own question, answered just for you and never shared with the group.' },
   { target: '[data-tab="discussion"]', title: 'Tell Scout what matters', body: 'Request a must-have in Discussion. The organizer approves it, then Scout weighs it.' },
   { target: '[data-tab="decision"]', title: 'Lock the official pick', body: 'Everyone casts one top choice; the organizer seals the winner with the gold lock.' },
 ];

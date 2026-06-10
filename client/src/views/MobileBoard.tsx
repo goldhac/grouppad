@@ -10,7 +10,8 @@ import { useApp, isDeadListing } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { ScoutVerdict } from '@/components/board/ScoutVerdict';
 import { SplitPill } from '@/components/board/SplitPill';
-import { useCompare } from '@/hooks/useCompare';
+import { Markdown } from '@/components/Markdown';
+import { useCompare, toInput } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
 import { MobilePhotoCarousel } from '@/components/MobilePhotoCarousel';
@@ -71,6 +72,19 @@ export function MobileBoard() {
   const [itinEditOpen, setItinEditOpen] = useState(false);
   const [itinDraft, setItinDraft] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  // Personal "ask Scout" lane (not cached, not shared with the group).
+  const [askQ, setAskQ] = useState('');
+  const [askBusy, setAskBusy] = useState(false);
+  const [askAns, setAskAns] = useState<string | null>(null);
+  const askScout = async () => {
+    const q = askQ.trim();
+    if (!q || !trip) return;
+    if (!requireSignIn('ask Scout')) return;
+    setAskBusy(true);
+    try { const res = await api.askScout(trip.id, shortlist.map(toInput), q); setAskAns(res.answer); setAskQ(''); }
+    catch (e) { toast(e instanceof Error ? e.message : 'Scout could not answer right now.', 'error'); }
+    finally { setAskBusy(false); }
+  };
   const refreshHomes = async () => {
     if (!trip || refreshing) return;
     setRefreshing(true);
@@ -297,6 +311,16 @@ export function MobileBoard() {
           ? <button className="btn btn-ghost btn-sm" onClick={() => void compare.runSelected(selected.size === 2 ? '1v1' : 'multi')} disabled={compare.running}><Icon icon={Swords} className="ico" /> Compare {selected.size}</button>
           : <button className="btn btn-ghost btn-sm" disabled><Icon icon={Swords} className="ico" /> 1v1 · pick 2</button>}
       </div>
+      <div className="ai-ask">
+        <input className="field" value={askQ} onChange={(e) => setAskQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void askScout(); }} placeholder="Ask Scout your own question…" disabled={askBusy} />
+        <button className="btn btn-primary btn-sm" onClick={() => void askScout()} disabled={askBusy || !askQ.trim()} aria-label="Ask Scout"><Icon icon={Send} className="ico" /></button>
+      </div>
+      {askAns && (
+        <div className="ai-answer">
+          <div className="ai-answer-h"><Icon icon={Sparkles} className="ico" /> Just for you <span>private</span><button onClick={() => setAskAns(null)} aria-label="Dismiss"><Icon icon={X} className="ico" /></button></div>
+          <Markdown text={askAns} />
+        </div>
+      )}
     </div>
   );
 

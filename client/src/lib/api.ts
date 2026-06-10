@@ -157,6 +157,12 @@ export const api = {
       method: 'POST',
       body: { listings, criteria, ...(mode ? { mode } : {}) },
     }),
+  /** A member's personal question about the shortlist — not cached, not shared. */
+  askScout: (tripId: string, listings: CompareListingInput[], question: string) =>
+    request<{ answer: string }>(`${t(tripId)}/ask-scout`, {
+      method: 'POST',
+      body: { listings, question },
+    }),
   aiRank: (tripId: string, listings: Partial<Listing>[]) =>
     request<{ order: { id: string; why: string | null }[]; ranked_at: string | null; fallback?: boolean; cached?: boolean }>(
       `${t(tripId)}/ai-rank`,

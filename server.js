@@ -2607,6 +2607,57 @@ Write like a sharp friend, not a brochure. No em dashes.`;
 app.post('/api/compare-listings', requireAuth, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
 app.post('/api/trips/:tripId/compare-listings', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 10 }), hCompare);
 
+// ── Ask Scout: a member's PERSONAL question about the shortlist ────────────────
+// Conversational, scoped to this caller, and never cached — so it does not touch
+// the trip-wide analysis everyone else sees.
+const hAskScout = async (req, res) => {
+  const tripId = req.params.tripId;
+  if (!GEMINI_API_KEY) return res.status(503).json({ error: 'Scout is not configured right now.' });
+  if (!geminiGuard()) return res.status(429).json({ error: 'Scout has reached its usage limit for this month. Try again later.' });
+  const { listings, question } = req.body || {};
+  const q = String(question || '').trim();
+  if (!q) return res.status(400).json({ error: 'Type a question first.' });
+  if (q.length > 600) return res.status(400).json({ error: 'Keep the question a little shorter.' });
+
+  const trip = getTrip(tripId) || {};
+  const adults = trip.adults || 14;
+  const dest = trip.destination || 'their destination';
+  const itinerary = loadItinerary(tripId).text || '';
+  const compact = (Array.isArray(listings) ? listings : []).slice(0, 12).map((l, i) => ({
+    n: i + 1, name: l.name, beds: l.bd, baths: l.ba, sleeps: l.sleeps, area: l.area,
+    miFromDTLA: l.distance_mi, est_all_in_5n: l.est_5n, pool: l.pool === 'yes',
+    hot_tub: l.hot_tub === 'yes', parking: l.parking === 'yes', rating: l.rating, reviews: l.reviews,
+  }));
+
+  const prompt = `You are Scout, helping ONE member of a group of ${adults} planning a trip to ${dest}. They are asking YOU a quick question about their shortlisted homes. Answer just them.
+
+Shortlisted homes (JSON):
+${JSON.stringify(compact, null, 1)}
+${itinerary ? `\nThe group's trip plans:\n${String(itinerary).slice(0, 2000)}\n` : ''}
+Their question: "${q}"
+
+Reply in 2 to 4 short sentences. Refer to homes by name. If the data does not answer it, say so plainly. Write like a sharp friend texting back, not a brochure. No "great question", no preamble, no em dashes.`;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const r = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.5, maxOutputTokens: 600, thinkingConfig: { thinkingBudget: 0 } } }),
+    });
+    const data = await r.json();
+    if (!r.ok) { console.error('[ask-scout] Gemini', r.status, JSON.stringify(data).slice(0, 200)); return res.status(502).json({ error: 'Scout could not answer that. Try again in a moment.' }); }
+    const um = data.usageMetadata || {};
+    bumpUsage('gemini', { calls: 1, promptTokens: um.promptTokenCount || 0, candidatesTokens: um.candidatesTokenCount || 0, totalTokens: um.totalTokenCount || 0 });
+    const answer = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+    if (!answer) return res.status(502).json({ error: 'Scout had nothing to add there.' });
+    res.json({ answer }); // intentionally NOT cached to insights
+  } catch (e) {
+    console.error('[ask-scout]', e.message);
+    res.status(500).json({ error: 'Scout could not answer right now. Try again in a moment.' });
+  }
+};
+app.post('/api/trips/:tripId/ask-scout', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 15 }), hAskScout);
+
 // ── AI-ranked recommendations ────────────────────────────────────────────────
 // Scout ranks the FULL candidate pool (curated + live + community — the client
 // sends them) by itinerary fit + all facets, with a one-line "why" each. Cached
