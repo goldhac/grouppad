@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useApp } from '@/store/AppContext';
 import { ApiError } from '@/lib/api';
-import type { CompareListingInput, Listing } from '@/types';
+import type { CompareListingInput, Listing, ScoutVerdict } from '@/types';
 
 export function toInput(l: Listing): CompareListingInput {
   return {
@@ -31,6 +31,8 @@ export interface CompareController {
   setCriteria: (v: string) => void;
   /** AI analysis text for the active selection-based comparison (modal). */
   result: string | null;
+  /** Structured verdict for the active comparison (preferred over markdown). */
+  verdict: ScoutVerdict | null;
   /** The listings the active result compares — drives the VS columns. */
   comparedListings: Listing[] | null;
   /** '1v1' shows the head-to-head VS layout; 'multi' shows a column grid. */
@@ -49,6 +51,7 @@ export function useCompare(): CompareController {
   const [panelOpen, setPanelOpen] = useState(false);
   const [criteria, setCriteria] = useState('');
   const [result, setResult] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<ScoutVerdict | null>(null);
   const [comparedListings, setComparedListings] = useState<Listing[] | null>(null);
   const [resultMode, setResultMode] = useState<'1v1' | 'multi' | null>(null);
   const [running, setRunning] = useState(false);
@@ -69,11 +72,13 @@ export function useCompare(): CompareController {
       setRunning(true);
       setError(null);
       setResult(null);
+      setVerdict(null);
       setComparedListings(items);
       setResultMode('multi');
       try {
-        const analysis = await runCompare(items.map(toInput), criteria);
-        setResult(analysis);
+        const res = await runCompare(items.map(toInput), criteria);
+        setResult(res.analysis);
+        setVerdict(res.verdict ?? null);
         setPanelOpen(false);
       } catch (e) {
         setComparedListings(null);
@@ -104,15 +109,17 @@ export function useCompare(): CompareController {
       setRunning(true);
       setError(null);
       setResult(null);
+      setVerdict(null);
       setComparedListings(items);
       setResultMode(mode === '1v1' ? '1v1' : 'multi');
       try {
-        const analysis = await runCompare(
+        const res = await runCompare(
           items.map(toInput),
           criteria,
           mode === '1v1' ? '1v1' : undefined,
         );
-        setResult(analysis);
+        setResult(res.analysis);
+        setVerdict(res.verdict ?? null);
       } catch (e) {
         setComparedListings(null);
         setResultMode(null);
@@ -128,6 +135,7 @@ export function useCompare(): CompareController {
 
   const dismissResult = useCallback(() => {
     setResult(null);
+    setVerdict(null);
     setComparedListings(null);
     setResultMode(null);
     setError(null);
@@ -140,6 +148,7 @@ export function useCompare(): CompareController {
     criteria,
     setCriteria,
     result,
+    verdict,
     comparedListings,
     resultMode,
     running,

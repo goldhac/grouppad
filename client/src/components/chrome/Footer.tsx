@@ -12,7 +12,7 @@ export function Footer() {
             <PeakLogo withWord />
           </Link>
           <p className="mt-2 max-w-xs text-sm text-muted">
-            Plan a group trip together — browse rentals, vote, ask Scout, and lock the winner
+            Plan a group trip together. Browse rentals, vote, ask Scout, and lock the winner
             without the endless group chat.
           </p>
         </div>
@@ -32,7 +32,7 @@ export function Footer() {
 
       <div className="border-t border-border">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-4 text-xs text-muted sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <span>© {YEAR} GroupPad. Prices are estimates — verify totals at the booking step.</span>
+          <span>© {YEAR} GroupPad. Prices are estimates, so verify totals at the booking step.</span>
           <span>Made for group trips.</span>
         </div>
       </div>

@@ -52,7 +52,7 @@ export function CreateTripView() {
     else if (!form.guests || Number(form.guests) < 2) { bad.add('guests'); text = 'How many guests? (2 or more.)'; }
     setInvalid(bad);
     const ok = bad.size === 0;
-    setMsg(ok ? { text: 'Looks good — creating your board…', ok: true } : { text, ok: false });
+    setMsg(ok ? { text: 'Looks good. Creating your board…', ok: true } : { text, ok: false });
     return [...bad];
   }
 
@@ -101,7 +101,7 @@ export function CreateTripView() {
           <div className="ct-head rv in">
             <span className="k"><Sparkles className="ico" /> Start a trip</span>
             <h1>Set the basics.</h1>
-            <p>Where and when — you can share the board with your group right after.</p>
+            <p>Where and when. You can share the board with your group right after.</p>
           </div>
 
           <form onSubmit={submit} noValidate>
@@ -182,7 +182,7 @@ export function CreateTripView() {
                 <div className="ct-field full">
                   <label>Itinerary <span className="hint">(optional)</span></label>
                   <textarea className="field" name="itin"
-                    placeholder="Rough plans help tailor the search — e.g. Fri: arrive + dinner downtown. Sat: pool day. Sun: museum…"
+                    placeholder="Rough plans help tailor the search, e.g. Fri: arrive + dinner downtown. Sat: pool day. Sun: museum…"
                     value={form.itin} onChange={set('itin')} />
                   <span className="sub"><Info className="ico" /> Helps pick nearby reference points and powers Scout, our AI.</span>
                 </div>

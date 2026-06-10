@@ -102,8 +102,8 @@ export function TripsView() {
             <h1>Your trips</h1>
             <p>
               {count === 0
-                ? 'No boards yet — start one and invite your group.'
-                : <>{count} active board{count === 1 ? '' : 's'} — <b>pick up where your group left off.</b></>}
+                ? 'No boards yet. Start one and invite your group.'
+                : <>{count} active board{count === 1 ? '' : 's'}. <b>Pick up where your group left off.</b></>}
             </p>
           </div>
           {count > 0 && (

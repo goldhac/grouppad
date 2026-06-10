@@ -15,10 +15,10 @@ import { useScrollReveal } from '@/lib/useScrollReveal';
 const IMG = (id: string) => `https://images.unsplash.com/photo-${id}?w=1100&q=80&auto=format&fit=crop`;
 
 const LOOP = [
-  { icon: <Icon icon={LayoutGrid} className="ico" />, h: 'Browse together', p: 'Everyone adds the rentals they\'re eyeing to one shared board — curated, scraped, or pasted from any link.' },
-  { icon: <Icon icon={ThumbsUp} className="ico" />, h: 'Vote, see the real cost', p: 'A thumb up floats a home to the shortlist. Every price shows the all-in total and the per-person split, live.' },
-  { icon: <ScoutMark className="ico" />, h: 'Let Scout break the tie', p: 'Run a 1v1 or compare the shortlist — Scout weighs price, distance, and your plans, and explains the call.' },
-  { icon: <Icon icon={Lock} className="ico" />, h: 'Lock the official pick', p: 'Everyone casts one top choice. The organizer seals the winner with a gold lock — debate over.' },
+  { icon: <Icon icon={LayoutGrid} className="ico" />, h: 'Get every option in one place', p: 'Drop in any rental link, or browse the homes we already pulled together. No more ten tabs and a lost group chat.' },
+  { icon: <Icon icon={ThumbsUp} className="ico" />, h: 'Vote, and see what it really costs', p: 'Thumbs up the ones you like. Each home shows the all-in total and what that works out to per person, updated as people join.' },
+  { icon: <ScoutMark className="ico" />, h: 'Ask Scout when you cannot decide', p: 'Put two homes head to head, or hand Scout the whole shortlist. It looks at price, distance, and your plans, then tells you which one it would book and why.' },
+  { icon: <Icon icon={Lock} className="ico" />, h: 'Lock it in', p: 'Everyone picks their favorite. Whoever set up the trip makes it official, and the back-and-forth is done.' },
 ];
 
 export function LandingView() {
@@ -45,19 +45,20 @@ export function LandingView() {
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section className="d1-hero wrap">
         <span className="d1-kicker rv">
-          <span className="golddot-motif" /> Group trips, minus the endless chat
+          <span className="golddot-motif" /> For groups who can never agree on a place
         </span>
         <h1 className="rv d1">
-          Pick the place your whole group <em>actually agrees</em> on.
+          Get your group to <em>actually agree</em> on where to stay.
         </h1>
         <div className="d1-hero-sub">
           <p className="rv d2">
-            GroupPad turns "where should we stay?" into one shared board — add rentals, vote, see the
-            real per-person cost, ask Scout, and lock the winner together.
+            Planning a trip with friends turns into a mess of links and half-answered texts. GroupPad
+            puts every rental on one board so everyone can vote, see what they'd pay, and settle on a place
+            without the 200-message thread.
           </p>
           <div className="cta rv d3">
             <Button variant="primary" size="lg" onClick={primary}>
-              <Plus className="h-[18px] w-[18px]" /> {user ? 'Start a trip' : 'Get started — it\'s free'}
+              <Plus className="h-[18px] w-[18px]" /> {user ? 'Start a trip' : 'Start free'}
             </Button>
             <Button variant="ghost" size="lg" onClick={seeHow}>See how it works</Button>
           </div>
@@ -93,8 +94,8 @@ export function LandingView() {
       <section id="how" className="d1-demo-band wrap">
         <div className="d1-demo-head">
           <div className="l">
-            <div className="d1-chapno">01 — THE CORE LOOP</div>
-            <h2 className="d1-h2 rv">From scattered links to one locked pick.</h2>
+            <div className="d1-chapno">01 · HOW IT WORKS</div>
+            <h2 className="d1-h2 rv">Four steps from "no idea" to booked.</h2>
           </div>
           <span className="try rv"><Icon icon={Sparkles} className="ico" /> Live demo · click around</span>
         </div>
@@ -120,22 +121,22 @@ export function LandingView() {
       <div className="wrap">
         <FeaturePair
           tag="Per person" tagIcon={Users}
-          title="Every home, priced per head."
-          body="No more mental math in the group chat. GroupPad shows the all-in total and what each person actually pays — recomputed live as your group size changes."
+          title="See what you'd actually pay."
+          body="Nobody wants to do the math in their head at 1am. Every home shows the all-in total and your share of it, and both numbers update the moment someone joins or drops out."
           media={<SafeImg src={IMG('1600566753086-00f18fb6b3ea')} alt="A bright, spacious group rental interior" />}
           float={<div className="float pp"><div className="lbl">Per person</div><div className="v tnum"><MoneyCount value={359} /></div></div>}
         />
         <FeaturePair
           flip
           tag="Meet Scout" tagIcon={Swords}
-          title="Let Scout settle the tie."
-          body="Stuck between two? Run a head-to-head and Scout weighs price, distance, and your itinerary — then tells you which wins and why, in plain language."
+          title="Torn between two? Ask Scout."
+          body="Scout is the tie-breaker. Put two homes side by side and it weighs the price, the drive, and what your group actually has planned, then makes the call and tells you how it got there."
           media={<SafeImg src={IMG('1600585152220-90363fe7e115')} alt="A standout vacation home exterior" />}
         />
         <FeaturePair
           tag="Walkthrough" tagIcon={Clapperboard}
-          title="A tour of the best rooms — generated for you."
-          body="The board picks each home's standout spaces and stitches a short walkthrough, so the group feels the place before anyone books a flight."
+          title="Walk through a place before you commit."
+          body="For each home, GroupPad pulls the best rooms into a short video tour. The group gets a real feel for the place before anyone spends a dollar on flights."
           media={
             <video poster="/landing-hero.jpg" autoPlay={!reduce} loop={!reduce} muted playsInline preload="metadata" aria-hidden
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}>
@@ -152,8 +153,8 @@ export function LandingView() {
           <div className="scrim" />
           <div className="c">
             <span className="d1-cta-kicker"><span className="golddot-motif" /> Ready when you are</span>
-            <h2>Your group's next trip starts with one board.</h2>
-            <p>Spin one up in under a minute, share the link, and let everyone weigh in.</p>
+            <h2>Start the board. Send the link. Let them argue it out.</h2>
+            <p>Setting up a trip takes about a minute. Share the link and your group can jump in from anywhere.</p>
             <div className="cta">
               <button className="btn btn-lg btn-onphoto" onClick={primary}>
                 <Plus className="h-[18px] w-[18px]" /> {user ? 'Start a trip' : 'Create your first trip'}

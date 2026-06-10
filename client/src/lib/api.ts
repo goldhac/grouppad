@@ -3,6 +3,7 @@ import type {
   AdminUsage,
   Caveat,
   CompareListingInput,
+  ScoutVerdict,
   CreateTripInput,
   FinalState,
   Insights,
@@ -152,7 +153,7 @@ export const api = {
     request<Caveat[]>(`${t(tripId)}/caveats/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
   insights: (tripId: string) => request<Insights>(`${t(tripId)}/insights`),
   compare: (tripId: string, listings: CompareListingInput[], criteria?: string, mode?: '1v1') =>
-    request<{ analysis: string }>(`${t(tripId)}/compare-listings`, {
+    request<{ analysis: string; verdict?: ScoutVerdict | null }>(`${t(tripId)}/compare-listings`, {
       method: 'POST',
       body: { listings, criteria, ...(mode ? { mode } : {}) },
     }),

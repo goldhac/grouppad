@@ -34,7 +34,7 @@ export function BeyondBudgetSection({ view = 'grid' }: { view?: 'grid' | 'list' 
         <Icon icon={Banknote} className="ico-lead" style={{ color: 'var(--over)' }} />
         <span className="ttl">Beyond the budget</span>
         <span className="cnt tnum">{items.length}</span>
-        <span className="sub">over budget or unpriced — still worth a look</span>
+        <span className="sub">over budget or unpriced · still worth a look</span>
         {items.length > CAP && (
           <button className="seeall" style={{ marginLeft: 'auto' }} onClick={() => setOpen((v) => !v)}>
             {open ? <>Show less <Icon icon={ChevronDown} className="ico" /></> : <>See all {items.length} <Icon icon={ChevronRight} className="ico" /></>}

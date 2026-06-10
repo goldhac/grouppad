@@ -73,7 +73,7 @@ export function DecisionSection() {
               <Icon icon={Trophy} className="ico" />
               <p className="text-sm text-text-muted">
                 No top choices yet. Cast your single <Icon icon={Star} className="ico inline align-text-bottom" /> Top
-                choice on any card — the group’s favourite rises here.
+                choice on any card, and the group’s favourite rises here.
               </p>
             </div>
           ) : (

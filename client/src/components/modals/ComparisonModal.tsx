@@ -6,7 +6,7 @@ import { Icon } from '@/components/ui/Icon';
 import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
 import { ScoutThinking } from '@/components/ui/ScoutThinking';
 import { SafeImg } from '@/components/ui/SafeImg';
-import { Markdown } from '@/components/Markdown';
+import { ScoutVerdict } from '@/components/board/ScoutVerdict';
 import { fmt } from '@/lib/utils';
 import { cn } from '@/lib/cn';
 import type { CompareController } from '@/hooks/useCompare';
@@ -82,7 +82,7 @@ export function ComparisonModal({ compare }: { compare: CompareController }) {
               ) : compare.result ? (
                 <div className="cm-verdict">
                   <div className="vh"><ScoutMark className="ico" /> {AI_NAME}’s verdict</div>
-                  <Markdown text={compare.result} />
+                  <ScoutVerdict verdict={compare.verdict} fallback={compare.result} />
                 </div>
               ) : compare.error ? (
                 <div className="cm-verdict" style={{ background: 'var(--over-bg)', borderColor: 'var(--over-border)' }}>

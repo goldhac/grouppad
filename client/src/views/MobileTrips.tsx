@@ -83,7 +83,7 @@ export function MobileTrips() {
         <div className="mb-scroll" style={{ paddingBottom: 104 }}>
           <div className="tp-title">
             <h1>Your trips</h1>
-            <p>{myTrips.length ? <><b>{myTrips.length} active board{myTrips.length === 1 ? '' : 's'}</b> — pick up where your group left off.</> : 'No boards yet — start one and invite your group.'}</p>
+            <p>{myTrips.length ? <><b>{myTrips.length} active board{myTrips.length === 1 ? '' : 's'}</b>. Pick up where your group left off.</> : 'No boards yet. Start one and invite your group.'}</p>
           </div>
           {myTrips.length > 0 && (
             <div className="tp-seg">

@@ -1,8 +1,12 @@
 import { cn } from '@/lib/cn';
+import { GEN_PREFIX, GENERATED_AVATARS, GeneratedAvatar } from '@/lib/avatar';
 
-/** The fun avatar set (AI-generated, hosted under /avatars). */
+/** The illustrated avatar set (hosted under /avatars). */
 export const AVATARS = ['fox', 'owl', 'bear', 'cat', 'rabbit'] as const;
 export type AvatarId = (typeof AVATARS)[number];
+
+/** Everything offered in the picker: illustrated animals + generated faces. */
+export const AVATAR_CHOICES: string[] = [...AVATARS, ...GENERATED_AVATARS];
 
 function initials(name?: string | null) {
   if (!name) return '?';
@@ -12,6 +16,9 @@ function initials(name?: string | null) {
 
 /** A user's avatar — their chosen picture, or a first+last initials circle. */
 export function Avatar({ name, avatar, size = 32, className }: { name?: string | null; avatar?: string | null; size?: number; className?: string }) {
+  if (avatar && avatar.startsWith(GEN_PREFIX)) {
+    return <GeneratedAvatar seed={avatar} size={size} className={cn('gp-avatar', className)} />;
+  }
   if (avatar && (AVATARS as readonly string[]).includes(avatar)) {
     return (
       <img

@@ -5,8 +5,9 @@ import { Icon } from '@/components/ui/Icon';
 import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
 import { ScoutThinking } from '@/components/ui/ScoutThinking';
 import { Card } from '@/components/Card';
-import { Markdown } from '@/components/Markdown';
+import { ScoutVerdict } from '@/components/board/ScoutVerdict';
 import { toInput } from '@/hooks/useCompare';
+import type { ScoutVerdict as Verdict } from '@/types';
 
 /** Each member's own saved homes — a personal shortlist, separate from the
  *  group's net-voted Shortlist. Includes a *private* "Ask Scout — for me" that
@@ -15,7 +16,8 @@ export function SavedSection() {
   const { favoriteIds, listings, submitted, pipeline, user, openAuth, runCompare, toast } = useApp();
   const [crit, setCrit] = useState('');
   const [running, setRunning] = useState(false);
-  const [verdict, setVerdict] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [verdictMd, setVerdictMd] = useState<string | null>(null);
 
   const homes = useMemo(() => {
     const seen = new Set<string>();
@@ -30,8 +32,11 @@ export function SavedSection() {
     if (homes.length < 2) { toast('Save at least 2 homes to compare them.', 'error'); return; }
     setRunning(true);
     setVerdict(null);
+    setVerdictMd(null);
     try {
-      setVerdict(await runCompare(homes.map(toInput), crit ? `My personal priorities: ${crit}` : ''));
+      const res = await runCompare(homes.map(toInput), crit ? `My personal priorities: ${crit}` : '');
+      setVerdict(res.verdict ?? null);
+      setVerdictMd(res.analysis);
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Scout couldn’t compare right now.', 'error');
     } finally {
@@ -62,7 +67,7 @@ export function SavedSection() {
           <Icon icon={Bookmark} className="ico" />
           <p className="text-text-muted">
             Nothing saved yet. Tap the <Icon icon={Bookmark} className="ico inline align-text-bottom" /> on any home to keep
-            it here — your own shortlist for tracking favourites before the group locks one.
+            it here. It's your own shortlist for tracking favourites before the group locks one.
           </p>
         </div>
       ) : (
@@ -72,12 +77,12 @@ export function SavedSection() {
             <div className="sb-head">
               <div className="sb-mark"><ScoutMark className="ico" /></div>
               <div className="min-w-0">
-                <div className="sb-t">{AI_NAME} — just for you</div>
-                <div className="sb-s">Rank your {homes.length} saved {homes.length === 1 ? 'home' : 'homes'} by what <em>you</em> care about. Private — not shared with the group.</div>
+                <div className="sb-t">{AI_NAME} · just for you</div>
+                <div className="sb-s">Rank your {homes.length} saved {homes.length === 1 ? 'home' : 'homes'} by what <em>you</em> care about. Private, not shared with the group.</div>
               </div>
               <div className="sb-cta">
                 <button className="btn btn-primary btn-sm" disabled={running || homes.length < 2} onClick={() => void askForMe()}>
-                  {running ? <ScoutThinking size="sm" /> : <ScoutMark className="ico" />} {running ? 'Thinking…' : 'Ask Scout — for me'}
+                  {running ? <ScoutThinking size="sm" /> : <ScoutMark className="ico" />} {running ? 'Thinking…' : 'Ask Scout · for me'}
                 </button>
               </div>
             </div>
@@ -93,13 +98,13 @@ export function SavedSection() {
             </div>
           </div>
 
-          {verdict && (
+          {(verdict || verdictMd) && (
             <div className="scout-analysis" style={{ paddingTop: 0 }}>
               <div className="sa-body" style={{ borderTop: 0, paddingTop: 14 }}>
                 <div className="mb-1 inline-flex items-center gap-1.5 text-[13px] font-semibold text-accent-text">
                   <ScoutMark className="ico" /> {AI_NAME}’s pick for you
                 </div>
-                <Markdown text={verdict} />
+                <ScoutVerdict verdict={verdict} fallback={verdictMd ?? undefined} />
               </div>
             </div>
           )}

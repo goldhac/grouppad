@@ -30,16 +30,16 @@ import { Button } from '@/components/ui/Button';
 type Tab = 'all' | 'shortlist' | 'saved' | 'decision' | 'discussion';
 
 const BOARD_TOUR: TourStep[] = [
-  { target: '.b-controls .tabbar', title: 'Your group’s board', body: 'Everything for this trip — browse, vote, compare, and decide — lives in these tabs.' },
+  { target: '.b-controls .tabbar', title: 'Your group’s board', body: 'Everything for this trip lives in these tabs: browse, vote, compare, and decide.' },
   { target: '.b-grid article.card .ai-why', title: 'Scout ranks every home', body: 'Homes are sorted best-to-worst for your itinerary, budget, and must-haves. This line is Scout’s reason each one ranks where it does.' },
   { target: '.b-grid article.card .card-money', title: 'The number that ends the debate', body: 'Every home shows the all-in cost and exactly what each person pays.' },
   { target: '.b-grid article.card .votebar', title: 'Vote in the open', body: 'Thumbs-up the ones you like. At net +1, a home rises into the group’s Shortlist.' },
   { target: '.b-grid article.card .cbx', title: 'Compare with Scout', body: 'Tick two or more homes, then Compare for a side-by-side with Scout’s verdict. Open a home for an AI video walkthrough, map, and reviews.' },
   { target: '.row-tint.community', title: 'Community submissions', body: 'Homes anyone pastes in land here. The same villa from two different sites is merged automatically.' },
-  { target: '.b-grid article.card .save-btn', title: 'Save your own picks', body: 'Bookmark homes to your private Saved list — only you see it. Ask Scout to rank just yours.' },
+  { target: '.b-grid article.card .save-btn', title: 'Save your own picks', body: 'Bookmark homes to your private Saved list that only you see. Ask Scout to rank just yours.' },
   { target: '.b-toolbar .filters-btn', title: 'Filter to what fits', body: 'Narrow by budget, pool, parking, hot tub, or a minimum sleeps. Filters stick across refreshes.' },
   { target: '[data-tab="shortlist"]', title: 'Let Scout decide', body: 'In Shortlist, ask Scout to rank the finalists against your group’s approved criteria.' },
-  { target: '[data-tab="discussion"]', title: 'Tell Scout what matters', body: 'Request a must-have in Discussion — the organizer approves it, then Scout weighs it.' },
+  { target: '[data-tab="discussion"]', title: 'Tell Scout what matters', body: 'Request a must-have in Discussion. The organizer approves it, then Scout weighs it.' },
   { target: '[data-tab="decision"]', title: 'Lock the official pick', body: 'Everyone casts one top choice; the organizer seals the winner with the gold lock.' },
 ];
 
@@ -57,7 +57,7 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total, onTour }: { onOp
     setRefreshing(true);
     try {
       await api.refreshListings(tripId);
-      toast('Refreshing listings — fresh homes appear in about a minute.', 'success');
+      toast('Refreshing listings. Fresh homes appear in about a minute.', 'success');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not refresh right now.', 'error');
     } finally {
@@ -73,7 +73,7 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total, onTour }: { onOp
       await submitListing(url.trim());
       setUrl('');
       setOpenField(false);
-      toast('Added — it rises into the Shortlist at net +1.', 'success');
+      toast('Added. It rises into the Shortlist at net +1.', 'success');
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Could not add that link.', 'error');
     } finally {
@@ -104,7 +104,7 @@ function AddToolbar({ onOpenFilters, filterCount, shown, total, onTour }: { onOp
         </button>
       )}
       {isOwner && (
-        <button className="btn btn-ghost btn-sm" onClick={() => void refresh()} disabled={refreshing} title="Refresh listings — once per cycle; they also auto-refresh every few days">
+        <button className="btn btn-ghost btn-sm" onClick={() => void refresh()} disabled={refreshing} title="Refresh listings, once per cycle; they also auto-refresh every few days">
           <Icon icon={RotateCw} className="ico" /> {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
       )}
@@ -216,7 +216,7 @@ export function BoardView() {
         {showJoin && (
           <div className="join-banner">
             <Icon icon={UserPlus} className="ico" />
-            <span>You’re viewing as a guest. <b>Sign in to join</b> — vote, add homes, and comment.</span>
+            <span>You’re viewing as a guest. <b>Sign in to join</b> to vote, add homes, and comment.</span>
             <Button
               variant="primary"
               size="sm"
@@ -294,7 +294,7 @@ export function BoardView() {
                   {listings.length === 0 && <EmptyBoardArt />}
                   <p className="text-text-muted">
                     {listings.length === 0
-                      ? 'No homes yet — paste a rental link above to add the homes your group is considering.'
+                      ? 'No homes yet. Paste a rental link above to add the homes your group is considering.'
                       : 'No homes match these filters.'}
                   </p>
                 </div>

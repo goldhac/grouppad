@@ -10,15 +10,15 @@ const BrandMark = ({ s }: { s: number }) => (
 );
 
 const LOOP = [
-  { icon: LayoutGrid, h: 'Browse together', p: "Everyone adds the rentals they're eyeing to one shared board — curated, scraped, or pasted from any link." },
-  { icon: ThumbsUp, h: 'Vote, see the real cost', p: 'A thumb up floats a home to the shortlist. Every price shows the all-in total and the per-person split, live.' },
-  { icon: Sparkles, h: 'Let Scout break the tie', p: 'Run a 1v1 or compare the shortlist — Scout weighs price, distance, and your plans, and explains the call.' },
-  { icon: Lock, h: 'Lock the official pick', p: 'Everyone casts one top choice. The organizer seals the winner with a gold lock — debate over.' },
+  { icon: LayoutGrid, h: 'Get every option in one place', p: 'Drop in any rental link, or browse the homes we already pulled together. No more ten tabs and a lost group chat.' },
+  { icon: ThumbsUp, h: 'Vote, and see what it really costs', p: 'Thumbs up the ones you like. Each home shows the all-in total and what that works out to per person, updated as people join.' },
+  { icon: Sparkles, h: 'Ask Scout when you cannot decide', p: 'Put two homes head to head, or hand Scout the whole shortlist. It weighs price, distance, and your plans, then makes the call.' },
+  { icon: Lock, h: 'Lock it in', p: 'Everyone picks their favorite. Whoever set up the trip makes it official, and the back-and-forth is done.' },
 ];
 const PAIRS = [
-  { tag: 'Per person', icon: Users, title: 'Every home, priced per head.', body: 'No more mental math in the group chat. GroupPad shows the all-in total and what each person actually pays — recomputed live as your group size changes.', img: '1600566753086-00f18fb6b3ea', float: true },
-  { tag: 'Meet Scout', icon: Swords, title: 'Let Scout settle the tie.', body: 'Stuck between two? Run a head-to-head and Scout weighs price, distance, and your itinerary — then tells you which wins and why, in plain language.', img: '1600585152220-90363fe7e115', float: false },
-  { tag: 'Walkthrough', icon: Clapperboard, title: 'A tour of the best rooms — generated for you.', body: "The board picks each home's standout spaces and stitches a short walkthrough, so the group feels the place before anyone books a flight.", img: '1600047509807-ba8f99d2cdde', float: false },
+  { tag: 'Per person', icon: Users, title: "See what you'd actually pay.", body: "Nobody wants to do the math at 1am. Every home shows the all-in total and your share of it, and both update the moment someone joins or drops out.", img: '1600566753086-00f18fb6b3ea', float: true },
+  { tag: 'Meet Scout', icon: Swords, title: 'Torn between two? Ask Scout.', body: 'Put two homes side by side and Scout weighs the price, the drive, and what your group has planned, then makes the call and shows its reasoning.', img: '1600585152220-90363fe7e115', float: false },
+  { tag: 'Walkthrough', icon: Clapperboard, title: 'Walk through a place before you commit.', body: "For each home, GroupPad pulls the best rooms into a short video tour, so the group gets a real feel for it before anyone spends a dollar on flights.", img: '1600047509807-ba8f99d2cdde', float: false },
 ];
 
 export function MobileLanding() {
@@ -48,11 +48,11 @@ export function MobileLanding() {
 
         <div className="ln-scroll" ref={scrollRef}>
           <section className="ln-hero">
-            <span className="ln-kicker"><span className="gd" /> Skip the endless group chat</span>
-            <h1>Pick the place your whole group <em>actually agrees</em> on.</h1>
-            <p>GroupPad turns "where should we stay?" into one shared board — add rentals, vote, see the real per-person cost, ask Scout, and lock the winner together.</p>
+            <span className="ln-kicker"><span className="gd" /> For groups who can never agree on a place</span>
+            <h1>Get your group to <em>actually agree</em> on where to stay.</h1>
+            <p>Planning with friends turns into a mess of links and half-answered texts. GroupPad puts every rental on one board so everyone can vote, see what they'd pay, and settle on a place.</p>
             <div className="ln-cta">
-              <button className="btn btn-primary" onClick={start}><Icon icon={Plus} className="ico" /> Get started — it's free</button>
+              <button className="btn btn-primary" onClick={start}><Icon icon={Plus} className="ico" /> Start free</button>
               <button className="btn btn-ghost" onClick={seeHow}>See how it works</button>
             </div>
             <div className="ln-band">
@@ -64,15 +64,15 @@ export function MobileLanding() {
           </section>
 
           <section className="ln-sec" ref={howRef as React.RefObject<HTMLElement>}>
-            <div className="ln-chapno">01 — The core loop</div>
-            <h2 className="ln-h2">From scattered links to one locked pick.</h2>
+            <div className="ln-chapno">01 · How it works</div>
+            <h2 className="ln-h2">Four steps from "no idea" to booked.</h2>
             <span className="ln-try"><Icon icon={Sparkles} className="ico" /> The whole flow in four steps</span>
             <div className="ln-loop">
               {LOOP.map((l, i) => (
                 <div className="ln-loopitem" key={i}><span className="ix"><Icon icon={l.icon} className="ico" /></span><div><h4>{l.h}</h4><p>{l.p}</p></div></div>
               ))}
             </div>
-            <div className="ln-preview"><img src={IMG('1600607687939-ce8a6c25118c', 900)} alt="" /><div className="pv-cap"><Icon icon={LayoutGrid} className="ico" /> One board · everyone votes · per-person pricing on every card</div></div>
+            <div className="ln-preview"><img src={IMG('1600607687939-ce8a6c25118c', 900)} alt="" /><div className="pv-cap"><Icon icon={LayoutGrid} className="ico" /> One board, everyone votes, per-person pricing on every card</div></div>
           </section>
 
           {PAIRS.map((p, i) => (
@@ -88,17 +88,17 @@ export function MobileLanding() {
             <img src={IMG('1564013799919-ab600027ffc6')} alt="" /><div className="scrim" />
             <div className="c">
               <span className="k"><span className="gd" /> Ready when you are</span>
-              <h2>Your group's next trip starts with one board.</h2>
-              <p>Spin one up in under a minute, share the link, and let everyone weigh in.</p>
+              <h2>Start the board. Send the link. Let them argue it out.</h2>
+              <p>Setting up a trip takes about a minute. Share the link and your group can jump in from anywhere.</p>
               <button className="btn btn-onphoto" onClick={start}><Icon icon={Plus} className="ico" /> Create your first trip</button>
             </div>
           </section>
 
           <footer className="ln-foot">
             <span className="brand"><BrandMark s={24} /> GroupPad</span>
-            <p className="tag">The calm way for groups to pick one rental — browse, vote, compare with Scout, and lock the winner without the endless group chat.</p>
+            <p className="tag">The calmer way for a group to pick one rental. Browse, vote, compare with Scout, and lock the winner without the 200-message thread.</p>
             <div className="links"><a onClick={start}>Start a trip</a><a onClick={seeHow}>How it works</a><a onClick={() => navigate('/terms')}>Terms</a><a onClick={() => navigate('/privacy')}>Privacy</a></div>
-            <div className="copy">© 2026 GroupPad · Prices are estimates — verify all-in totals at the booking step. Made for group trips.</div>
+            <div className="copy">© 2026 GroupPad · Prices are estimates, so verify the all-in total at the booking step. Made for group trips.</div>
           </footer>
         </div>
 

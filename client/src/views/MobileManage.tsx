@@ -46,7 +46,7 @@ export function MobileManage() {
   if (!trip) return <div className="gp-mobile" />;
 
   const toggleTheme = () => { const next = theme === 'dark' ? 'light' : 'dark'; document.documentElement.setAttribute('data-theme', next); try { localStorage.setItem('gp_theme', next); } catch { /**/ } setTheme(next); };
-  const link = `${location.origin}/#/t/${trip.id}/board${trip.join_code ? `?join=${trip.join_code}` : ''}`;
+  const link = `${location.origin}/s/i/${trip.id}${trip.join_code ? `?c=${trip.join_code}` : ''}`;
   const joined = members.length || trip.memberCount;
   const guests = trip.adults || joined;
   const pct = Math.min(100, Math.round(((pulse?.picks || 0) / Math.max(1, guests)) * 100));
@@ -107,7 +107,7 @@ export function MobileManage() {
                 <div className="pstat"><Icon icon={ThumbsUp} className="ico" /><div className="v tnum">{pulse?.votes ?? 0}</div><div className="l">Votes cast</div></div>
                 <div className="pstat"><Icon icon={Star} className="ico" /><div className="v tnum">{pulse?.picks ?? 0}</div><div className="l">Top picks</div></div>
               </div>
-              <div className="decision-status">{trip.voting_closed ? 'Voting is closed.' : "No official pick yet — lock one from the board when the group's ready."}</div>
+              <div className="decision-status">{trip.voting_closed ? 'Voting is closed.' : "No official pick yet. Lock one from the board when the group's ready."}</div>
             </div>
 
             <div className="mg-card">
@@ -137,7 +137,7 @@ export function MobileManage() {
                     )}
                   </div>
                 ))}
-                {members.length === 0 && <p style={{ padding: '10px 0', fontSize: 13.5, color: 'var(--text-muted)' }}>Just you so far — share the invite link to bring your group in.</p>}
+                {members.length === 0 && <p style={{ padding: '10px 0', fontSize: 13.5, color: 'var(--text-muted)' }}>Just you so far. Share the invite link to bring your group in.</p>}
               </div>
             </div>
 
@@ -175,7 +175,7 @@ export function MobileManage() {
               <div className="scrim show" onClick={() => { setConfirm(null); setDelText(''); }} />
               <div className="sheet show"><div className="grab" />
                 <div className="confirm-body">
-                  <div className="c-top"><div className={`c-icon ${c.tone}`}><Icon icon={c.glyph} className="ico" /></div><div><h3>{c.title}</h3><p className="sub">{confirm.member ? `${confirm.member.name} — ${c.sub}` : c.sub}</p></div></div>
+                  <div className="c-top"><div className={`c-icon ${c.tone}`}><Icon icon={c.glyph} className="ico" /></div><div><h3>{c.title}</h3><p className="sub">{confirm.member ? `${confirm.member.name} · ${c.sub}` : c.sub}</p></div></div>
                   {c.typed ? (
                     <div style={{ margin: '6px 0 16px' }}><div className="type-lab">Type <b>DELETE</b> to confirm.</div><input className="field" placeholder="DELETE" autoComplete="off" value={delText} onChange={(e) => setDelText(e.target.value)} /></div>
                   ) : <div style={{ height: 8 }} />}

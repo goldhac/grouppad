@@ -80,7 +80,7 @@ export function DecisionStrip({
         </button>
       ) : (
         <div className="lead" style={{ borderLeft: '1px solid var(--border)' }}>
-          <div className="who"><div className="sub">No leader yet — like homes to build the shortlist.</div></div>
+          <div className="who"><div className="sub">No leader yet. Like homes to build the shortlist.</div></div>
         </div>
       )}
 

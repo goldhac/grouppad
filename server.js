@@ -64,6 +64,99 @@ app.use((req, res, next) => attachUser(req, res, next));
 app.use(express.static(path.join(__dirname, 'client', 'dist')));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Scenario-specific link previews (Open Graph) ───────────────────────────────
+// The app is a HashRouter SPA, so a crawler hitting a shared "#/..." link only
+// ever sees the static index.html. These real (non-hash) /s/* routes give each
+// share scenario its own preview card (invite, listing, board) with the trip's
+// own photo + personalized text, then bounce humans to the in-app hash route.
+// Cheap: no image rendering — og:image reuses a real listing/cover photo.
+const ogEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const OG_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function ogDateRange(a, b) {
+  if (!a) return '';
+  const [ya, ma, da] = String(a).split('-').map(Number);
+  if (!ma) return '';
+  const start = `${OG_MON[ma - 1]} ${da}`;
+  if (!b) return `${start}, ${ya}`;
+  const [yb, mb, db] = String(b).split('-').map(Number);
+  return `${start}–${ma === mb ? db : `${OG_MON[mb - 1]} ${db}`}, ${yb || ya}`;
+}
+function ogImage(url) {
+  if (!url) return `${APP_BASE_URL}/og.jpg`;
+  if (/^https?:\/\//.test(url)) return url;
+  return `${APP_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+}
+function sharePage({ title, desc, image, canonical, redirect, fallbackImg }) {
+  const dim = fallbackImg ? '\n<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">' : '';
+  return `<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${ogEsc(title)}</title>
+<meta name="description" content="${ogEsc(desc)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="GroupPad">
+<meta property="og:title" content="${ogEsc(title)}">
+<meta property="og:description" content="${ogEsc(desc)}">
+<meta property="og:image" content="${ogEsc(image)}">${dim}
+<meta property="og:url" content="${ogEsc(canonical)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${ogEsc(title)}">
+<meta name="twitter:description" content="${ogEsc(desc)}">
+<meta name="twitter:image" content="${ogEsc(image)}">
+<link rel="canonical" href="${ogEsc(canonical)}">
+<meta http-equiv="refresh" content="0;url=${ogEsc(redirect)}">
+<script>location.replace(${JSON.stringify(redirect)})</script>
+</head><body style="font-family:system-ui;background:#10110f;color:#e7e0d0;display:grid;place-items:center;height:100vh;margin:0">Opening GroupPad…</body></html>`;
+}
+function boardHash(tripId, qs) { return `${APP_BASE_URL}/#/t/${encodeURIComponent(tripId)}/board${qs || ''}`; }
+
+// "Your friend is inviting you to join this group trip"
+app.get('/s/i/:tripId', (req, res) => {
+  const trip = getTrip(req.params.tripId);
+  if (!trip) return res.redirect(302, `${APP_BASE_URL}/`);
+  const code = String(req.query.c || trip.join_code || '');
+  const facts = [trip.destination, ogDateRange(trip.checkin, trip.checkout_5n), trip.adults ? `${trip.adults} guests` : ''].filter(Boolean).join(' · ');
+  const cover = tripCoverPhoto(trip.id);
+  res.set('Cache-Control', 'public, max-age=300').send(sharePage({
+    title: `You're invited: ${trip.name}`,
+    desc: `${facts ? facts + '. ' : ''}Browse the homes, vote on your favorites, and help the group pick one on GroupPad.`,
+    image: ogImage(cover), fallbackImg: !cover,
+    canonical: `${APP_BASE_URL}/s/i/${encodeURIComponent(trip.id)}`,
+    redirect: boardHash(trip.id, code ? `?join=${encodeURIComponent(code)}` : ''),
+  }));
+});
+
+// "Your friend wants you to look at this listing"
+app.get('/s/l/:tripId/:listingId', (req, res) => {
+  const trip = getTrip(req.params.tripId);
+  if (!trip) return res.redirect(302, `${APP_BASE_URL}/`);
+  const l = findListingByIdInTrip(trip.id, req.params.listingId);
+  const name = (l && l.name) || 'this home';
+  const specs = [l && l.bd && `${l.bd} bd`, l && l.sleeps && `sleeps ${l.sleeps}`, l && l.est_5n && `~$${Math.round(l.est_5n).toLocaleString('en-US')} all-in`, l && l.area].filter(Boolean).join(' · ');
+  const photo = (l && Array.isArray(l.photos) && l.photos[0]) || tripCoverPhoto(trip.id);
+  res.set('Cache-Control', 'public, max-age=300').send(sharePage({
+    title: `Take a look: ${name}`,
+    desc: `${specs ? specs + '. ' : ''}Part of ${trip.name}. Open it on GroupPad and tell the group what you think.`,
+    image: ogImage(photo), fallbackImg: !photo,
+    canonical: `${APP_BASE_URL}/s/l/${encodeURIComponent(trip.id)}/${encodeURIComponent(req.params.listingId)}`,
+    redirect: boardHash(trip.id, `?listing=${encodeURIComponent(req.params.listingId)}`),
+  }));
+});
+
+// General board share
+app.get('/s/b/:tripId', (req, res) => {
+  const trip = getTrip(req.params.tripId);
+  if (!trip) return res.redirect(302, `${APP_BASE_URL}/`);
+  const facts = [trip.destination, ogDateRange(trip.checkin, trip.checkout_5n), trip.adults ? `${trip.adults} guests` : ''].filter(Boolean).join(' · ');
+  const cover = tripCoverPhoto(trip.id);
+  res.set('Cache-Control', 'public, max-age=300').send(sharePage({
+    title: `${trip.name} on GroupPad`,
+    desc: `${facts ? facts + '. ' : ''}See the homes the group is weighing, compare them with Scout, and add your vote.`,
+    image: ogImage(cover), fallbackImg: !cover,
+    canonical: `${APP_BASE_URL}/s/b/${encodeURIComponent(trip.id)}`,
+    redirect: boardHash(trip.id, ''),
+  }));
+});
+
 // ── File helpers ─────────────────────────────────────────────────────────────
 
 // Atomic write: write to a temp file then rename, so a crash mid-write can't
@@ -2333,6 +2426,34 @@ function geminiGuard() {
   catch { return true; } // fail open on a metering error rather than block all AI
 }
 
+// Render a structured Scout verdict back to markdown — the safety net for old
+// clients and the text cached for stale-insights comparison.
+function verdictToMarkdown(v, headToHead) {
+  if (!v || typeof v !== 'object') return '';
+  const out = [];
+  if (v.summary) out.push(v.summary, '');
+  if (Array.isArray(v.ranked) && v.ranked.length) {
+    out.push('### Ranked');
+    for (const r of v.ranked) out.push(`- **#${r.n} ${r.name}** — ${r.reason}`);
+    out.push('');
+  }
+  if (Array.isArray(v.table) && v.table.length) {
+    out.push('| # | beds/sleeps | ~all-in | distance | pool/hot tub | standout |');
+    out.push('| --- | --- | --- | --- | --- | --- |');
+    for (const t of v.table) out.push(`| ${t.n ?? ''} ${t.name || ''} | ${t.bedsSleeps || ''} | ${t.allIn || ''} | ${t.distance || ''} | ${t.poolHotTub || ''} | ${t.standout || ''} |`);
+    out.push('');
+  }
+  if (Array.isArray(v.picks) && v.picks.length) {
+    for (const p of v.picks) out.push(`- **${p.name}:** ${p.line}`);
+    out.push('');
+  }
+  if (Array.isArray(v.redFlags) && v.redFlags.length) {
+    out.push('### Red flags');
+    for (const f of v.redFlags) out.push(`- **${f.name}:** ${f.note}`);
+  }
+  return out.join('\n').trim();
+}
+
 const hCompare = async (req, res) => {
   const tripId = req.params.tripId;
   if (!GEMINI_API_KEY) {
@@ -2381,6 +2502,9 @@ ${criteria ? `Extra criteria they care about:\n${String(criteria).slice(0, 1000)
     ? 'IMPORTANT: explicitly reference specific items from their itinerary above (named activities, neighborhoods, the party/event) when explaining fit — e.g. "10 min from the Universal Studios day" or "close to the Santa Monica dinner". Tie at least two points directly to the itinerary.'
     : 'No itinerary was posted, so judge on group size, budget, and distance from DTLA.';
 
+  // Scout returns STRUCTURED JSON (not a prose blob), so the client can render a
+  // branded, scannable verdict instead of a wall of markdown. A markdown fallback
+  // is derived from the structure for old clients and the stale-insights cache.
   const prompt = headToHead
     ? `${context}
 Head-to-head: compare these TWO homes (JSON):
@@ -2388,22 +2512,40 @@ ${JSON.stringify(compact, null, 1)}
 
 ${itineraryRule}
 
-Write a punchy 1v1 markdown breakdown:
-1. **Winner:** name the better pick in one bold line and why${hasItinerary ? ', referencing their itinerary' : ''}.
-2. A tight table (Metric | Home 1 | Home 2) covering beds/sleeps, ~all-in price, distance from DTLA, pool, hot tub, parking, rating/reviews.
-3. "Pick Home 1 if…" / "Pick Home 2 if…" — one line each, tied to their plans.
-Keep it under ~250 words. Refer to homes by number and name.`
+Return a JSON verdict for this 1-vs-1:
+- summary: one warm, plain sentence naming the better pick. No hype words.
+- winner: { n, name, why } — why it wins in one sentence${hasItinerary ? ', tied to their itinerary' : ''}.
+- table: one row per home with { n, name, bedsSleeps (e.g. "7 / 16"), allIn (e.g. "$5,766" or "—"), distance (e.g. "26 mi" or "—"), poolHotTub (e.g. "Pool · Hot tub", "Pool", or "—"), standout (3-5 words) }.
+- picks: exactly two { n, name, line } — "the case for this one" in one short line each, tied to their plans.
+- redFlags: { n, name, severity ("high"|"medium"), note } for any real concern, else [].
+- ranked: best home first as { n, name, fit ("best"|"good"|"skip"), reason }.
+Write like a sharp friend, not a brochure. No em dashes.`
     : `${context}
 Here are the candidate listings (JSON):
 ${JSON.stringify(compact, null, 1)}
 
 ${itineraryRule}
 
-Write a concise, friendly comparison in markdown:
-1. A short ranked recommendation (best fit first) with one-line reasons explicitly tied to their itinerary and group size.
-2. A compact comparison table (Listing # | beds/sleeps | ~all-in | distance | pool/hot tub | standout).
-3. Call out any red flags (too far for their planned activities, tight sleeping capacity for ${adults}, over budget, low/no reviews).
-Keep it under ~400 words. Refer to homes by their number and name.`;
+Return a JSON verdict:
+- summary: one warm, plain sentence framing the choice for this group. No hype words.
+- ranked: every home, best fit first, as { n, name, fit ("best"|"good"|"skip"), reason } — reason is one short line tied to their itinerary and group of ${adults}.
+- winner: the top pick as { n, name, why }.
+- table: one row per home { n, name, bedsSleeps (e.g. "7 / 16"), allIn (e.g. "$5,766" or "—"), distance (e.g. "26 mi" or "—"), poolHotTub (e.g. "Pool · Hot tub", "Pool", or "—"), standout (3-5 words) }.
+- redFlags: real concerns only (too far for their plans, tight capacity for ${adults}, over budget, no reviews) as { n, name, severity ("high"|"medium"), note }. Empty array if none.
+Write like a sharp friend, not a brochure. No em dashes.`;
+
+  const verdictSchema = {
+    type: 'object',
+    properties: {
+      summary: { type: 'string' },
+      winner: { type: 'object', properties: { n: { type: 'integer' }, name: { type: 'string' }, why: { type: 'string' } } },
+      ranked: { type: 'array', items: { type: 'object', properties: { n: { type: 'integer' }, name: { type: 'string' }, fit: { type: 'string', enum: ['best', 'good', 'skip'] }, reason: { type: 'string' } }, required: ['n', 'name', 'fit', 'reason'] } },
+      table: { type: 'array', items: { type: 'object', properties: { n: { type: 'integer' }, name: { type: 'string' }, bedsSleeps: { type: 'string' }, allIn: { type: 'string' }, distance: { type: 'string' }, poolHotTub: { type: 'string' }, standout: { type: 'string' } }, required: ['n', 'name'] } },
+      redFlags: { type: 'array', items: { type: 'object', properties: { n: { type: 'integer' }, name: { type: 'string' }, severity: { type: 'string', enum: ['high', 'medium'] }, note: { type: 'string' } }, required: ['name', 'note'] } },
+      picks: { type: 'array', items: { type: 'object', properties: { n: { type: 'integer' }, name: { type: 'string' }, line: { type: 'string' } }, required: ['name', 'line'] } },
+    },
+    required: ['summary', 'ranked', 'table'],
+  };
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
@@ -2414,7 +2556,7 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
         contents: [{ parts: [{ text: prompt }] }],
         // thinkingBudget:0 keeps 2.5-flash from spending the output budget on
         // internal reasoning (which was truncating the visible answer).
-        generationConfig: { temperature: 0.4, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
+        generationConfig: { temperature: 0.4, maxOutputTokens: 2048, responseMimeType: 'application/json', responseSchema: verdictSchema, thinkingConfig: { thinkingBudget: 0 } },
       }),
     });
     const data = await r.json();
@@ -2430,17 +2572,20 @@ Keep it under ~400 words. Refer to homes by their number and name.`;
       candidatesTokens: um.candidatesTokenCount || 0,
       totalTokens: um.totalTokenCount || ((um.promptTokenCount || 0) + (um.candidatesTokenCount || 0)),
     });
-    const analysis = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
-    if (!analysis) return res.status(502).json({ error: 'Gemini returned no text.' });
-    // Cache the full-shortlist analysis so everyone sees it without re-spending
-    // on Gemini. 1v1 battles are ad-hoc and not cached.
+    const raw = data.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+    if (!raw) return res.status(502).json({ error: 'Scout returned nothing. Try again in a moment.' });
+    let verdict = null;
+    try { verdict = JSON.parse(raw); } catch { /* fall back to raw text below */ }
+    // Always provide a markdown rendering too: old clients and the stale-insights
+    // cache key off `analysis`, and it is the safety net if structured parse fails.
+    const analysis = verdict ? verdictToMarkdown(verdict, headToHead) : raw;
+    // Cache the full-shortlist verdict so everyone sees it without re-spending on
+    // Gemini. 1v1 battles are ad-hoc and not cached.
     if (!headToHead) {
-      // Record which listings were analyzed so the client can flag the insights
-      // as stale once the shortlist changes.
       const ids = listings.map(l => String(l.id)).sort();
-      saveInsights({ analysis, count: compact.length, ids, created_at: new Date().toISOString() }, tripId);
+      saveInsights({ analysis, verdict, count: compact.length, ids, created_at: new Date().toISOString() }, tripId);
     }
-    res.json({ analysis });
+    res.json({ analysis, verdict });
   } catch (e) {
     console.error('[compare]', e.message);
     res.status(500).json({ error: 'Scout could not compare these right now. Try again in a moment.' });
@@ -3027,7 +3172,8 @@ app.post('/api/trips/:tripId/invite', requireTripOwner, rateLimit({ windowMs: 60
   const raw = String((req.body && req.body.emails) || '');
   const emails = [...new Set(raw.split(/[\s,;]+/).map(s => s.trim().toLowerCase()).filter(isEmail))].slice(0, 25);
   if (!emails.length) return res.status(400).json({ error: 'Enter at least one valid email address.' });
-  const link = `${boardUrl(trip.id)}?join=${trip.join_code}`;
+  // Use the scenario share route so a forwarded invite still previews nicely.
+  const link = `${APP_BASE_URL}/s/i/${encodeURIComponent(trip.id)}?c=${encodeURIComponent(trip.join_code)}`;
   const inviter = req.user.name || 'The organizer';
   let sent = 0;
   for (const e of emails) {

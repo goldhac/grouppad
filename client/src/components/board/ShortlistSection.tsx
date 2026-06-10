@@ -5,7 +5,7 @@ import { Icon } from '@/components/ui/Icon';
 import { ScoutMark, AI_NAME } from '@/components/ui/ScoutMark';
 import { ScoutThinking } from '@/components/ui/ScoutThinking';
 import { Card } from '@/components/Card';
-import { Markdown } from '@/components/Markdown';
+import { ScoutVerdict } from '@/components/board/ScoutVerdict';
 import { netVotes, mansionScore, fmt } from '@/lib/utils';
 import type { CompareController } from '@/hooks/useCompare';
 import type { Listing } from '@/types';
@@ -76,7 +76,7 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
           <div className="sb-mark"><ScoutMark className="ico" /></div>
           <div className="min-w-0">
             <div className="sb-t">Ask {AI_NAME} to rank your {shortlist.length} finalists</div>
-            <div className="sb-s">Weighs budget, distance, and your group’s approved criteria — then explains the call.</div>
+            <div className="sb-s">Weighs budget, distance, and your group’s approved criteria, then explains the call.</div>
           </div>
           <div className="sb-cta">
             <button className="btn btn-primary btn-sm" disabled={compare.running} onClick={() => void compare.runWhole(shortlist)}>
@@ -110,11 +110,11 @@ export function ShortlistSection({ compare }: { compare: CompareController }) {
       {insights?.analysis && (
         <details className="scout-analysis" ref={analysisRef} open={analysisOpen} onToggle={(e) => setAnalysisOpen(e.currentTarget.open)}>
           <summary>
-            <Icon icon={Lightbulb} className="ico" /> {AI_NAME}’s full analysis — top picks, comparison table & red flags
+            <Icon icon={Lightbulb} className="ico" /> {AI_NAME}’s full analysis · top picks, comparison table & red flags
             {stale && <span className="sa-stale"><Icon icon={AlertCircle} className="ico" /> re-analyze to refresh</span>}
             <Icon icon={ChevronDown} className="ico sa-chev" />
           </summary>
-          <div className="sa-body"><Markdown text={insights.analysis} /></div>
+          <div className="sa-body"><ScoutVerdict verdict={insights.verdict} fallback={insights.analysis} /></div>
         </details>
       )}
 

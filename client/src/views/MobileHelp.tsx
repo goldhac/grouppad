@@ -11,14 +11,14 @@ import { cn } from '@/lib/cn';
 const STEPS = [
   { img: '/onboarding/01-board.webp', step: 'The core loop', h: 'One board for the whole group', p: 'Every idea lands on one shared board instead of scattering across a 200-message group chat. Open the trip and you’re on the board.' },
   { img: '/onboarding/02-add.webp', step: 'Step 1 · Add homes', h: 'Paste any rental link', p: 'Tap Add (+) and paste an Airbnb, VRBO, Booking, or villa link. GroupPad scrapes photos, beds and amenities and prices it all-in. No price on the page? Add one manually.' },
-  { img: '/onboarding/06-scout.webp', step: 'Step 2 · Scout ranks', h: 'Recommended, ranked by AI', p: 'Scout reads your itinerary, budget and must-haves, then ranks every home — curated, live and community — best-to-worst. Recommended shows the top 10 within budget, each with a “why”.' },
+  { img: '/onboarding/06-scout.webp', step: 'Step 2 · Scout ranks', h: 'Recommended, ranked by AI', p: 'Scout reads your itinerary, budget and must-haves, then ranks every home (curated, live and community) best-to-worst. Recommended shows the top 10 within budget, each with a “why”.' },
   { img: '/onboarding/03-vote.webp', step: 'Step 3 · Vote', h: 'Vote in the open', p: 'Public thumbs, not secret hearts. Any home that reaches net +1 rises into the Group’s Shortlist on its own.' },
   { img: '/onboarding/04-perperson.webp', step: 'Step 4 · The number', h: 'The per-person cost', p: 'Every home shows the real all-in cost split across your group, recomputed live as people join. Use the Split slider to model a different headcount.' },
   { img: '/onboarding/05-lock.webp', step: 'Step 5 · Decide', h: 'Compare with Scout, then lock it', p: 'Down to a few? Ask Scout to compare them head-to-head and call a winner. The organizer makes one pick official with the gold lock.', gold: true },
 ];
 const FEATURES = [
   { icon: SlidersHorizontal, h: 'Filters', p: 'Under-budget, pool, parking, hot tub, or a minimum “sleeps”. Filters stick per-trip and only reset when you sign out.' },
-  { icon: Bookmark, h: 'Saved (private)', p: 'Bookmark homes to a Saved list only you see. Ask Scout to rank just your saved picks — it never touches the group board.' },
+  { icon: Bookmark, h: 'Saved (private)', p: 'Bookmark homes to a Saved list only you see. Ask Scout to rank just your saved picks; it never touches the group board.' },
   { icon: MapIcon, h: 'Map & distances', p: 'Open any home for a map and drive-time chips to the airport, downtown and your venue. Tap “Open in Maps” for directions.' },
   { icon: MessagesSquare, h: 'Must-haves & itinerary', p: 'Post must-haves and the itinerary in Discussion. Once approved, Scout weighs them in every ranking and compare.' },
   { icon: Scale, h: 'Compare', p: 'Tick two or more homes and Compare for a side-by-side with Scout’s verdict. Results are cached, so re-opening is instant.' },
@@ -28,7 +28,7 @@ const FEATURES = [
 ];
 const FAQ = [
   { q: 'How do I add a home?', a: 'Tap Add (+) and paste any Airbnb, VRBO, Booking, or villa link (an optional price helps if the page hides it). GroupPad scrapes the details, prices it all-in, and drops it into your group\'s submissions to vote on.' },
-  { q: 'How does Scout rank the homes?', a: 'Scout reads your itinerary, budget and the group’s approved must-haves, then scores every home on cost, per-person price, distance, capacity, amenities and ratings. Over-budget homes stay out of Recommended. Rankings are cached and shared with everyone — nobody pays for the same comparison twice.' },
+  { q: 'How does Scout rank the homes?', a: 'Scout reads your itinerary, budget and the group’s approved must-haves, then scores every home on cost, per-person price, distance, capacity, amenities and ratings. Over-budget homes stay out of Recommended. Rankings are cached and shared with everyone, so nobody pays for the same comparison twice.' },
   { q: 'Why does a home have no price?', a: 'Some boutique sites hide prices behind a date picker. GroupPad tries the page, a real headless browser, and a nightly-rate fallback; if all fail it marks the home “check manually”. Add a price when you submit and it folds into the budget math and ranking.' },
   { q: 'How do I invite people?', a: 'Open Manage trip → copy the invite link and share it anywhere. Anyone with the link can view the board; they sign in with a one-tap link to vote or add homes. You can also send email invites from the same screen.' },
   { q: 'How do we change the official pick?', a: 'The organizer can unlock the current pick from the board or from Manage → Danger zone ("Reset the official pick"). All votes are kept, so the group can keep deciding and lock a new winner.' },
@@ -53,7 +53,7 @@ export function MobileHelp() {
         </div></div></div>
         <div className="mb-scroll" style={{ paddingBottom: 32 }}>
           <div className="help">
-            <div className="help-head"><span className="ey"><Icon icon={Sparkles} className="ico" /> How GroupPad works</span><h1>Pick one rental, together.</h1><p>GroupPad turns "where should we stay?" into one shared board. Here's the whole loop, step by step — plus every feature.</p></div>
+            <div className="help-head"><span className="ey"><Icon icon={Sparkles} className="ico" /> How GroupPad works</span><h1>Pick one rental, together.</h1><p>GroupPad turns "where should we stay?" into one shared board. Here's the whole loop, step by step, plus every feature.</p></div>
             <div className="help-steps">
               {STEPS.map((s) => (
                 <div className={cn('help-step', s.gold && 'gold')} key={s.h}>

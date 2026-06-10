@@ -189,8 +189,19 @@ export interface Caveat {
   created_at: string;
 }
 
+/** Structured Scout comparison verdict (server returns this alongside markdown). */
+export interface ScoutVerdict {
+  summary?: string;
+  winner?: { n?: number; name: string; why?: string } | null;
+  ranked?: { n?: number; name: string; fit: 'best' | 'good' | 'skip'; reason: string }[];
+  table?: { n?: number; name: string; bedsSleeps?: string; allIn?: string; distance?: string; poolHotTub?: string; standout?: string }[];
+  redFlags?: { n?: number; name: string; severity?: 'high' | 'medium'; note: string }[];
+  picks?: { n?: number; name: string; line: string }[];
+}
+
 export interface Insights {
   analysis: string;
+  verdict?: ScoutVerdict | null;
   count?: number;
   ids?: string[];
   /** Set when the group's approved criteria changed after this was computed. */

@@ -20,6 +20,7 @@ import type {
   Listing,
   ListingReviews,
   ListingTour,
+  ScoutVerdict,
   TripView,
   User,
   VoteDir,
@@ -124,7 +125,7 @@ interface AppActions {
   approveCaveat: (id: string) => Promise<void>;
   deleteListing: (id: string, isSubmitted: boolean) => Promise<void>;
   // compare / itinerary
-  runCompare: (items: CompareListingInput[], criteria: string, mode?: '1v1') => Promise<string>;
+  runCompare: (items: CompareListingInput[], criteria: string, mode?: '1v1') => Promise<{ analysis: string; verdict?: ScoutVerdict | null }>;
   saveItinerary: (text: string) => Promise<void>;
   // reviews
   loadReviewsFor: (listing: Listing) => Promise<void>;
@@ -676,8 +677,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const id = tripIdRef.current;
       if (!id) throw new ApiError(0, 'No active trip.');
       const res = await api.compare(id, items, criteria, mode);
-      if (mode !== '1v1') setInsights({ analysis: res.analysis, created_at: new Date().toISOString() });
-      return res.analysis;
+      if (mode !== '1v1') setInsights({ analysis: res.analysis, verdict: res.verdict ?? null, created_at: new Date().toISOString() });
+      return res;
     },
     [],
   );

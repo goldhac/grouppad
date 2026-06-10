@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useApp, isDeadListing } from '@/store/AppContext';
 import { api } from '@/lib/api';
-import { Markdown } from '@/components/Markdown';
+import { ScoutVerdict } from '@/components/board/ScoutVerdict';
 import { useCompare } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
@@ -73,7 +73,7 @@ export function MobileBoard() {
   const refreshHomes = async () => {
     if (!trip || refreshing) return;
     setRefreshing(true);
-    try { await api.refreshListings(trip.id); toast('Refreshing listings — fresh homes appear in about a minute.', 'success'); }
+    try { await api.refreshListings(trip.id); toast('Refreshing listings. Fresh homes appear in about a minute.', 'success'); }
     catch (e) { toast(e instanceof Error ? e.message : 'Could not refresh right now.', 'error'); }
     finally { setRefreshing(false); }
   };
@@ -311,7 +311,7 @@ export function MobileBoard() {
           <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 7 }}>
             <Icon icon={Sparkles} className="ico" style={{ color: 'var(--accent-text)' }} /> Scout's last analysis
           </summary>
-          <div style={{ marginTop: 8, fontSize: 13.5, lineHeight: 1.55, color: 'var(--text-2)' }}><Markdown text={insights.analysis} /></div>
+          <div style={{ marginTop: 8, fontSize: 13.5, lineHeight: 1.55, color: 'var(--text-2)' }}><ScoutVerdict verdict={insights.verdict} fallback={insights.analysis} /></div>
         </details>
       )}
       {shortlist.length
@@ -323,10 +323,10 @@ export function MobileBoard() {
   const savedView = (
     <div className="sec">
       <div className="sec-h"><span className="t">Saved</span>{savedItems.length > 0 && <span className="c tnum">{savedItems.length}</span>}</div>
-      <div className="sec-sub">Private to you — bookmarked homes only you can see</div>
+      <div className="sec-sub">Private to you · bookmarked homes only you can see</div>
       {savedItems.length >= 2 && (
         <div className="ai-card">
-          <div className="ah"><div className="sp"><Icon icon={Sparkles} className="ico" /></div><div><div className="at">Ask Scout — for me</div><div className="as">Ranks your saved homes by your priorities · private, doesn't touch the group</div></div></div>
+          <div className="ah"><div className="sp"><Icon icon={Sparkles} className="ico" /></div><div><div className="at">Ask Scout · for me</div><div className="as">Ranks your saved homes by your priorities · private, doesn't touch the group</div></div></div>
           <div className="acts">
             <button className="btn btn-primary btn-sm" onClick={() => { if (requireSignIn('rank your saved')) void compare.runWhole(savedItems); }} disabled={compare.running}><Icon icon={Sparkles} className="ico" /> {compare.running ? 'Thinking…' : `Rank my ${savedItems.length} saved`}</button>
             {selected.size >= 2 && <button className="btn btn-ghost btn-sm" onClick={() => void compare.runSelected(selected.size === 2 ? '1v1' : 'multi')} disabled={compare.running}><Icon icon={Swords} className="ico" /> Compare {selected.size}</button>}
@@ -342,7 +342,7 @@ export function MobileBoard() {
   const decisionView = (
     <div className="sec">
       <div className="sec-h"><span className="t">Decision</span></div>
-      <div className="sec-sub">Where the group is landing — one official pick when you're ready</div>
+      <div className="sec-sub">Where the group is landing · one official pick when you're ready</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 4 }}>
         {official && (
           <div className="official-banner"><div className="seal"><Icon icon={BadgeCheck} className="ico" /></div>
@@ -383,8 +383,8 @@ export function MobileBoard() {
   const chatView = (
     <div className="sec">
       <div className="sec-h"><span className="t">Discussion</span><span className="c tnum">{caveats.length}</span></div>
-      <div className="sec-sub">Must-haves &amp; dealbreakers — these feed Scout's ranking</div>
-      <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', margin: '8px 0 4px' }} onClick={() => startOnboarding(true)}><Icon icon={HelpCircle} className="ico" /> Show me around — replay the tour</button>
+      <div className="sec-sub">Must-haves &amp; dealbreakers · these feed Scout's ranking</div>
+      <button className="btn btn-ghost btn-sm" style={{ alignSelf: 'flex-start', margin: '8px 0 4px' }} onClick={() => startOnboarding(true)}><Icon icon={HelpCircle} className="ico" /> Show me around · replay the tour</button>
       <div style={{ background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '4px 15px', marginTop: 4 }}>
         {caveats.map((c) => {
           const pending = (c.status ?? 'approved') !== 'approved';
@@ -396,14 +396,14 @@ export function MobileBoard() {
               </div>
               {pending && isOwner && (
                 <span style={{ display: 'flex', gap: 6, alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
-                  <button className="iconbtn" style={{ width: 32, height: 32 }} aria-label="Approve" title="Approve — Scout will weigh it" onClick={() => void approveCaveat(c.id)}><Icon icon={Check} className="ico" style={{ color: 'var(--under)' }} /></button>
+                  <button className="iconbtn" style={{ width: 32, height: 32 }} aria-label="Approve" title="Approve · Scout will weigh it" onClick={() => void approveCaveat(c.id)}><Icon icon={Check} className="ico" style={{ color: 'var(--under)' }} /></button>
                   <button className="iconbtn" style={{ width: 32, height: 32 }} aria-label="Reject" title="Reject" onClick={() => void deleteCaveat(c.id)}><Icon icon={X} className="ico" style={{ color: 'var(--over)' }} /></button>
                 </span>
               )}
             </div>
           );
         })}
-        {!caveats.length && <div className="txt" style={{ padding: '12px 0', color: 'var(--text-muted)' }}>No criteria yet — add the group's must-haves below.</div>}
+        {!caveats.length && <div className="txt" style={{ padding: '12px 0', color: 'var(--text-muted)' }}>No criteria yet. Add the group's must-haves below.</div>}
       </div>
       <div className="cv-post">
         <input className="field" placeholder="Add a must-have or dealbreaker…" value={draft} onChange={(e) => setDraft(e.target.value)} />
@@ -470,7 +470,7 @@ export function MobileBoard() {
         {isGuest && (
           <div className="guest-join">
             <Icon icon={UserPlus} className="ico" />
-            <span>{user ? 'Join to vote, save, and add homes.' : 'Viewing as a guest — sign in to join.'}</span>
+            <span>{user ? 'Join to vote, save, and add homes.' : 'Viewing as a guest. Sign in to join.'}</span>
             <button className="btn btn-primary btn-sm" onClick={joinThisTrip}>{user ? 'Join trip' : 'Sign in to join'}</button>
           </div>
         )}
@@ -513,7 +513,7 @@ export function MobileBoard() {
             <div className="sh-head"><h3>Add a listing</h3><button className="iconbtn x" onClick={() => setSheet(null)} aria-label="Close"><Icon icon={X} className="ico" /></button></div>
             <div className="field-wrap"><label className="field-label">Listing URL</label><input className="field" value={addUrl} onChange={(e) => setAddUrl(e.target.value)} placeholder="Paste Airbnb / VRBO / Booking URL…" autoComplete="off" /></div>
             <div className="field-wrap" style={{ marginTop: 12 }}><label className="field-label">Nightly all-in (optional)</label><input className="field" value={addPrice} onChange={(e) => setAddPrice(e.target.value)} placeholder="$5,540" inputMode="decimal" /></div>
-            <div className="so-hint"><Icon icon={Info} className="ico" /> Adds to <b>your group's submissions</b> — it rises into the shortlist once it reaches net +1 likes.</div>
+            <div className="so-hint"><Icon icon={Info} className="ico" /> Adds to <b>your group's submissions</b>. It rises into the shortlist once it reaches net +1 likes.</div>
             <div className="sh-foot"><button className="btn btn-ghost" onClick={() => setSheet(null)}>Cancel</button><button className="btn btn-primary" onClick={() => void addHome()} disabled={adding}><Icon icon={Plus} className="ico" /> {adding ? 'Adding…' : 'Add to board'}</button></div>
           </div>
         </>

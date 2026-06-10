@@ -22,9 +22,9 @@ function GoogleG() {
 
 const REASONS: Record<string, { ey: string; h: string; p: string }> = {
   vote: { ey: 'Sign in to vote', h: 'Join the group to vote', p: 'Sign in to thumbs-up the homes you love and help your group decide.' },
-  join: { ey: 'Trip invite', h: 'Join the trip', p: 'Sign in to view the board, vote, and add places — no password, just a one-tap link.' },
+  join: { ey: 'Trip invite', h: 'Join the trip', p: 'Sign in to view the board, vote, and add places. No password, just a one-tap link.' },
   start: { ey: '', h: 'Start planning', p: 'Create a board, invite your group by link, and decide on one rental together.' },
-  default: { ey: '', h: 'Sign in to GroupPad', p: 'Plan a trip your whole group agrees on — browse, vote, and lock one rental together.' },
+  default: { ey: '', h: 'Sign in to GroupPad', p: 'Plan a trip your whole group agrees on. Compare rentals, vote, and lock one together.' },
 };
 function reasonContent(reason?: string) {
   const r = (reason || '').toLowerCase();

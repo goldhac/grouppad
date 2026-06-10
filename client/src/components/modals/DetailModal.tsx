@@ -75,11 +75,11 @@ export function DetailModal() {
 
   const copyLink = async () => {
     if (!trip || !l) return;
-    try { await navigator.clipboard.writeText(`${window.location.origin}/#/t/${trip.id}/board?listing=${encodeURIComponent(l.id)}`); setCopied(true); window.setTimeout(() => setCopied(false), 1600); } catch { /* ignore */ }
+    try { await navigator.clipboard.writeText(`${window.location.origin}/s/l/${trip.id}/${encodeURIComponent(l.id)}`); setCopied(true); window.setTimeout(() => setCopied(false), 1600); } catch { /* ignore */ }
   };
   const onGenTour = async () => {
     if (!l) return;
-    try { await generateTour(l.id); toast('Generating the walkthrough — it’ll appear here shortly.', 'success'); }
+    try { await generateTour(l.id); toast('Generating the walkthrough. It’ll appear here shortly.', 'success'); }
     catch (e) { toast(e instanceof Error ? e.message : 'Could not start the tour.', 'error'); }
   };
 
@@ -285,7 +285,7 @@ export function DetailModal() {
                           <span className="vmeta"><b>{voterIds.length} of {groupSize}</b> voted{ups > 0 ? ` · ${ups} liked it` : ''}</span>
                         </>
                       ) : (
-                        <span className="vmeta">No votes yet — be the first to weigh in.</span>
+                        <span className="vmeta">No votes yet. Be the first to weigh in.</span>
                       )}
                     </div>
                   </div>
@@ -307,8 +307,8 @@ export function DetailModal() {
                       {revLoading && !rev ? <p className="text-[13px] text-text-muted">Loading reviews…</p>
                         : rev && (rev.pos.length || rev.neg.length) ? (
                           <div className="flex flex-col gap-2">
-                            {rev.pos[0] && <blockquote className="rounded-[var(--r-md)] border border-border bg-surface-inset p-3 text-[12.5px] italic text-text-2">“{rev.pos[0].text}”{rev.pos[0].author ? <span className="not-italic text-text-muted"> — {rev.pos[0].author}</span> : null}</blockquote>}
-                            {rev.neg[0] && <blockquote className="rounded-[var(--r-md)] border border-border bg-surface-inset p-3 text-[12.5px] italic text-text-2">“{rev.neg[0].text}”{rev.neg[0].author ? <span className="not-italic text-text-muted"> — {rev.neg[0].author}</span> : null}</blockquote>}
+                            {rev.pos[0] && <blockquote className="rounded-[var(--r-md)] border border-border bg-surface-inset p-3 text-[12.5px] italic text-text-2">“{rev.pos[0].text}”{rev.pos[0].author ? <span className="not-italic text-text-muted"> · {rev.pos[0].author}</span> : null}</blockquote>}
+                            {rev.neg[0] && <blockquote className="rounded-[var(--r-md)] border border-border bg-surface-inset p-3 text-[12.5px] italic text-text-2">“{rev.neg[0].text}”{rev.neg[0].author ? <span className="not-italic text-text-muted"> · {rev.neg[0].author}</span> : null}</blockquote>}
                           </div>
                         ) : <p className="text-[13px] text-text-muted">No written reviews available.</p>}
                     </div>

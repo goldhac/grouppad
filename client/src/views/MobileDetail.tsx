@@ -39,7 +39,7 @@ export function MobileDetail() {
     ...(l.superhost ? [{ yes: true, icon: Award, label: 'Superhost' }] : []),
   ];
 
-  const share = () => { try { navigator.clipboard?.writeText(`${location.origin}/#/t/${tripId || ''}/board?listing=${l.id}`); toast('Link copied.', 'success'); } catch { /**/ } };
+  const share = () => { try { navigator.clipboard?.writeText(`${location.origin}/s/l/${tripId || ''}/${l.id}`); toast('Link copied.', 'success'); } catch { /**/ } };
 
   return (
     <div className="gp-mobile">
@@ -110,7 +110,7 @@ export function MobileDetail() {
                 <div className="d-seclabel"><Icon icon={Star} className="ico" style={{ width: 13, height: 13, color: 'var(--star)', fill: 'var(--star)' }} /> Guest reviews{rev.total ? ` · ${rev.total}` : ''}</div>
                 {[...rev.pos.slice(0, 2).map((r) => ({ ...r, tone: 'pos' })), ...rev.neg.slice(0, 1).map((r) => ({ ...r, tone: 'neg' }))].map((r, i) => (
                   <div key={i} style={{ fontSize: 13, lineHeight: 1.5, color: 'var(--text-2)', background: 'var(--surface-inset)', border: '1px solid var(--border)', borderLeft: `3px solid ${r.tone === 'pos' ? 'var(--under)' : 'var(--over)'}`, borderRadius: 'var(--r-md)', padding: '9px 12px', marginBottom: 8 }}>
-                    “{r.text}”{r.author ? <span style={{ color: 'var(--text-muted)' }}> — {r.author}</span> : null}
+                    “{r.text}”{r.author ? <span style={{ color: 'var(--text-muted)' }}> · {r.author}</span> : null}
                   </div>
                 ))}
               </div>
@@ -130,7 +130,7 @@ export function MobileDetail() {
             )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: 2 }}>
-              <button className="source-link" onClick={() => { toggleSelect(l.id); toast(selected.has(l.id) ? 'Removed from compare.' : 'Added to compare — pick another and tap Compare.', 'success'); }} style={{ fontSize: 13.5, fontWeight: 600, color: selected.has(l.id) ? 'var(--accent-text)' : 'var(--link)', background: 'none', border: 0, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><Icon icon={Scale} className="ico" /> {selected.has(l.id) ? 'In compare' : 'Add to compare'}</button>
+              <button className="source-link" onClick={() => { toggleSelect(l.id); toast(selected.has(l.id) ? 'Removed from compare.' : 'Added to compare. Pick another and tap Compare.', 'success'); }} style={{ fontSize: 13.5, fontWeight: 600, color: selected.has(l.id) ? 'var(--accent-text)' : 'var(--link)', background: 'none', border: 0, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}><Icon icon={Scale} className="ico" /> {selected.has(l.id) ? 'In compare' : 'Add to compare'}</button>
               <a className="source-link" href={l.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--link)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>{l.check_manual ? 'Check manually' : `View on ${l.source}`} <Icon icon={ExternalLink} className="ico" /></a>
               {isOwner && l.last_seen == null && (
                 <button className="source-link" style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--over)', background: 'none', border: 0, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }} onClick={() => { if (confirm('Remove this listing for everyone?')) { void deleteListing(l.id, !!l.submitted_by); closeDetail(); } }}>

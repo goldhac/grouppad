@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Users, Wallet, Home, Settings, Share2 } from 'lucide-react';
-import { useApp } from '@/store/AppContext';
+import { useApp, isDeadListing } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -17,16 +17,20 @@ function fmtRange(a?: string | null, b?: string | null): string | null {
 
 /** The trip-title row of the board masthead: identity + key facts + organizer actions. */
 export function BoardHeader() {
-  const { trip, listings, isOwner, toast } = useApp();
+  const { trip, pooledListings, isOwner, toast } = useApp();
   const navigate = useNavigate();
   if (!trip) return null;
 
-  const underCount = listings.filter((l) => l.budget === 'under' || l.budget === 'marginal').length;
+  // Count real homes only: deduped pool, minus delisted/dead entries and
+  // unpriced placeholders. "Under budget" = priced homes at or below the target.
+  const live = pooledListings.filter((l) => !isDeadListing(l));
+  const homeCount = live.length;
+  const underCount = live.filter((l) => l.budget === 'under' || l.budget === 'marginal').length;
   const range = fmtRange(trip.checkin, trip.checkout_5n);
 
   const share = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(`${window.location.origin}/s/b/${trip.id}`);
       toast('Board link copied — share it with your group.', 'success');
     } catch {
       toast('Could not copy the link.', 'error');
@@ -41,9 +45,9 @@ export function BoardHeader() {
           {range && <span className="mi"><Icon icon={Calendar} className="ico" /> {range}</span>}
           <span className="mi"><Icon icon={Users} className="ico" /> {trip.adults} guests</span>
           {trip.budget > 0 && (
-            <span className="mi"><Icon icon={Wallet} className="ico" /> <span className="hl tnum">${trip.budget.toLocaleString()}</span> all-in</span>
+            <span className="mi"><Icon icon={Wallet} className="ico" /> <span className="hl tnum">${trip.budget.toLocaleString()}</span> budget</span>
           )}
-          <span className="mi"><Icon icon={Home} className="ico" /> <span className="hl tnum">{listings.length}</span> homes</span>
+          {homeCount > 0 && <span className="mi"><Icon icon={Home} className="ico" /> <span className="hl tnum">{homeCount}</span> {homeCount === 1 ? 'home' : 'homes'}</span>}
           {underCount > 0 && <span className="mi"><span className="under tnum">{underCount} under budget</span></span>}
         </div>
       </div>

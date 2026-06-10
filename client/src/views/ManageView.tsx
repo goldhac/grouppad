@@ -76,7 +76,7 @@ export function ManageView() {
   if (isMobile) return <MobileManage />;
 
   const joinedCount = members.length || trip.memberCount;
-  const inviteLink = `${window.location.origin}/#/t/${trip.id}/board${trip.join_code ? `?join=${trip.join_code}` : ''}`;
+  const inviteLink = `${window.location.origin}/s/i/${trip.id}${trip.join_code ? `?c=${trip.join_code}` : ''}`;
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(inviteLink); setCopied(true); toast('Invite link copied.', 'success'); window.setTimeout(() => setCopied(false), 1800); } catch { /* ignore */ }
@@ -124,7 +124,7 @@ export function ManageView() {
     const c = confirm;
     setConfirm(null);
     try {
-      if (c.kind === 'reset') { await setDecision(null); toast('Official pick reset — the group can keep deciding.', 'success'); api.tripPulse(trip!.id).then(setPulse).catch(() => {}); }
+      if (c.kind === 'reset') { await setDecision(null); toast('Official pick reset. The group can keep deciding.', 'success'); api.tripPulse(trip!.id).then(setPulse).catch(() => {}); }
       else if (c.kind === 'close') { const next = !trip!.voting_closed; await api.patchTrip(trip!.id, { voting_closed: next }); await enterTrip(trip!.id); toast(next ? 'Voting closed. Reopen it whenever you like.' : 'Voting reopened.', 'success'); }
       else if (c.kind === 'transfer' && c.member) { await api.transferOrganizer(trip!.id, c.member.id); toast(`${c.member.name} is now the organizer.`, 'success'); await enterTrip(trip!.id); navigate(`/t/${trip!.id}/board`); }
       else if (c.kind === 'remove' && c.member) { await api.removeMember(trip!.id, c.member.id); setMembers((m) => m.filter((x) => x.id !== c.member!.id)); toast('Member removed from the trip.', 'success'); }
@@ -192,7 +192,7 @@ export function ManageView() {
                   ) : null}
                 </div>
               ))}
-              {members.length === 0 && <p className="py-3 text-sm text-text-muted">Just you so far — share the invite link to bring your group in.</p>}
+              {members.length === 0 && <p className="py-3 text-sm text-text-muted">Just you so far. Share the invite link to bring your group in.</p>}
             </div>
           </div>
 
@@ -232,7 +232,7 @@ export function ManageView() {
               <div className="set-foot">
                 <button className="btn btn-primary" type="submit" disabled={savingSet}><Icon icon={Check} className="ico" /> {savingSet ? 'Saving…' : 'Save changes'}</button>
                 <button className="btn btn-ghost" type="button" onClick={resetForm}>Discard</button>
-                {saved && <span className="saved" style={{ display: 'inline-flex' }}><Icon icon={CheckCircle2} className="ico" /> Saved — back to the board</span>}
+                {saved && <span className="saved" style={{ display: 'inline-flex' }}><Icon icon={CheckCircle2} className="ico" /> Saved · back to the board</span>}
               </div>
             </form>
           </div>
@@ -253,12 +253,12 @@ export function ManageView() {
             {pulse?.decisionLocked ? (
               <div className="decision-status locked"><div className="seal"><Icon icon={BadgeCheck} className="ico" /></div><div><div className="k"><span className="gd" /> Official pick locked</div><div className="nm">The group has a decision.</div></div></div>
             ) : (
-              <div className="decision-status"><div>No official pick yet — lock one from the board when the group’s ready.</div></div>
+              <div className="decision-status"><div>No official pick yet. Lock one from the board when the group’s ready.</div></div>
             )}
           </div>
           <div className="mg-card" style={{ padding: '16px 18px' }}>
             <div className="c-h" style={{ marginBottom: 9 }}><Icon icon={Info} className="ico" /><h2 style={{ fontSize: 15 }}>Organizer powers</h2></div>
-            <p className="c-sub" style={{ margin: 0, fontSize: 13 }}>Post the itinerary, remove listings, and lock the official pick — all from the board. {pulse?.decisionLocked ? 'An official pick is currently locked.' : 'No official pick locked yet.'}</p>
+            <p className="c-sub" style={{ margin: 0, fontSize: 13 }}>Post the itinerary, remove listings, and lock the official pick, all from the board. {pulse?.decisionLocked ? 'An official pick is currently locked.' : 'No official pick locked yet.'}</p>
           </div>
         </aside>
       </div>
@@ -306,7 +306,7 @@ const CONFIRMS: Record<ConfirmKind, { glyph: typeof Crown; tone: string; title: 
 function ConfirmDialog({ state, onCancel, onConfirm }: { state: ConfirmState; onCancel: () => void; onConfirm: (typedOk: boolean) => void }) {
   const c = CONFIRMS[state.kind];
   const [typed, setTyped] = useState('');
-  const sub = state.member ? `${state.member.name} — ${c.sub}` : c.sub;
+  const sub = state.member ? `${state.member.name} · ${c.sub}` : c.sub;
   const ok = !c.typed || typed.trim().toUpperCase() === 'DELETE';
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCancel();

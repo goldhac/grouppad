@@ -5,12 +5,12 @@ import { Icon } from '@/components/ui/Icon';
 
 const TERMS = {
   title: 'Terms of Service', updated: 'June 2026',
-  intro: 'GroupPad is a tool for planning a group trip together — collecting rental listings on a shared board, voting, comparing options, and agreeing on one place to book. By creating an account or using GroupPad, you agree to these terms.',
+  intro: 'GroupPad is a tool for planning a group trip together: collecting rental listings on a shared board, voting, comparing options, and agreeing on one place to book. By creating an account or using GroupPad, you agree to these terms.',
   secs: [
-    ["What GroupPad is — and isn't", "GroupPad helps your group organize and decide. It is not a booking platform, travel agency, or payment processor — we don't take reservations or handle money. When your group settles on a place, you book it directly with the host or listing site. Prices, availability, and details shown are estimates from public listing pages and can be out of date — always verify on the original listing before you book."],
-    ['Your account', "You sign in with Google or a one-time email link — no password to manage. You're responsible for activity on your account and for keeping your email secure."],
-    ['Your content', "You and your group own what you add — links, votes, comments, caveats, itineraries. You grant GroupPad permission to store and display that content to your trip's members so the product works. Organizers can remove listings/members and delete the trip; deletion is permanent."],
-    ['AI features', "Scout (powered by Google's Gemini) compares homes and summarizes trade-offs. AI output is a helpful opinion, not advice — it can be wrong. Use your own judgment before deciding."],
+    ["What GroupPad is, and isn't", "GroupPad helps your group organize and decide. It is not a booking platform, travel agency, or payment processor. We don't take reservations or handle money. When your group settles on a place, you book it directly with the host or listing site. Prices, availability, and details shown are estimates from public listing pages and can be out of date, so always verify on the original listing before you book."],
+    ['Your account', "You sign in with Google or a one-time email link, so no password to manage. You're responsible for activity on your account and for keeping your email secure."],
+    ['Your content', "You and your group own what you add: links, votes, comments, caveats, itineraries. You grant GroupPad permission to store and display that content to your trip's members so the product works. Organizers can remove listings/members and delete the trip; deletion is permanent."],
+    ['AI features', "Scout (powered by Google's Gemini) compares homes and summarizes trade-offs. AI output is a helpful opinion, not advice, and it can be wrong. Use your own judgment before deciding."],
     ['No warranty & liability', 'GroupPad is provided "as is." To the extent the law allows, we\'re not liable for indirect damages or for anything arising from a booking you make with a third party.'],
   ],
 };
@@ -19,7 +19,7 @@ const PRIVACY = {
   intro: "The short version: we collect the minimum needed to run a shared trip board, we don't sell your data, and we never post or email your group on your behalf without you.",
   secs: [
     ['What we collect', "Account: your email, plus name and avatar if you use Google. Activity: trips you're in, listings you add, votes, comments, caveats, and itinerary text. Technical: a sign-in cookie and a little browser storage (theme + whether you've seen the tour)."],
-    ['How we use it', 'To run your trip board — show your group the listings, votes, and decisions; tie your votes to you across devices; and email trip updates if you opt in. Aggregate usage figures keep the service healthy.'],
+    ['How we use it', 'To run your trip board: show your group the listings, votes, and decisions; tie your votes to you across devices; and email trip updates if you opt in. Aggregate usage figures keep the service healthy.'],
     ['Third parties', "Google (sign-in), Resend (email), Apify and Firecrawl (public listing details and prices), and Google Gemini (Scout). Each processes only what's needed. We don't sell or rent your personal data."],
     ['Email', 'We send sign-in links and, if you opt in, trip recap and "big moment" emails. Every email has one-click unsubscribe; change preferences anytime from the account menu.'],
     ['Your choices', 'Browse a shared board without an account, edit notification preferences, leave a trip, or ask us to delete your data. Cookies are limited to sign-in and display preferences.'],

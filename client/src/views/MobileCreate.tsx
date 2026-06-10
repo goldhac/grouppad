@@ -25,7 +25,7 @@ export function MobileCreate() {
     else if (f.cout <= f.cin) { bad.add('cout'); text = 'Check-out must be after check-in.'; }
     else if (!f.guests || Number(f.guests) < 2) { bad.add('guests'); text = 'How many guests? (2 or more.)'; }
     setInvalid(bad);
-    setMsg(bad.size === 0 ? { text: 'Looks good — creating your board…', ok: true } : { text, ok: false });
+    setMsg(bad.size === 0 ? { text: 'Looks good. Creating your board…', ok: true } : { text, ok: false });
     return bad.size === 0;
   };
 
@@ -86,7 +86,7 @@ export function MobileCreate() {
             <div className="ct-head">
               <span className="k"><Icon icon={Sparkles} className="ico" /> Start a trip</span>
               <h1>Set the basics.</h1>
-              <p>Where and when — you can share the board with your group right after.</p>
+              <p>Where and when. You can share the board with your group right after.</p>
             </div>
             {msg && <div className={`ct-msg ${msg.ok ? 'ok' : 'err'}`}><Icon icon={msg.ok ? CheckCircle2 : AlertCircle} className="ico" /> {msg.text}</div>}
             <div className="ct-group">
@@ -106,7 +106,7 @@ export function MobileCreate() {
                 {field('budget', 'Budget', { icon: Wallet, sign: '$', type: 'number', ph: '7,000' })}
               </div>
               {field('type', 'Home type', { icon: Home, select: HOME_TYPES })}
-              {field('itin', 'Itinerary', { hint: '(optional)', type: 'textarea', ph: 'Rough plans help tailor the search — e.g. Fri: arrive + dinner. Sat: pool day…', sub: 'Helps pick nearby reference points and powers Scout, our AI.', subicon: Info })}
+              {field('itin', 'Itinerary', { hint: '(optional)', type: 'textarea', ph: 'Rough plans help tailor the search, e.g. Fri: arrive + dinner. Sat: pool day…', sub: 'Helps pick nearby reference points and powers Scout, our AI.', subicon: Info })}
             </div>
             <div style={{ height: 30 }} />
           </div>

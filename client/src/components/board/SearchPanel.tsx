@@ -65,7 +65,7 @@ export function SearchPanel() {
           <Loader2 className="h-5 w-5 animate-spin text-accent" />
           <div>
             <p className="text-sm font-semibold">Finding rentals in {trip.destination}…</p>
-            <p className="text-xs text-muted">This takes a minute — homes will appear here automatically.</p>
+            <p className="text-xs text-muted">This takes a minute. Homes will appear here automatically.</p>
           </div>
         </div>
       </div>
@@ -91,7 +91,7 @@ export function SearchPanel() {
             </>
           ) : (
             <p className="max-w-sm text-sm text-muted">
-              Auto-search isn’t configured on this server — add the homes you’re considering with
+              Auto-search isn’t configured on this server. Add the homes you’re considering with
               <span className="text-text"> “Add a listing.”</span>
             </p>
           )}

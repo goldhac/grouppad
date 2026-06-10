@@ -95,7 +95,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
         type="button"
         className={cn('save-btn', isSaved && 'on')}
         aria-label={isSaved ? 'Saved to your shortlist' : 'Save to your shortlist'}
-        title={isSaved ? 'Saved — in your shortlist' : 'Save to your shortlist'}
+        title={isSaved ? 'Saved · in your shortlist' : 'Save to your shortlist'}
         aria-pressed={isSaved}
         onClick={(e) => { e.stopPropagation(); void toggleFavorite(l.id); }}
       >
@@ -248,7 +248,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
             {rev?.pos[0]?.text && (
               <div className="reviews" style={{ alignItems: 'flex-start' }}>
                 <Icon icon={Quote} className="ico" style={{ color: 'var(--text-muted)' }} />
-                <span className="line-clamp-2 italic">“{rev.pos[0].text}”{rev.pos[0].author ? <span className="not-italic" style={{ color: 'var(--text-muted)' }}> — {rev.pos[0].author}</span> : null}</span>
+                <span className="line-clamp-2 italic">“{rev.pos[0].text}”{rev.pos[0].author ? <span className="not-italic" style={{ color: 'var(--text-muted)' }}> · {rev.pos[0].author}</span> : null}</span>
               </div>
             )}
 

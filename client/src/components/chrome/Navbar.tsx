@@ -3,7 +3,7 @@ import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { ChevronDown, Plus, LogOut, LayoutGrid, Check, Bell, Sun, Moon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
-import { Avatar, AVATARS } from '@/components/ui/Avatar';
+import { Avatar, AVATAR_CHOICES } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { PeakLogo } from '@/components/ui/PeakLogo';
 import { useTheme } from '@/lib/useTheme';
@@ -225,14 +225,13 @@ export function Navbar() {
                 {(close) => (
                   <>
                     <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Your avatar</div>
-                    <div className="flex flex-wrap gap-1.5 px-3 pb-2">
-                      {AVATARS.map((a) => (
+                    <div className="flex flex-wrap gap-1.5 px-3 pb-2 max-h-[156px] overflow-y-auto">
+                      {AVATAR_CHOICES.map((a) => (
                         <button
                           key={a}
                           onClick={() => void setAvatar(a)}
                           className={`rounded-full ${user.avatar === a ? 'ring-2 ring-accent ring-offset-1 ring-offset-panel' : 'opacity-80 hover:opacity-100'}`}
-                          aria-label={`Use ${a} avatar`}
-                          title={a}
+                          aria-label="Use this avatar"
                         >
                           <Avatar avatar={a} size={32} />
                         </button>

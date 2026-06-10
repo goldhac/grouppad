@@ -21,7 +21,7 @@ export function CaveatsSection() {
     try {
       await postCaveat(t);
       setText('');
-      if (!isOwner) toast('Request sent — the organizer approves it before Scout weighs it.', 'success');
+      if (!isOwner) toast('Request sent. The organizer approves it before Scout weighs it.', 'success');
     } finally {
       setBusy(false);
     }
@@ -42,7 +42,7 @@ export function CaveatsSection() {
             </span>
           )}
           <span className="hidden text-xs text-muted sm:inline">
-            Request a must-have — the organizer approves it, then Scout weighs it
+            Request a must-have. The organizer approves it, then Scout weighs it
           </span>
         </button>
 
@@ -51,7 +51,7 @@ export function CaveatsSection() {
           {pending.length > 0 && (
             <div className="mt-3">
               <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                {isOwner ? 'Pending requests — approve to feed Scout' : 'Awaiting the organizer’s approval'}
+                {isOwner ? 'Pending requests · approve to feed Scout' : 'Awaiting the organizer’s approval'}
               </div>
               <div className="space-y-2">
                 {[...pending].reverse().map((c) => (
@@ -81,7 +81,7 @@ export function CaveatsSection() {
           {/* Approved criteria that Scout weighs */}
           <div className="mt-3 space-y-2">
             {approved.length === 0 && pending.length === 0 && (
-              <p className="text-sm text-muted">No criteria yet — add the must-haves your group cares about.</p>
+              <p className="text-sm text-muted">No criteria yet. Add the must-haves your group cares about.</p>
             )}
             {[...approved].reverse().map((c) => (
               <div key={c.id} className="flex items-start gap-2 rounded-md bg-panel-2 px-3 py-2 text-sm">
