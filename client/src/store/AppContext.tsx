@@ -472,9 +472,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (e: unknown, reason: string, fallback: string) => {
       if (e instanceof ApiError && e.status === 401) { setUser(null); userRef.current = null; openAuth(reason); return; }
       if (e instanceof ApiError && e.status === 403 && e.needsJoin) {
+        // Signed-in non-member: try to join (open trips succeed silently; gated
+        // trips surface joinTrip's own "ask for a fresh invite" message).
         const id = tripIdRef.current;
-        toast('Join this trip to take part.', 'info');
         if (id) joinTrip(id);
+        else toast('Join this trip to take part.', 'info');
         return;
       }
       toast(e instanceof Error ? e.message : fallback, 'error');
