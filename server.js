@@ -3336,6 +3336,18 @@ app.post('/api/trips/:tripId/transfer', requireTripCreator, (req, res) => {
   if (prevCreator && prevCreator !== userId && !trip.organizers.includes(prevCreator)) trip.organizers.push(prevCreator);
   trip.owner_id = userId;
   saveTrips(trips);
+  // Tell the new creator they now own the trip.
+  try {
+    const u = loadUsers()[userId];
+    if (u && isEmail(u.email)) {
+      const html = Emails.creatorTransferred({
+        appBase: APP_BASE_URL, tripName: trip.name, from: req.user.name || '',
+        boardUrl: boardUrl(trip.id), manageUrl: `${APP_BASE_URL}/#/t/${trip.id}/manage`,
+        unsub: unsubToken(u.id),
+      });
+      sendEmail(u.email, `You're now the creator of ${trip.name}`, html).catch(() => {});
+    }
+  } catch (e) { console.error('[creatorTransferred email]', e.message); }
   res.json(tripView(trip, req.user));
 });
 
@@ -3349,8 +3361,24 @@ app.post('/api/trips/:tripId/organizers', requireTripOwner, (req, res) => {
     return res.status(400).json({ error: 'That person needs to join the trip first.' });
   if (userId === trip.owner_id) return res.status(400).json({ error: 'The creator is already an organizer.' });
   trip.organizers = trip.organizers || [];
-  if (!trip.organizers.includes(userId)) trip.organizers.push(userId);
+  const already = trip.organizers.includes(userId);
+  if (!already) trip.organizers.push(userId);
   saveTrips(trips);
+  // Let the new organizer know what they can do now.
+  if (!already) {
+    try {
+      const u = loadUsers()[userId];
+      if (u && isEmail(u.email)) {
+        const html = Emails.organizerAdded({
+          appBase: APP_BASE_URL, tripName: trip.name,
+          promotedBy: req.user.name || 'An organizer',
+          boardUrl: boardUrl(trip.id), manageUrl: `${APP_BASE_URL}/#/t/${trip.id}/manage`,
+          unsub: unsubToken(u.id),
+        });
+        sendEmail(u.email, `You're now an organizer of ${trip.name}`, html).catch(() => {});
+      }
+    } catch (e) { console.error('[organizerAdded email]', e.message); }
+  }
   res.json(tripView(trip, req.user));
 });
 

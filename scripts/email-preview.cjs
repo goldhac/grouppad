@@ -21,6 +21,8 @@ const samples = [
             + E.digestRow('12 votes', [])
             + E.digestRow('4 top-choice picks', []),
     unsub: 'demo' })],
+  ['[Preview] You’re now an organizer', E.organizerAdded({ appBase: BASE, tripName: 'LA Birthday 2026', promotedBy: 'Gold', boardUrl: `${BASE}/#/t/la-birthday-2026/board`, manageUrl: `${BASE}/#/t/la-birthday-2026/manage`, unsub: 'demo' })],
+  ['[Preview] You’re the trip creator', E.creatorTransferred({ appBase: BASE, tripName: 'LA Birthday 2026', from: 'Gold', boardUrl: `${BASE}/#/t/la-birthday-2026/board`, manageUrl: `${BASE}/#/t/la-birthday-2026/manage`, unsub: 'demo' })],
 ];
 
 (async () => {

@@ -190,4 +190,36 @@ function welcome({ appBase, name, link: href }) {
     foot: `<span style="color:${MUTED};" class="ec-foot">You’re receiving this because you just created a GroupPad account. ${link(`${appBase}/#/help`, 'Help center')}</span>` });
 }
 
-module.exports = { esc, frame, btn, digestRow, magicLink, invite, joined, decisionLocked, digest, welcome, ACCENT };
+// Sent to a member the moment they're promoted to organizer.
+function organizerAdded({ appBase, tripName, promotedBy, boardUrl, manageUrl, unsub }) {
+  const can = [
+    'Lock in the group’s official pick',
+    'Invite people and manage the member list',
+    'Approve must-haves and refresh the listings',
+    'Promote other members to organizer',
+  ].map((t) => `<tr><td style="padding:5px 0;font-family:${SANS};font-size:14.5px;line-height:1.5;color:${INK};" class="ec-ink"><span style="color:${TEAL_EYE};">&#10003;</span>&nbsp;&nbsp;${esc(t)}</td></tr>`).join('');
+  const lead = promotedBy ? `${esc(promotedBy)} just made you an organizer of` : 'You’re now an organizer of';
+  const body = `<tr><td class="ec-pad" style="padding:28px 40px 0;">${eyebrow('You’re now an organizer')}${h1(`You can help run the ${esc(tripName)}`)}</td></tr>
+<tr><td class="ec-pad ec-ink" style="padding:14px 40px 0;font-family:${SANS};">
+  <p class="ec-ink" style="margin:0 0 18px;font-size:16px;line-height:1.65;color:${INK};">${lead} <strong>${esc(tripName)}</strong>. You now have the same controls as every other organizer on the trip:</p>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="ec-chip" style="margin:0 0 24px;background-color:${CHIP};border:1px solid ${BORDER};border-radius:14px;"><tr><td style="padding:15px 20px;"><table role="presentation" cellpadding="0" cellspacing="0">${can}</table></td></tr></table>
+  ${btn(manageUrl || boardUrl, 'Open the board', 200)}
+  <p class="ec-muted" style="margin:20px 0 0;font-size:13px;line-height:1.6;color:${MUTED};">Only the trip’s creator can delete the trip. Everything else is yours to manage.</p>
+</td></tr>`;
+  return frame({ appBase, preheader: `You’re now an organizer of the ${tripName}.`, body,
+    foot: `${unsub ? `${link(`${appBase}/api/notify/unsubscribe?u=${unsub}`, 'Manage notifications')} &middot; ` : ''}<span style="color:${MUTED};" class="ec-foot">We let you know when your role on a trip changes.</span>` });
+}
+
+// Sent to the new creator when the creator role is handed over.
+function creatorTransferred({ appBase, tripName, from, boardUrl, manageUrl, unsub }) {
+  const lead = from ? `${esc(from)} handed you` : 'You’ve been handed';
+  const body = `<tr><td class="ec-pad" style="padding:28px 40px 0;">${eyebrow('You’re the trip creator')}${h1(`The ${esc(tripName)} is yours to run`)}</td></tr>
+<tr><td class="ec-pad ec-ink" style="padding:14px 40px 0;font-family:${SANS};">
+  <p class="ec-ink" style="margin:0 0 22px;font-size:16px;line-height:1.65;color:${INK};">${lead} the <strong>${esc(tripName)}</strong>. As the creator you have full control, including trip settings and the option to delete the trip. The previous creator stays on as an organizer.</p>
+  ${btn(manageUrl || boardUrl, 'Open trip settings', 220)}
+</td></tr>`;
+  return frame({ appBase, preheader: `You’re now the creator of the ${tripName}.`, body,
+    foot: `${unsub ? `${link(`${appBase}/api/notify/unsubscribe?u=${unsub}`, 'Manage notifications')} &middot; ` : ''}<span style="color:${MUTED};" class="ec-foot">We let you know when your role on a trip changes.</span>` });
+}
+
+module.exports = { esc, frame, btn, digestRow, magicLink, invite, joined, decisionLocked, digest, welcome, organizerAdded, creatorTransferred, ACCENT };
