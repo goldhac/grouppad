@@ -115,11 +115,12 @@ app.get('/s/i/:tripId', (req, res) => {
   if (!trip) return res.redirect(302, `${APP_BASE_URL}/`);
   const code = String(req.query.c || trip.join_code || '');
   const facts = [trip.destination, ogDateRange(trip.checkin, trip.checkout_5n), trip.adults ? `${trip.adults} guests` : ''].filter(Boolean).join(' · ');
-  const cover = tripCoverPhoto(trip.id);
+  // Invites lead with the branded GroupPad card (not a random home photo) so the
+  // preview clearly reads as "you're being invited to GroupPad".
   res.set('Cache-Control', 'public, max-age=300').send(sharePage({
     title: `You're invited: ${trip.name}`,
     desc: `${facts ? facts + '. ' : ''}Browse the homes, vote on your favorites, and help the group pick one on GroupPad.`,
-    image: ogImage(cover), fallbackImg: !cover,
+    image: ogImage('/og.jpg'), fallbackImg: true,
     canonical: `${APP_BASE_URL}/s/i/${encodeURIComponent(trip.id)}`,
     redirect: boardHash(trip.id, code ? `?join=${encodeURIComponent(code)}` : ''),
   }));
