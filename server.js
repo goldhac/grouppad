@@ -81,10 +81,19 @@ function ogDateRange(a, b) {
   const [yb, mb, db] = String(b).split('-').map(Number);
   return `${start}–${ma === mb ? db : `${OG_MON[mb - 1]} ${db}`}, ${yb || ya}`;
 }
-function ogImage(url) {
-  if (!url) return `${APP_BASE_URL}/og.jpg`;
+// Build absolute URLs from the host the request actually arrived on, NOT the
+// configured APP_BASE_URL — a link shared on the railway domain must point its
+// og:image + redirect back at THAT domain (the configured custom domain may not
+// be live, which silently breaks the preview image).
+function reqBase(req) {
+  const host = req.get('host');
+  return host ? `${req.protocol}://${host}` : APP_BASE_URL;
+}
+function ogImage(url, base) {
+  const b = base || APP_BASE_URL;
+  if (!url) return `${b}/og.jpg`;
   if (/^https?:\/\//.test(url)) return url;
-  return `${APP_BASE_URL}${url.startsWith('/') ? '' : '/'}${url}`;
+  return `${b}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 function sharePage({ title, desc, image, canonical, redirect, fallbackImg }) {
   const dim = fallbackImg ? '\n<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">' : '';
@@ -107,12 +116,13 @@ function sharePage({ title, desc, image, canonical, redirect, fallbackImg }) {
 <script>location.replace(${JSON.stringify(redirect)})</script>
 </head><body style="font-family:system-ui;background:#10110f;color:#e7e0d0;display:grid;place-items:center;height:100vh;margin:0">Opening GroupPad…</body></html>`;
 }
-function boardHash(tripId, qs) { return `${APP_BASE_URL}/#/t/${encodeURIComponent(tripId)}/board${qs || ''}`; }
+function boardHash(tripId, qs, base) { return `${base || APP_BASE_URL}/#/t/${encodeURIComponent(tripId)}/board${qs || ''}`; }
 
 // "Your friend is inviting you to join this group trip"
 app.get('/s/i/:tripId', (req, res) => {
+  const base = reqBase(req);
   const trip = getTrip(req.params.tripId);
-  if (!trip) return res.redirect(302, `${APP_BASE_URL}/`);
+  if (!trip) return res.redirect(302, `${base}/`);
   const code = String(req.query.c || trip.join_code || '');
   const facts = [trip.destination, ogDateRange(trip.checkin, trip.checkout_5n), trip.adults ? `${trip.adults} guests` : ''].filter(Boolean).join(' · ');
   // Invites lead with the branded GroupPad card (not a random home photo) so the
@@ -120,16 +130,17 @@ app.get('/s/i/:tripId', (req, res) => {
   res.set('Cache-Control', 'public, max-age=300').send(sharePage({
     title: `You're invited: ${trip.name}`,
     desc: `${facts ? facts + '. ' : ''}Browse the homes, vote on your favorites, and help the group pick one on GroupPad.`,
-    image: ogImage('/og.jpg'), fallbackImg: true,
-    canonical: `${APP_BASE_URL}/s/i/${encodeURIComponent(trip.id)}`,
-    redirect: boardHash(trip.id, code ? `?join=${encodeURIComponent(code)}` : ''),
+    image: ogImage('/og.jpg', base), fallbackImg: true,
+    canonical: `${base}/s/i/${encodeURIComponent(trip.id)}`,
+    redirect: boardHash(trip.id, code ? `?join=${encodeURIComponent(code)}` : '', base),
   }));
 });
 
 // "Your friend wants you to look at this listing"
 app.get('/s/l/:tripId/:listingId', (req, res) => {
+  const base = reqBase(req);
   const trip = getTrip(req.params.tripId);
-  if (!trip) return res.redirect(302, `${APP_BASE_URL}/`);
+  if (!trip) return res.redirect(302, `${base}/`);
   const l = findListingByIdInTrip(trip.id, req.params.listingId);
   const name = (l && l.name) || 'this home';
   const specs = [l && l.bd && `${l.bd} bd`, l && l.sleeps && `sleeps ${l.sleeps}`, l && l.est_5n && `~$${Math.round(l.est_5n).toLocaleString('en-US')} all-in`, l && l.area].filter(Boolean).join(' · ');
@@ -137,24 +148,25 @@ app.get('/s/l/:tripId/:listingId', (req, res) => {
   res.set('Cache-Control', 'public, max-age=300').send(sharePage({
     title: `Take a look: ${name}`,
     desc: `${specs ? specs + '. ' : ''}Part of ${trip.name}. Open it on GroupPad and tell the group what you think.`,
-    image: ogImage(photo), fallbackImg: !photo,
-    canonical: `${APP_BASE_URL}/s/l/${encodeURIComponent(trip.id)}/${encodeURIComponent(req.params.listingId)}`,
-    redirect: boardHash(trip.id, `?listing=${encodeURIComponent(req.params.listingId)}`),
+    image: ogImage(photo, base), fallbackImg: !photo,
+    canonical: `${base}/s/l/${encodeURIComponent(trip.id)}/${encodeURIComponent(req.params.listingId)}`,
+    redirect: boardHash(trip.id, `?listing=${encodeURIComponent(req.params.listingId)}`, base),
   }));
 });
 
 // General board share
 app.get('/s/b/:tripId', (req, res) => {
+  const base = reqBase(req);
   const trip = getTrip(req.params.tripId);
-  if (!trip) return res.redirect(302, `${APP_BASE_URL}/`);
+  if (!trip) return res.redirect(302, `${base}/`);
   const facts = [trip.destination, ogDateRange(trip.checkin, trip.checkout_5n), trip.adults ? `${trip.adults} guests` : ''].filter(Boolean).join(' · ');
   const cover = tripCoverPhoto(trip.id);
   res.set('Cache-Control', 'public, max-age=300').send(sharePage({
     title: `${trip.name} on GroupPad`,
     desc: `${facts ? facts + '. ' : ''}See the homes the group is weighing, compare them with Scout, and add your vote.`,
-    image: ogImage(cover), fallbackImg: !cover,
-    canonical: `${APP_BASE_URL}/s/b/${encodeURIComponent(trip.id)}`,
-    redirect: boardHash(trip.id, ''),
+    image: ogImage(cover, base), fallbackImg: !cover,
+    canonical: `${base}/s/b/${encodeURIComponent(trip.id)}`,
+    redirect: boardHash(trip.id, '', base),
   }));
 });
 
