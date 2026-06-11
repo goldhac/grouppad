@@ -127,7 +127,9 @@
 
   --text:        var(--c-ink-900);
   --text-2:      var(--c-ink-700);
-  --text-muted:  var(--c-ink-500);
+  /* Darkened from c-ink-500 (#7B847D ≈ 3.4:1 on the cream surface, below AA)
+     to ~4.6:1 so captions/sub-labels/per-person text pass WCAG AA. */
+  --text-muted:  #646C66;
   --text-on-photo: #FFFFFF;
 
   --border:        var(--c-taupe-200);
