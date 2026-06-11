@@ -137,6 +137,18 @@ Wrap each real screenshot in a clean cream/teal frame with a one-line caption. O
 5. **Gold lock** — the official-pick seal.
 6. **Mobile** — the board on a phone frame.
 
+## 9a. Premium campaign assets (Higgsfield)
+
+In `marketing/assets/premium/` — the launch-prep set, one visual system (villa golden hour / teal / cream / gold seal):
+
+- **launch-hero-4x5.png** — "Get your group to actually agree on where to stay." over the golden-hour villa. IG/X feed, 4:5.
+- **problem-37-messages-1x1.png** — "37 messages. 0 decisions." editorial still life. The scroll-stopper, 1:1.
+- **official-seal-4x5.png** — "It's official." gold wax seal on teal. The launch-tease, 4:5.
+- **commercial-cinematic.mp4** — 6s cinematic crane move over the villa scene (animated from the hero frame), with audio. The paid-ad / hero-video cut.
+- **commercial-ugc.mp4** — 10s UGC creator-style ad with spoken line ("GroupPad saved our group trip..."). The TikTok/Reels organic cut.
+
+Suggested posting order pre-launch: problem (day 1) → hero (day 3) → seal + "launching soon" (day 5), cinematic video pinned on the profile.
+
 ## 9. Produced assets (this kit)
 
 - `marketing/LAUNCH_KIT.md` — this file (copy + plans).
