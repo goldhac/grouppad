@@ -805,7 +805,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const BIG = Number.MAX_SAFE_INTEGER;
     const decided = canonFinal.decision?.listing_id;
     return pooledListings
-      .filter((l) => (l.budget === 'under' || l.budget === 'marginal') && !isDeadListing(l) && l.id !== decided)
+      // available === false means the scrape confirmed the trip's dates are
+      // blocked — don't recommend it (it stays browsable in the other rows,
+      // since date flexibility may still make it workable).
+      .filter((l) => (l.budget === 'under' || l.budget === 'marginal') && !isDeadListing(l) && l.id !== decided && l.available !== false)
       .map((l, i) => ({ l, i, r: aiRankIndex.get(l.id) ?? BIG }))
       .sort((a, b) => a.r - b.r || a.i - b.i)
       .map((x) => x.l);

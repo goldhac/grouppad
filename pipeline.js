@@ -839,12 +839,42 @@ async function runTripSearch(tripId) {
     // An itinerary posted at create time gives the AI better reference points.
     let itineraryText = '';
     try { itineraryText = JSON.parse(fs.readFileSync(path.join(dir, 'itinerary.json'), 'utf8')).text || ''; } catch {}
-    // Search + geocode the destination's reference points (downtown/airport/attraction) in parallel.
-    const [items, refs] = await Promise.all([
-      runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput),
-      getRefPoints(trip.destination, itineraryText),
-    ]);
-    console.log(`[trip-search] returned ${items.length} items; ref-points ${refs ? 'ok' : 'none'}`);
+
+    // Availability: a DATED search only returns homes bookable for those exact
+    // dates — the most reliable signal we can get without per-listing calendar
+    // scrapes. Caveat: far-future calendars often aren't open (a dated search
+    // returns ~0), so we only try dated inside a ~9-month horizon and fall back
+    // to the undated search (representative prices, availability unknown).
+    const daysOut = trip.checkin ? Math.round((new Date(trip.checkin) - Date.now()) / 86400000) : null;
+    const tryDated = !!(trip.checkin && (trip.checkout_5n || trip.checkout) && daysOut != null && daysOut > 0 && daysOut < 270);
+    let datedSearch = false;
+    let items = [];
+    let refs = null;
+
+    if (tryDated) {
+      const datedInput = { ...actorInput, checkIn: trip.checkin, checkOut: trip.checkout_5n || trip.checkout };
+      const [datedItems, refsRes] = await Promise.all([
+        runApifyAsync('tri_angle~new-fast-airbnb-scraper', datedInput),
+        getRefPoints(trip.destination, itineraryText),
+      ]);
+      refs = refsRes;
+      if (datedItems.length >= 5) {
+        items = datedItems;
+        datedSearch = true;
+        console.log(`[trip-search] dated search ok (${items.length} items, all available ${trip.checkin}→${trip.checkout_5n || trip.checkout})`);
+      } else {
+        console.log(`[trip-search] dated search thin (${datedItems.length}) — retrying undated`);
+        items = await runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput);
+      }
+    } else {
+      const [undatedItems, refsRes] = await Promise.all([
+        runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput),
+        getRefPoints(trip.destination, itineraryText),
+      ]);
+      items = undatedItems;
+      refs = refsRes;
+    }
+    console.log(`[trip-search] returned ${items.length} items (${datedSearch ? 'dated' : 'undated'}); ref-points ${refs ? 'ok' : 'none'}`);
 
     const mapped = items
       .filter(it => it && it.id)
@@ -885,7 +915,9 @@ async function runTripSearch(tripId) {
           est_5n:       est5n,
           est_4n:       est5n ? Math.round(est5n * 0.8) : null,
           budget:       tier,
-          check_manual: true, // undated representative price — members verify
+          // Dated search results are bookable for the trip's dates by definition.
+          ...(datedSearch ? { available: true } : {}),
+          check_manual: true, // representative price — members verify at booking
         };
       });
 

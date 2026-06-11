@@ -1581,15 +1581,23 @@ async function fetchPriceWithPlaywright(cleanUrl, source, dates) {
       /\$([\d,]+(?:\.\d{2})?)\s+for\s+5\s+nights?/i,
       /\$([\d,]+(?:\.\d{2})?)\s+for\s+4\s+nights?/i,
     ];
+    // We loaded the page WITH the trip's dates, so a rendered total means the
+    // home is bookable for those dates — and an explicit "dates not available"
+    // message in the booking panel means it definitively is not.
+    const datedSource = source === 'Airbnb' || source === 'VRBO';
     for (const re of textPatterns) {
       const m = allText.match(re);
       if (m) {
         const val = parseFloat(m[1].replace(/,/g, ''));
         if (val >= 1000 && val <= 200000) {
           console.log('[Playwright] found price in visible text:', val);
-          return { price: Math.round(val), type: 'full' };
+          return { price: Math.round(val), type: 'full', available: datedSource ? true : undefined };
         }
       }
+    }
+    if (datedSource && /those dates are not available|dates? (?:are|is)n[’']?t available|not available for (?:your|these|those|the selected) dates|unavailable for (?:your|these|those|the selected) dates|select new dates|this listing is no longer available|those dates are unavailable/i.test(allText)) {
+      console.log('[Playwright] booking panel says the dates are unavailable');
+      return { price: null, type: 'unavailable', available: false };
     }
 
     // Fall back to rendered HTML snapshot — catches embedded JSON data
@@ -1905,10 +1913,15 @@ async function scrapeListingDetails(cleanUrl, parsed, dates) {
     } else {
       // 2. Playwright: render the full page with real headless Chrome so JS/GraphQL executes
       const pwResult = await fetchPriceWithPlaywright(cleanUrl, parsed.source, dates);
-      if (pwResult) {
+      if (pwResult && pwResult.type === 'unavailable') {
+        // The booking panel said the trip's dates are blocked — record it and
+        // skip Firecrawl (any price it digs up would be for other dates).
+        result.available = false;
+      } else if (pwResult) {
         result.displayed_5n    = pwResult.price;
         // nightly_only = a base nightly rate × nights, so cleaning/tax get added downstream.
         result.priceIsBaseOnly = pwResult.type === 'nightly_only';
+        if (pwResult.available === true) result.available = true; // dated total rendered → bookable
       } else {
         // 3. Last resort: Firecrawl LLM extraction (uses Firecrawl's managed browser)
         const fcResult = await fetchPriceViaFirecrawl(urlWithDates(cleanUrl, parsed.source, dates));
@@ -2265,7 +2278,7 @@ async function createSubmission(tripId, url, manual_price, user, opts = {}) {
     est_5n:        est5n,
     est_4n:        est5n ? Math.round(est5n * 0.8) : null,
     budget,
-    available:     scraped.available === false ? false : undefined,
+    available:     typeof scraped.available === 'boolean' ? scraped.available : undefined,
     check_manual:  true,
     photos:        scraped.photos,
     submitted_by:  by,
