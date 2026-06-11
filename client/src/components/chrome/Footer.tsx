@@ -23,6 +23,7 @@ export function Footer() {
         ]} />
         <FooterCol title="Resources" links={[
           ['How it works', '/'],
+          ['Press kit', '/press'],
         ]} />
         <FooterCol title="Legal" links={[
           ['Privacy', '/privacy'],

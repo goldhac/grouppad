@@ -16,6 +16,7 @@ import { HelpView } from '@/views/HelpView';
 import { ManageView } from '@/views/ManageView';
 import { AdminView } from '@/views/AdminView';
 import { TermsView, PrivacyView } from '@/views/LegalView';
+import { PressView } from '@/views/PressView';
 
 /** "/" → trips dashboard when signed in, else the product landing page. */
 function RootIndex() {
@@ -75,6 +76,7 @@ export function App() {
           <Route path="/admin" element={<AdminView />} />
           <Route path="/terms" element={<TermsView />} />
           <Route path="/privacy" element={<PrivacyView />} />
+          <Route path="/press" element={<PressView />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
