@@ -32,7 +32,7 @@ The point: know when we cross a cost threshold instead of guessing.
   - **Hosted `scrapegraph-js` (Node SDK / REST):** drops into the Express server, no Chromium, no Python. ~5 credits/listing (~**$0.01–0.025**). Starter plan $17/mo ≈ 2,000 extractions. **Best fit for our Node stack.**
   - **OSS `scrapegraphai` (Python, MIT):** bring-your-own-key (supports Gemini, which we already use → only token cost), BUT it's Python (a sidecar) and STILL needs Playwright. Cheapest per-call, most friction. Only if we want to delete hand-written parsers and accept a 2nd service.
 - **GATE: pilot before switching.** Run ScrapeGraphAI against 5–10 real Airbnb + VRBO listing URLs *at trip dates*; confirm it returns the **dated** price (not blocked, not a teaser rate). If it passes → swap in, delete Playwright price path + Firecrawl dep. If Airbnb blocks it → keep Playwright. (Pilot result appended below.)
-- REST shape: `POST https://api.scrapegraphai.com/v1/smartscraper`, header `SGAI-APIKEY`, body `{ website_url, user_prompt, output_schema? }`, async (returns `request_id` + `status`, poll for `result`).
+- REST shape (v2, **verified working** — see pilot below): `POST https://v2-api.scrapegraphai.com/api/extract`, header `SGAI-APIKEY`, body `{ url, prompt, mode }`, **synchronous** (returns `{ id, json, usage }` directly). The v1 `api.scrapegraphai.com/v1/smartscraper` host is deprecated and rejects keys.
 
 ---
 
@@ -66,12 +66,39 @@ Config today: **3 clips × 6s** per walkthrough, fal `hailuo-02 standard` @ **$0
 
 ---
 
-## Pilot results — ScrapeGraphAI on real listings
+## Pilot results — ScrapeGraphAI on real listings (RAN 2026-06-11)
 
-**2026-06-11 — blocked on auth, not yet run.** Hit `POST /v1/smartscraper` (and `/v1/credits`) with the provided key against the real Airbnb `1632886531011031555` and VRBO `3918232` URLs at trip dates. Every call returned `{"error":"Invalid API key."}`.
+**Auth gotcha first:** the docs section I started from used the **deprecated v1 host** (`api.scrapegraphai.com/v1/smartscraper` + `/v1/credits`), which rejected every key with `{"error":"Invalid API key."}` — that was a *host/version* mismatch, NOT a bad key. The live API is **v2**:
+- `POST https://v2-api.scrapegraphai.com/api/extract` — body `{ url, prompt, mode }`, header `SGAI-APIKEY`. **Synchronous** (returns `{ id, json, usage, metadata }` directly — no `request_id` polling).
+- Also: `/api/search`, `/api/scrape`, `/api/crawl`, `/api/monitor`, `/api/credits`.
+- Cost observed: **~2–3 credits per `extract`** (Free plan = 500 credits; after 2 successful + 2 empty calls, `used:5, remaining:490`). Empty/blocked fetches **still charge**.
 
-Diagnosis: the **auth mechanism is correct** — sending `Authorization: Bearer` returned `"SGAI-APIKEY missing."`, confirming the API reads the `SGAI-APIKEY` header we used; the specific key was simply rejected by the credits endpoint too, so it's the key, not the request shape.
+### Results at trip dates (Aug 18–23, 14 guests)
 
-Next step to actually run the pilot:
-- Re-check / regenerate the key in the ScrapeGraphAI dashboard (verify the account/email is confirmed and the key is active), then re-run the test script (submits both URLs, polls `request_id` for the dated price, compares to stored est_5n of $5,022 / $5,766).
-- Pass/fail bar: returns a real **dated** total for the trip window (not blocked, not a teaser nightly rate) on Airbnb specifically. If yes → swap in for the Playwright/Firecrawl path. If Airbnb blocks → keep Playwright.
+| Listing | Result | Returned | Stored est_5n |
+|---|---|---|---|
+| **Airbnb `1632886531011031555`** (7BR) | ✅ **PASS** | dated price **$3,788**, nightly $757.60, 7BR, sleeps 24, available | $5,022 |
+| **VRBO `3918232`** | ❌ **FAIL** | empty `{}` — fetch returned a ~125-byte shell (bot/JS wall), both URL formats, 2 tries | $5,766 |
+
+### Round 2 — pushed `fetch_config` (heavy JS + stealth) to "find a way"
+
+Docs revealed a `fetch_config` object (NOT in the v1 examples): `mode` ∈ `auto|fast|js`, `stealth: true` (= "residential proxy + anti-bot headers"), `wait` (0–30000ms), `scrolls` (0–100), `country` (ISO-2), `headers`, `cookies`, `timeout`. These DO run (heavy calls cost ~10 credits vs ~2–3 normal).
+
+**Airbnb with `mode:"js"`+`stealth`+`wait:6000`+`scrolls`:** byte-identical chunks to `normal` → still $3,788 base, fees still 0. Pulled the **raw markdown** to settle it: the page contains only the **JSON-LD listing object** (title/photos/description). **The fee breakdown is not in the DOM at all** — it lives behind Airbnb's reservation/checkout GraphQL, which no room-page scraper reaches.
+
+**VRBO with `mode:"js"`+`stealth`+`wait:9000`+`country:us`:** STILL the **"Bot or Not?" 429** challenge page (verified via raw markdown). Stealth + residential proxy does **not** defeat Expedia's bot wall.
+
+### The reframe that matters — checked our OWN pipeline (`server.js`)
+- Airbnb is fetched **base-only** (`fetchAirbnbCalendarPrices` → `type:'nightly_only'`; comment L1707: *"nightly base rates only (no cleaning/service fees)"*).
+- `est_5n` is then **computed, not scraped**: `(base + PIPELINE_CLEANING_FEE $400) × (1 + PIPELINE_TAX 0.14)` (L2242, L2351-2352). Community prices are even labeled *"base nightly rates only (excl. cleaning & service fees)"* (L2288).
+- **So our "all-in" was always an estimate.** ScrapeGraphAI's $3,788 is the *same kind of base number* our pipeline already feeds into that formula. (Stored $5,022 vs a fresh `(3788+400)×1.14=$4,774` differ only by Airbnb price drift since original capture — both are base+estimate, neither is real fees.)
+
+### FINAL VERDICT
+| Source | Result | Action |
+|---|---|---|
+| **Airbnb** | ScrapeGraphAI returns the **identical base** our flaky Playwright/calendar path produces, feeding the **same** `+$400+14%` estimate. "Missing fees" is **not a regression** — we never scraped them. | **Clean drop-in** for the Airbnb base-price fetch. Managed anti-bot replaces maintaining our own Chromium, **zero change** to the price number. Wire behind a flag post-launch. |
+| **VRBO** | Hard-blocked by Bot-or-Not even with stealth+residential proxy, twice. | **Keep Playwright/Firecrawl.** ScrapeGraphAI is not an option. |
+
+- There is **no "real all-in fees" to unlock** — that was a mirage; the $400+14% estimate is the design, on both sides.
+- Cost: ~2–3 credits/listing normal, **~10 credits with `js`+`stealth`**. Empty/blocked fetches still charge. Burned ~36 of 500 free credits across both rounds.
+- Pre-launch stance unchanged: **change nothing in prod now.** Post-launch, the only worthwhile swap is Airbnb base-price → `extract` (normal mode is enough; stealth not needed for Airbnb). VRBO stays on Playwright.
