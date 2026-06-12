@@ -72,7 +72,8 @@ export interface CreateTripInput {
 export interface TripMember {
   id: string;
   name: string;
-  email: string;
+  /** Organizer-only; omitted for regular members viewing the roster. */
+  email?: string;
   avatar?: string | null;
   role: 'organizer' | 'member';
   /** The original creator (cannot be demoted or removed). */

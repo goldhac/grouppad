@@ -551,6 +551,14 @@
   background: var(--accent-soft, color-mix(in srgb, var(--accent) 9%, transparent)); border: 1px solid var(--accent-line, color-mix(in srgb, var(--accent) 22%, transparent));
   border-radius: 9px; padding: 7px 9px; }
 .gp-mobile .mcard .ai-why .ico { width: 13px; height: 13px; flex: none; margin-top: 1px; color: var(--accent-text); }
+/* who liked this home (mobile card) */
+.gp-mobile .mcard .mlikes { display: flex; align-items: center; gap: 8px; margin-top: 9px; }
+.gp-mobile .mcard .mlikes-t { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+/* compact "who's coming" in the mobile top bar: hide the long count label, keep avatars + number tight */
+.gp-mobile .tbar .wc-compact .wc-label { font-size: 12px; font-weight: 700; }
+.gp-mobile .tbar .wc-compact .wc-trigger { padding: 3px 9px 3px 4px; }
+/* on phones, anchor the roster popover to the viewport so it never runs off-screen */
+.gp-mobile .wc-pop { position: fixed; top: calc(54px + env(safe-area-inset-top)); left: 12px; right: 12px; width: auto; max-height: 60vh; }
 
 /* Detail quick-facts grid — themed at-a-glance numbers */
 .gp-mobile .detail .d-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 4px; }

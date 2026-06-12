@@ -3,6 +3,7 @@ import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, Lock, Users, Check, X
 import { useApp } from '@/store/AppContext';
 import { Carousel } from '@/components/Carousel';
 import { Icon } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
 import { fmt, tallyVotes } from '@/lib/utils';
 import type { Listing } from '@/types';
@@ -28,7 +29,7 @@ function initials(name?: string | null) {
 
 export function Card({ listing: l, isSubmitted = false, isPipeline = false, compact = false }: CardProps) {
   const {
-    user, votes, final, isOwner, split, trip, selected, reviewsMap, toursMap, favoriteIds, aiWhy,
+    user, votes, roster, final, isOwner, split, trip, selected, reviewsMap, toursMap, favoriteIds, aiWhy,
     castVote, toggleFinalPick, toggleFavorite, setDecision, deleteListing, toggleSelect, openDetail, requireSignIn,
   } = useApp();
   const isSaved = favoriteIds.has(l.id);
@@ -38,6 +39,11 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
   const hasTour = toursMap[l.id]?.status === 'ready' && (toursMap[l.id]?.clips.some((c) => c.videoUrl) ?? false);
   const tally = tallyVotes(votes, l.id, user?.id ?? null);
   const net = tally.up - tally.down;
+  // Who upvoted this home (members only — guests have an empty roster).
+  const upvoters = roster.length
+    ? Object.entries(votes[l.id] || {}).filter(([, v]) => v === 'up')
+        .map(([uid]) => roster.find((m) => m.id === uid)).filter((m): m is NonNullable<typeof m> => !!m)
+    : [];
 
   // ── Signature beats ───────────────────────────────────────────────────────
   // "Rose into the shortlist": the instant a home crosses net +1 it lifts.
@@ -114,15 +120,25 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
   );
 
   const votebar = (
-    <div className="votebar" onClick={(e) => e.stopPropagation()}>
-      <button className={cn('vote up', tally.mine === 'up' && 'on')} aria-label="Like" onClick={onUpvote}>
-        <Icon icon={ThumbsUp} className="ico" /> {tally.up}
-        {burst > 0 && <span key={burst} className="vote-burst" aria-hidden><i /><i /><i /><i /><i /><i /></span>}
-      </button>
-      <span className={cn('net', net > 0 && 'pos', net < 0 && 'neg', 'tnum')}>{net > 0 ? `+${net}` : net}</span>
-      <button className={cn('vote down', tally.mine === 'down' && 'on')} aria-label="Dislike" onClick={() => void castVote(l.id, 'down')}>
-        <Icon icon={ThumbsDown} className="ico" /> {tally.down}
-      </button>
+    <div className="votebar-row" onClick={(e) => e.stopPropagation()}>
+      <div className="votebar">
+        <button className={cn('vote up', tally.mine === 'up' && 'on')} aria-label="Like" onClick={onUpvote}>
+          <Icon icon={ThumbsUp} className="ico" /> {tally.up}
+          {burst > 0 && <span key={burst} className="vote-burst" aria-hidden><i /><i /><i /><i /><i /><i /></span>}
+        </button>
+        <span className={cn('net', net > 0 && 'pos', net < 0 && 'neg', 'tnum')}>{net > 0 ? `+${net}` : net}</span>
+        <button className={cn('vote down', tally.mine === 'down' && 'on')} aria-label="Dislike" onClick={() => void castVote(l.id, 'down')}>
+          <Icon icon={ThumbsDown} className="ico" /> {tally.down}
+        </button>
+      </div>
+      {upvoters.length > 0 && (
+        <span className="vote-who" title={`Liked by ${upvoters.map((m) => m.name).join(', ')}`}>
+          {upvoters.slice(0, 3).map((m) => (
+            <span className="vw-av" key={m.id}><Avatar name={m.name} avatar={m.avatar} size={20} /></span>
+          ))}
+          {upvoters.length > 3 && <span className="vw-more tnum">+{upvoters.length - 3}</span>}
+        </span>
+      )}
     </div>
   );
 

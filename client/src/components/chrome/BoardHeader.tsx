@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Calendar, Users, Wallet, Home, Settings, Share2 } from 'lucide-react';
 import { useApp, isDeadListing } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { WhosComing } from '@/components/board/WhosComing';
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 function fmtRange(a?: string | null, b?: string | null): string | null {
@@ -52,6 +53,7 @@ export function BoardHeader() {
         </div>
       </div>
       <div className="t-actions">
+        <WhosComing />
         {isOwner ? (
           <>
             <button className="btn btn-ghost btn-sm btn-icon" onClick={() => navigate(`/t/${trip.id}/manage`)} title="Manage trip" aria-label="Manage trip">

@@ -6,7 +6,13 @@
 /* ---------------------------------------------------------------------------
    9 · Vote control (public thumbs + net count) + voter avatars
    --------------------------------------------------------------------------- */
+.votebar-row { display: inline-flex; align-items: center; gap: 9px; }
 .votebar { display: inline-flex; align-items: stretch; gap: 0; background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: var(--r-pill); overflow: hidden; }
+/* who upvoted — small overlapping avatar stack beside the vote pill */
+.vote-who { display: inline-flex; align-items: center; }
+.vote-who .vw-av { margin-left: -7px; border-radius: 999px; box-shadow: 0 0 0 2px var(--surface); }
+.vote-who .vw-av:first-child { margin-left: 0; }
+.vote-who .vw-more { margin-left: 5px; font-size: 11.5px; font-weight: 700; color: var(--text-muted); }
 .votebar .vote { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text-muted); background: transparent; border: 0; padding: 8px 13px; min-height: 40px; transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard); }
 .votebar .vote .ico { width: var(--icon-md); height: var(--icon-md); }
 .votebar .vote:hover { color: var(--text); background: var(--surface-inset); }

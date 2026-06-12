@@ -10,6 +10,8 @@ import { useApp, isDeadListing } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { ScoutVerdict } from '@/components/board/ScoutVerdict';
 import { SplitPill } from '@/components/board/SplitPill';
+import { WhosComing } from '@/components/board/WhosComing';
+import { Avatar } from '@/components/ui/Avatar';
 import { Markdown } from '@/components/Markdown';
 import { useCompare, toInput } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
@@ -40,7 +42,7 @@ function rangeLabel(a?: string, b?: string) {
 
 export function MobileBoard() {
   const {
-    trip, submitted, pipeline, votes, final, caveats, isOwner, split,
+    trip, submitted, pipeline, votes, roster, final, caveats, isOwner, split,
     favoriteIds, shortlistIds, itinerary, aiRankIndex, aiWhy, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
     user, openAuth, joinTrip, findListing, insights,
     toggleFavorite, toggleFinalPick, setDecision, openDetail, requireSignIn, postCaveat,
@@ -212,6 +214,11 @@ export function MobileBoard() {
   function mcard(l: Listing, opts: { compact?: boolean; by?: boolean } = {}) {
     const isOff = official?.id === l.id;
     const b = l.budget || 'unknown';
+    // Who liked this home (members only — guests have an empty roster).
+    const upvoters = roster.length
+      ? Object.entries((votes as Record<string, Record<string, string>>)[l.id] || {})
+          .filter(([, v]) => v === 'up').map(([uid]) => roster.find((m) => m.id === uid)).filter((m): m is NonNullable<typeof m> => !!m)
+      : [];
     const rt = opts.by ? null : (l.rating
       ? <span className="rt"><Icon icon={Star} className="ico" /> {l.rating}</span>
       : <span className="rt none"><Icon icon={Star} className="ico" /> New</span>);
@@ -244,6 +251,15 @@ export function MobileBoard() {
               ? <span className="by"><span className="av">{(l.submitted_by || 'G').slice(0, 1)}</span> {l.submitted_by}</span>
               : (l.est_5n ? <>total · <span className={cn('pp', l.budget === 'over' ? 'bad' : 'ok')}>{ppOf(l)}/person</span></> : null)}
           </div>
+          {!opts.compact && upvoters.length > 0 && (
+            <div className="mlikes" title={`Liked by ${upvoters.map((m) => m.name).join(', ')}`}>
+              <span className="vote-who">
+                {upvoters.slice(0, 4).map((m) => <span className="vw-av" key={m.id}><Avatar name={m.name} avatar={m.avatar} size={20} /></span>)}
+                {upvoters.length > 4 && <span className="vw-more tnum">+{upvoters.length - 4}</span>}
+              </span>
+              <span className="mlikes-t">liked by {upvoters.length}</span>
+            </div>
+          )}
           {!opts.compact && aiWhy[l.id] && (
             <div className="ai-why"><Icon icon={Sparkles} className="ico" /><span>{aiWhy[l.id]}</span></div>
           )}
@@ -484,6 +500,7 @@ export function MobileBoard() {
             <div className="nm"><div className="t">{trip?.name}</div><div className="s">{rangeLabel(trip?.checkin, trip?.checkout_5n)} · {trip?.adults} guests</div></div>
           </div>
           <span className="spacer" />
+          <WhosComing compact />
           {isOwner && <span className="role-pill"><Icon icon={Crown} className="ico" /> Host</span>}
           {isOwner && <button className="iconbtn" disabled={refreshing} onClick={() => void refreshHomes()} aria-label="Refresh listings" title="Refresh the live listings"><Icon icon={RotateCw} className="ico" style={refreshing ? { animation: 'spin 1s linear infinite' } : undefined} /></button>}
           {isOwner && <button className="iconbtn" onClick={() => trip && navigate(`/t/${trip.id}/manage`)} aria-label="Manage"><Icon icon={Settings} className="ico" /></button>}

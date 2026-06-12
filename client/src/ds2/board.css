@@ -103,7 +103,26 @@
 .b-title .meta .mi .ico { width: 13px; height: 13px; color: var(--text-muted); }
 .b-title .meta .hl { color: var(--text); font-weight: 600; }
 .b-title .meta .under { color: var(--under); font-weight: 600; }
-.b-title .t-actions { margin-left: auto; display: flex; gap: 9px; }
+.b-title .t-actions { margin-left: auto; display: flex; align-items: center; gap: 9px; }
+
+/* who's coming — member avatar stack + roster popover */
+.wc { position: relative; }
+.wc-trigger { display: inline-flex; align-items: center; gap: 9px; padding: 4px 11px 4px 5px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-raised); cursor: pointer; transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard); }
+.wc-trigger:hover { border-color: var(--border-strong); background: var(--surface-inset); }
+.wc-stack { display: inline-flex; align-items: center; }
+.wc-stack .wc-av { margin-left: -8px; border-radius: 999px; box-shadow: 0 0 0 2px var(--surface-raised); }
+.wc-stack .wc-av:first-child { margin-left: 0; }
+.wc-more { margin-left: 6px; font-size: 12px; font-weight: 700; color: var(--text-2); }
+.wc-label { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; }
+.wc-pop { position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; width: 248px; max-height: 340px; overflow-y: auto; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); padding: 8px; }
+.wc-pop-h { display: flex; align-items: center; gap: 7px; font-family: var(--font-display); font-size: 13px; font-weight: 700; color: var(--text); padding: 6px 8px 8px; }
+.wc-pop-n { margin-left: auto; font-size: 12px; color: var(--text-muted); }
+.wc-list { display: flex; flex-direction: column; gap: 2px; }
+.wc-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--r-md); }
+.wc-row:hover { background: var(--surface-inset); }
+.wc-name { font-size: 13.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-you { color: var(--text-muted); font-weight: 500; }
+.wc-role { margin-left: auto; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent-text); background: var(--accent-tint); border: 1px solid var(--accent-tint-border); border-radius: 999px; padding: 2px 7px; flex: none; }
 
 /* visitor join banner */
 .join-banner { display: flex; align-items: center; gap: 11px; padding: 10px 20px; background: var(--accent-tint); border-top: 1px solid var(--accent-tint-border); border-bottom: 1px solid var(--accent-tint-border); font-size: 13.5px; color: var(--accent-text); }

@@ -698,14 +698,19 @@ function noteJoin(tripId, user) {
   const wasMember = Array.isArray(trip.members) && trip.members.includes(user.id);
   addMember(tripId, user.id);
   if (wasMember || trip.owner_id === user.id) return; // not a new join
-  const owner = loadUsers()[trip.owner_id];
-  if (!owner || !isEmail(owner.email) || !notifPrefs(owner).instant) return;
-  const html = Emails.joined({
-    appBase: APP_BASE_URL, tripName: trip.name, who: user.name || 'Someone',
-    boardUrl: boardUrl(tripId), unsub: unsubToken(owner.id),
-    memberCount: (getTrip(tripId)?.members || []).length,
-  });
-  sendEmail(owner.email, `${user.name || 'Someone'} joined ${trip.name}`, html).catch(() => {});
+  // Tell everyone already on the trip (not just the organizer) — the group
+  // sees their party growing. Skip the person who just joined.
+  const fresh = getTrip(tripId);
+  const memberCount = (fresh?.members || []).length;
+  const who = user.name || 'Someone';
+  const recips = tripRecipients(fresh).filter((r) => r.prefs.instant && r.id !== user.id);
+  for (const r of recips) {
+    const html = Emails.joined({
+      appBase: APP_BASE_URL, tripName: trip.name, who,
+      boardUrl: boardUrl(tripId), unsub: r.unsub, memberCount,
+    });
+    sendEmail(r.email, `${who} joined ${trip.name}`, html).catch(() => {});
+  }
 }
 
 // Instant alert: the organizer locked the final pick → tell every member.
@@ -3332,10 +3337,12 @@ app.post('/api/trips/:tripId/invite', requireTripOwner, rateLimit({ windowMs: 60
   res.json({ sent, attempted: emails.length });
 });
 
-// Organizer: the resolved member roster (names + emails + roles). Owner-only.
-app.get('/api/trips/:tripId/members', requireTripOwner, (req, res) => {
+// The resolved member roster (who's coming). Any member can see names, avatars
+// and roles — the group is transparent. Emails are organizer-only.
+app.get('/api/trips/:tripId/members', requireTripMember, (req, res) => {
   const trip = req.trip;
   const users = loadUsers();
+  const viewerIsOrg = isOrganizer(trip, req.user);
   const orgs = Array.isArray(trip.organizers) ? trip.organizers : [];
   const list = (trip.members || []).map((id) => {
     const u = users[id] || {};
@@ -3343,11 +3350,11 @@ app.get('/api/trips/:tripId/members', requireTripOwner, (req, res) => {
     return {
       id,
       name: u.name || (u.email ? u.email.split('@')[0] : 'Member'),
-      email: u.email || '',
       avatar: u.avatar || null,
       role: creator || orgs.includes(id) ? 'organizer' : 'member',
       isCreator: creator,
       isYou: id === req.user.id,
+      ...(viewerIsOrg ? { email: u.email || '' } : {}), // emails: organizers only
     };
   });
   // creator first, then other organizers, then members alphabetical

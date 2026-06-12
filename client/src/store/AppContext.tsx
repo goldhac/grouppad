@@ -21,6 +21,7 @@ import type {
   ListingReviews,
   ListingTour,
   ScoutVerdict,
+  TripMember,
   TripView,
   User,
   VoteDir,
@@ -63,6 +64,8 @@ interface AppState {
   // active-trip data
   listings: Listing[];
   votes: VotesMap;
+  /** Who's coming — the member roster (names + avatars). Empty for guests. */
+  roster: TripMember[];
   submitted: Listing[];
   pipeline: Listing[];
   itinerary: Itinerary;
@@ -188,6 +191,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // active-trip data
   const [listings, setListings] = useState<Listing[]>([]);
   const [votes, setVotes] = useState<VotesMap>({});
+  const [roster, setRoster] = useState<TripMember[]>([]);
   const [submitted, setSubmitted] = useState<Listing[]>([]);
   const [pipeline, setPipeline] = useState<Listing[]>([]);
   const [itinerary, setItinerary] = useState<Itinerary>({ text: '', updated_at: null });
@@ -284,6 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTripLoading(true);
     setTripError(null);
     setSelected(new Set());
+    setRoster([]);
     setAiOrder([]); setAiWhy({});
     setFavoriteIds(new Set()); favRef.current = new Set();
     try {
@@ -300,6 +305,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         api.favorites(id).catch(() => ({ ids: [] as string[] })),
         api.reviews(id).catch(() => ({})),
         api.tours(id).catch(() => ({})),
+        api.members(id).catch(() => ({ members: [] as TripMember[] })), // 403 for guests → empty
       ]);
       // One-shot retry: 404/403 are definitive, but a transient blip (network /
       // 5xx) shouldn't dead-end on "Could not load this trip" — retry once.
@@ -312,9 +318,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (token !== loadTokenRef.current) return;
         bundle = await loadAll();
       }
-      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, favRes, revRes, tourRes] = bundle;
+      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, favRes, revRes, tourRes, memRes] = bundle;
       if (token !== loadTokenRef.current) return; // a newer enterTrip superseded us
       setTrip(tripView);
+      setRoster(memRes.members || []);
       // Restore the saved per-trip split, else default to the trip's guest count.
       setSplitState(readSplit(id) ?? tripView.adults ?? 14);
       setListings(listRes.listings);
@@ -388,6 +395,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const toursRef = useRef(toursMap);
   toursRef.current = toursMap;
+  const rosterRef = useRef(roster);
+  rosterRef.current = roster;
   useEffect(() => {
     const h = window.setInterval(async () => {
       const id = tripIdRef.current;
@@ -397,6 +406,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (tripIdRef.current !== id) return;
         if (JSON.stringify(v) !== JSON.stringify(votesRef.current)) setVotes(v);
         if (JSON.stringify(f) !== JSON.stringify(finalRef.current)) setFinal(f);
+        // Keep "who's coming" live for members (skip for guests, who have none).
+        if (rosterRef.current.length) {
+          const m = await api.members(id).catch(() => null);
+          if (m && tripIdRef.current === id && JSON.stringify(m.members) !== JSON.stringify(rosterRef.current)) setRoster(m.members);
+        }
         // While any tour is still rendering, refresh the map so it flips to ready.
         if (Object.values(toursRef.current).some((t) => t.status !== 'ready')) {
           const tr = await api.tours(id);
@@ -864,7 +878,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
       // Expose the CANONICAL votes/final/favorites — alias ids merged onto the
       // displayed copy — so every consumer reads merged tallies automatically.
-      listings, votes: canonVotes, submitted, pipeline, itinerary, caveats, insights, final: canonFinal, reviewsMap, toursMap,
+      listings, votes: canonVotes, submitted, pipeline, itinerary, caveats, insights, final: canonFinal, reviewsMap, toursMap, roster,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
       favoriteIds: canonFavoriteIds, toggleFavorite,
@@ -877,7 +891,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }),
     [
       user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
-      listings, canonVotes, submitted, pipeline, itinerary, caveats, insights, canonFinal, reviewsMap, toursMap,
+      listings, canonVotes, submitted, pipeline, itinerary, caveats, insights, canonFinal, reviewsMap, toursMap, roster,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
       canonFavoriteIds, toggleFavorite,
