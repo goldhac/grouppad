@@ -7,6 +7,7 @@ import { ToastStack } from '@/components/ui/ToastStack';
 import { AuthModal } from '@/components/modals/AuthModal';
 import { OnboardingModal } from '@/components/modals/OnboardingModal';
 import { DetailModal } from '@/components/modals/DetailModal';
+import { InviteWelcome } from '@/components/modals/InviteWelcome';
 import { TripGate } from '@/routing/TripGate';
 import { LandingView } from '@/views/LandingView';
 import { TripsView } from '@/views/TripsView';
@@ -84,6 +85,7 @@ export function App() {
       <Footer />
 
       <AuthModal />
+      <InviteWelcome />
       <OnboardingModal />
       <DetailModal />
       <ToastStack />

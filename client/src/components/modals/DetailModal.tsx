@@ -291,7 +291,7 @@ export function DetailModal() {
                   </div>
 
                   {/* tour */}
-                  {(hasTour || tour?.status === 'generating' || (isOwner && !tour)) && (
+                  {(hasTour || tour?.status === 'generating' || ((isOwner || user?.isSuperAdmin) && !tour)) && (
                     <div>
                       <div className="dx-section-label"><Icon icon={Clapperboard} className="ico" /> Walkthrough tour</div>
                       {hasTour ? <TourPlayer tour={tour!} />

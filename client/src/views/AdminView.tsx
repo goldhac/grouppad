@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, ShieldCheck, KeyRound, RefreshCw, Play, Sparkles, Globe, Flame,
-  Home, Users, ThumbsUp, BadgeCheck, Table2,
+  Home, Users, ThumbsUp, BadgeCheck, Table2, Video,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
@@ -74,8 +74,10 @@ export function AdminView() {
     );
   }
 
-  const g = usage?.gemini, fc = usage?.firecrawl, ap = usage?.apify, gp = usage?.group;
+  const g = usage?.gemini, fc = usage?.firecrawl, ap = usage?.apify, fl = usage?.fal, gp = usage?.group;
   const fcUsed = fc && fc.planCredits != null && fc.remainingCredits != null ? fc.planCredits - fc.remainingCredits : 0;
+  // hailuo-02 out of "fal-ai/minimax/hailuo-02/standard/image-to-video"
+  const falModelShort = fl?.model?.split('/')[2] || 'fal.ai';
 
   return (
     <main className="uu-main"><div className="tp-wrap uu-wrap">
@@ -123,6 +125,13 @@ export function AdminView() {
               usedLabel={num(fcUsed)} limitLabel={`${fc!.planCredits != null ? num(fc!.planCredits) : '—'} credits`}
               note={`${num(fc!.callsThisMonth)} scrapes this month`}
             />
+            <Meter
+              icon={Video} name="Walkthrough video" src={fl!.configured ? `fal · ${falModelShort}` : 'AI house tours'}
+              configured={fl!.configured}
+              used={fl!.estCostUsd} limit={FAL_SOFT_BUDGET}
+              usedLabel={money(fl!.estCostUsd)} limitLabel={`$${FAL_SOFT_BUDGET} / mo · soft`}
+              note={`${num(fl!.clips)} clips · ${num(fl!.seconds)}s this month`}
+            />
           </div>
 
           <div className="adm-pulse">
@@ -161,3 +170,4 @@ export function AdminView() {
 }
 
 const GEMINI_SOFT_BUDGET = 25;
+const FAL_SOFT_BUDGET = 25; // ~30 walkthroughs/mo at $0.81 each

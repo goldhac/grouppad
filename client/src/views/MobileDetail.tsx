@@ -116,7 +116,7 @@ export function MobileDetail() {
               </div>
             )}
             {/* AI walkthrough tour — parity with the desktop detail modal */}
-            {(tourClip || tour?.status === 'generating' || isOwner) && (
+            {(tourClip || tour?.status === 'generating' || isOwner || user?.isSuperAdmin) && (
               <div style={{ marginTop: 8 }}>
                 <div className="d-seclabel"><Icon icon={Clapperboard} className="ico" /> Walkthrough tour</div>
                 {tourClip ? (

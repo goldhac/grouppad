@@ -334,8 +334,13 @@ function tripView(trip, user) {
   if (!trip) return null;
   const { join_code, members, organizers, owner_id, ...rest } = trip;
   const organizer = isOrganizer(trip, user);
+  // First name of the organizer, so an invited guest sees "Gold invited you"
+  // (friendly context, no email/last name leaked).
+  const ownerUser = owner_id ? loadUsers()[owner_id] : null;
+  const owner_name = ownerUser && ownerUser.name ? String(ownerUser.name).trim().split(/\s+/)[0] : null;
   return {
     ...rest,
+    owner_name,
     // isOwner stays the "organizer powers" flag the client gates on; isCreator
     // is the narrower creator-only flag (delete trip, manage organizers).
     isOwner: organizer,
@@ -822,6 +827,10 @@ const FAL_MODEL = process.env.FAL_MODEL || 'fal-ai/minimax/hailuo-02/standard/im
 const TOUR_MAX_CLIPS = Math.max(1, Number(process.env.TOUR_MAX_CLIPS || 3));
 const TOUR_TRIP_CAP  = Math.max(1, Number(process.env.TOUR_TRIP_CAP || 12));
 const TOUR_CLIP_SECONDS = Number(process.env.TOUR_CLIP_SECONDS || 6);
+// fal hailuo-02 standard (768p) bills per second of generated video. Used only
+// to turn the app-side clip meter into an *estimated* dollar cost on the admin
+// board — fal exposes no per-key spend API to read live.
+const FAL_RATE_PER_SEC = Number(process.env.FAL_RATE_PER_SEC || 0.045); // $/sec
 function falConfigured() { return !!FAL_KEY; }
 
 function loadTours(tripId)    { return readJson(tripFile(tripId, 'tours.json'), {}); }
@@ -876,7 +885,7 @@ async function falSubmit(imageUrl, prompt) {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.request_id) { console.error('[fal] submit', r.status, JSON.stringify(d).slice(0, 200)); return null; }
-    bumpUsage('fal', { submits: 1 });
+    bumpUsage('fal', { submits: 1, seconds: TOUR_CLIP_SECONDS });
     return { requestId: d.request_id, statusUrl: d.status_url, responseUrl: d.response_url };
   } catch (e) { console.error('[fal] submit error', e.message); return null; }
 }
@@ -895,12 +904,13 @@ async function falPoll(clip) {
 }
 
 // Ensure a listing has a tour (generate clips if missing). Returns the tour or null.
-async function ensureTour(tripId, listingId, { force = false } = {}) {
+async function ensureTour(tripId, listingId, { force = false, bypassCap = false } = {}) {
   if (!falConfigured()) return null;
   const key = String(listingId);
   const tours = loadTours(tripId);
   if (tours[key] && !force) return tours[key];
-  if (!force && Object.keys(tours).length >= TOUR_TRIP_CAP) { console.warn(`[tours] cap reached for ${tripId}`); return null; }
+  // Per-trip cap guards fal spend; super-admins (bypassCap) can go past it.
+  if (!force && !bypassCap && Object.keys(tours).length >= TOUR_TRIP_CAP) { console.warn(`[tours] cap reached for ${tripId}`); return null; }
   const listing = findListingByIdInTrip(tripId, key);
   const photos = (listing && listing.photos) || [];
   if (!listing || photos.length === 0) return null;
@@ -3037,7 +3047,7 @@ app.get('/api/trips/:tripId/tours', loadTripOr404, hGetTours);
 
 const hGenTour = async (req, res) => {
   if (!falConfigured()) return res.status(503).json({ error: 'Video tours aren’t configured yet (FAL_KEY missing on server).' });
-  const t = await ensureTour(req.params.tripId, req.params.listingId, { force: !!(req.body && req.body.force) });
+  const t = await ensureTour(req.params.tripId, req.params.listingId, { force: !!(req.body && req.body.force), bypassCap: isSuperAdmin(req.user) });
   if (!t) return res.status(400).json({ error: 'Could not start a tour — no photos for this listing, or the per-trip tour cap was reached.' });
   res.json(t);
 };
@@ -3145,6 +3155,11 @@ app.get('/api/admin/usage', requireAdmin, async (req, res) => {
   const candidatesTokens = g.candidatesTokens || 0;
   const estCostUsd = promptTokens * GEMINI_IN_RATE + candidatesTokens * GEMINI_OUT_RATE;
 
+  // fal walkthrough video — app-side clip meter → estimated $ (no live spend API).
+  const f = meter.fal || {};
+  const falSeconds = f.seconds || 0;
+  const falEstUsd = falSeconds * FAL_RATE_PER_SEC;
+
   const [firecrawl, apify] = await Promise.all([fetchFirecrawlCredits(), fetchApifySummary()]);
 
   // Group pulse — a quick read on engagement, no per-user detail exposed.
@@ -3175,6 +3190,14 @@ app.get('/api/admin/usage', requireAdmin, async (req, res) => {
       spentUsd: apify ? apify.usageUsd : null,
       limitUsd: apify ? apify.limitUsd : null,
       recent: apify ? apify.recent : [],
+    },
+    fal: {
+      configured: falConfigured(),
+      model: FAL_MODEL,
+      clips: f.submits || 0,
+      seconds: falSeconds,
+      estCostUsd: falEstUsd,
+      ratePerSec: FAL_RATE_PER_SEC,
     },
     group: {
       members: Object.keys(loadUsers()).length,

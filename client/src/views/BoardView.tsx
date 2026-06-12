@@ -127,7 +127,7 @@ export function BoardView() {
   const {
     listings, caveats, shortlistIds, favoriteIds, split, setSplit, selected, trip, user,
     requireSignIn, joinTrip, detailId, openDetail, closeDetail, findListing, isOwner,
-    aiRankIndex, aiRankLoading, recommendedPool,
+    aiRankIndex, aiRankLoading, recommendedPool, siteTourSignal,
   } = useApp();
   const compare = useCompare();
   const isMobile = useIsMobile();
@@ -137,6 +137,12 @@ export function BoardView() {
   const [topAll, setTopAll] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
   const [sheet, setSheet] = useState<null | 'filters'>(null);
+
+  // External trigger (e.g. the invite welcome's "browse the homes first") asks
+  // for the guided walkthrough. Skip the initial 0; jump to Recommended first.
+  useEffect(() => {
+    if (siteTourSignal > 0) { setTab('all'); setTourOpen(true); }
+  }, [siteTourSignal]);
 
   // ── Deep-link the detail modal (?listing=<id> ⇄ DetailModal) ──────────────
   const linkParam = searchParams.get('listing');

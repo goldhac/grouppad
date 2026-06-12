@@ -5,14 +5,14 @@ Last reviewed: 2026-06-11.
 
 ---
 
-## TODO — Spend visibility (do this; ~half a day)
+## DONE — Spend visibility (2026-06-11)
 
 The point: know when we cross a cost threshold instead of guessing.
 
-- We already meter **Gemini** (token spend → est USD, monthly cap, `geminiGuard`) and **Apify** (counted in `bumpUsage`).
-- **Add a fal.ai spend counter the same way:** every `falSubmit` / walkthrough generation logs clips × seconds × $0.045 into `bumpUsage('fal', { clips, seconds, usd })`, segmented by month like the others.
-- **Surface all three (Gemini / Apify / fal) in the admin view** (`AdminView` reads `loadUsage()` / the usage meter) so monthly spend per provider is visible at a glance.
-- Why it matters: this is the instrument that tells us *when* the self-host math below actually flips. Without it, the WanGP decision is a guess.
+- We meter **Gemini** (token spend → est USD, monthly cap, `geminiGuard`), **Apify** (live $ via API), **Firecrawl** (live credits).
+- ✅ **fal.ai counter added:** `falSubmit` now logs `bumpUsage('fal', { submits: 1, seconds: TOUR_CLIP_SECONDS })`; cost is derived in the usage endpoint as `seconds × FAL_RATE_PER_SEC` ($0.045/sec, env-overridable) so the rate can change without rewriting history.
+- ✅ **Surfaced in the admin board:** `/api/admin/usage` returns a `fal` block; `AdminView` shows a 4th meter card ("Walkthrough video" — clips, seconds, est $ vs a $25/mo soft budget). All four providers now visible at a glance.
+- This is the instrument that tells us *when* the self-host math below actually flips. The WanGP trigger (>13 walkthroughs/day) is now readable directly off the fal card.
 
 ---
 

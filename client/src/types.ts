@@ -44,6 +44,8 @@ export interface TripView extends Trip {
   isCreator?: boolean;
   isMember: boolean;
   memberCount: number;
+  /** Organizer's first name, for the invite welcome ("Gold invited you"). */
+  owner_name?: string | null;
   created_at?: string;
   /** Cover photo from the trip's top-voted home; null for new trips (client falls back to an editorial image). */
   coverPhoto?: string | null;
@@ -264,6 +266,15 @@ export interface ApifyUsage {
   recent: ApifyRun[];
 }
 
+export interface FalUsage {
+  configured: boolean;
+  model: string;
+  clips: number;
+  seconds: number;
+  estCostUsd: number;
+  ratePerSec: number;
+}
+
 export interface GroupPulse {
   members: number;
   trips?: number;
@@ -290,6 +301,7 @@ export interface AdminUsage {
   gemini: GeminiUsage;
   firecrawl: FirecrawlUsage;
   apify: ApifyUsage;
+  fal: FalUsage;
   group: GroupPulse;
 }
 

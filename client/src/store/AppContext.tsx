@@ -114,6 +114,9 @@ interface AppActions {
   // onboarding
   startOnboarding: (force: boolean) => void;
   endOnboarding: () => void;
+  // guided site tour (the board "show me around" walkthrough); bump to trigger
+  siteTourSignal: number;
+  startSiteTour: () => void;
   // detail modal
   openDetail: (id: string) => void;
   closeDetail: () => void;
@@ -214,6 +217,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [authModal, setAuthModal] = useState<AuthModalState>({ open: false });
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [siteTourSignal, setSiteTourSignal] = useState(0);
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const userRef = useRef(user);
@@ -508,6 +512,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOnboardingOpen(false);
     localStorage.setItem(ONBOARDED_LS, '1');
   }, []);
+  // Bumping this signal asks the board (wherever it's mounted) to run its
+  // "show me around" guided tour — used by the invite welcome's "browse" path.
+  const startSiteTour = useCallback(() => setSiteTourSignal((n) => n + 1), []);
 
   // ── Detail modal ─────────────────────────────────────────────────────────────
   const openDetail = useCallback((id: string) => setDetailId(id), []);
@@ -863,7 +870,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       favoriteIds: canonFavoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
-      startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
+      startOnboarding, endOnboarding, siteTourSignal, startSiteTour, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, setSplit, toast, dismissToast,
@@ -876,7 +883,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       canonFavoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
-      startOnboarding, endOnboarding, openDetail, closeDetail, findListing,
+      startOnboarding, endOnboarding, siteTourSignal, startSiteTour, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, toast, dismissToast,
