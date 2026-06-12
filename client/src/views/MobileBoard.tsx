@@ -394,7 +394,7 @@ export function MobileBoard() {
           </div>
         )}
         <div className="lb">
-          <div className="lb-h"><span className="t">Group decision</span><span className="s">one ⭐ each · private</span></div>
+          <div className="lb-h"><span className="t">Group decision</span><span className="s">one ⭐ each · visible to all</span></div>
           <div className="lb-prog"><span><Icon icon={Users} className="ico" /> Top-choice votes in</span><b className="tnum">{votedCount} of {groupTotal}</b></div>
           <div className="ptrack"><div className="pfill" style={{ width: `${pct}%` }} /></div>
           <div style={{ marginTop: 6 }}>
@@ -403,7 +403,16 @@ export function MobileBoard() {
               return (
                 <div key={l.id} className={cn('lb-bar', i === 0 && 'lead')}>
                   <span className="rk tnum">{i + 1}</span>
-                  <div><div className="nm">{i === 0 && <Icon icon={Star} className="ico" />}{shortName(l.name)}</div><div className="tk"><div className="f" style={{ width: `${Math.max(7, (tv / max) * 100)}%` }} /></div></div>
+                  <div>
+                    <div className="nm">{i === 0 && <Icon icon={Star} className="ico" />}{shortName(l.name)}</div>
+                    <div className="tk"><div className="f" style={{ width: `${Math.max(7, (tv / max) * 100)}%` }} /></div>
+                    {(() => { const who = (final.pickers?.[l.id] ?? []).map((uid) => roster.find((m) => m.id === uid)).filter((m): m is NonNullable<typeof m> => !!m); return who.length > 0 && (
+                      <span className="vote-who" style={{ marginTop: 5 }} title={`Picked by ${who.map((m) => m.name).join(', ')}`}>
+                        {who.slice(0, 5).map((m) => <span className="vw-av" key={m.id}><Avatar name={m.name} avatar={m.avatar} size={19} /></span>)}
+                        {who.length > 5 && <span className="vw-more tnum">+{who.length - 5}</span>}
+                      </span>
+                    ); })()}
+                  </div>
                   <span className="tl tnum">{tv} <span>votes</span></span>
                 </div>
               );

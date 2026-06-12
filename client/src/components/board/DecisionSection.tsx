@@ -2,12 +2,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Trophy, Unlock, ExternalLink, Lock, Star, Users } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/Avatar';
 import { SealMark } from '@/components/ui/SealMark';
 import { fmt, formatDate } from '@/lib/utils';
 
 export function DecisionSection() {
-  const { final, isOwner, findListing, openDetail, setDecision, split, trip } = useApp();
+  const { final, roster, isOwner, findListing, openDetail, setDecision, split, trip } = useApp();
   const decision = final.decision;
+  // Map a list of member ids → roster entries (for transparent top-pick avatars).
+  const membersOf = (ids: string[] | undefined) =>
+    (ids ?? []).map((uid) => roster.find((m) => m.id === uid)).filter((m): m is NonNullable<typeof m> => !!m);
+  // Everyone who has cast a top choice (across all homes), unique.
+  const allPickers = membersOf([...new Set(Object.values(final.pickers ?? {}).flat())]);
 
   // Fire the seal stamp once, the moment a decision is freshly locked (not on
   // every render of an already-locked board, and not for an unlock).
@@ -92,6 +98,12 @@ export function DecisionSection() {
                         {mine && <span className="text-[10px] font-semibold text-accent-text">· your pick</span>}
                       </button>
                       <div className="lb-track"><div className="lb-fill" style={{ width: `${pct}%` }} /></div>
+                      {(() => { const who = membersOf(final.pickers?.[id]); return who.length > 0 && (
+                        <span className="lb-pickers" title={`Picked by ${who.map((m) => m.name).join(', ')}`}>
+                          {who.slice(0, 5).map((m) => <span className="vw-av" key={m.id}><Avatar name={m.name} avatar={m.avatar} size={20} /></span>)}
+                          {who.length > 5 && <span className="vw-more tnum">+{who.length - 5}</span>}
+                        </span>
+                      ); })()}
                     </div>
                     <span className="lb-tally">{n} <span>pick{n === 1 ? '' : 's'}</span></span>
                   </div>
@@ -123,13 +135,16 @@ export function DecisionSection() {
             <p className="text-sm text-text-muted">No one’s cast a top choice yet. Once your group votes, you’ll see momentum build here.</p>
           ) : (
             <div className="voters">
-              <span className="voters-mini" style={{ display: 'inline-flex' }}>
-                {Array.from({ length: Math.min(final.total, 6) }).map((_, i) => (
-                  <span key={i} className="av" style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--accent)', color: 'var(--accent-fg)', border: '2px solid var(--surface-raised)', marginLeft: i ? -7 : 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
-                    {String.fromCharCode(65 + i)}
-                  </span>
-                ))}
-              </span>
+              {allPickers.length > 0 && (
+                <span className="voters-mini" style={{ display: 'inline-flex' }}>
+                  {allPickers.slice(0, 6).map((m, i) => (
+                    <span key={m.id} className="av" style={{ marginLeft: i ? -7 : 0, borderRadius: '50%', boxShadow: '0 0 0 2px var(--surface-raised)' }}>
+                      <Avatar name={m.name} avatar={m.avatar} size={26} />
+                    </span>
+                  ))}
+                  {allPickers.length > 6 && <span className="vw-more tnum" style={{ marginLeft: 6 }}>+{allPickers.length - 6}</span>}
+                </span>
+              )}
               <span className="vlabel">{final.total} of {groupSize} have picked a favourite</span>
             </div>
           )}

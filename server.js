@@ -2906,7 +2906,8 @@ app.delete('/api/caveats/:id', requireAdmin, hDeleteCaveat);
 app.delete('/api/trips/:tripId/caveats/:id', requireTripOwner, hDeleteCaveat);
 
 // ── Final pick: member "top choice" poll + organizer-locked decision ────────────
-// Aggregate counts only — never expose who voted for which listing.
+// Transparent + collaborative: members see WHO top-picked each home (`pickers`).
+// Guests get aggregate counts only.
 function tallyFinal(votes) {
   const counts = {};
   let total = 0;
@@ -2922,7 +2923,17 @@ const hGetFinal = (req, res) => {
   const votes = loadFinalVotes(tripId);
   const { counts, total } = tallyFinal(votes);
   const myPick = req.user ? (votes[req.user.id] || null) : null;
-  res.json({ counts, total, myPick, decision: loadDecision(tripId) });
+  const trip = req.trip || getTrip(tripId);
+  const viewerIsMember = !!(req.user && trip && (trip.owner_id === req.user.id || isMember(trip, req.user) || isSuperAdmin(req.user)));
+  let pickers; // { listingId: [userId, ...] } — members only
+  if (viewerIsMember) {
+    pickers = {};
+    for (const [uid, lid] of Object.entries(votes)) {
+      if (!lid) continue;
+      (pickers[lid] = pickers[lid] || []).push(uid);
+    }
+  }
+  res.json({ counts, total, myPick, decision: loadDecision(tripId), ...(pickers ? { pickers } : {}) });
 };
 app.get('/api/final', hGetFinal);
 app.get('/api/trips/:tripId/final', loadTripOr404, hGetFinal);

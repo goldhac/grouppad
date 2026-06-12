@@ -65,6 +65,7 @@
 .lb-bar.lead .lb-fill { background: var(--star); }
 .lb-bar .lb-tally { font-size: 13px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .lb-bar .lb-tally span { color: var(--text-muted); font-weight: 500; font-size: 12px; }
+.lb-bar .lb-pickers { display: inline-flex; align-items: center; margin-top: 1px; }
 
 /* ---------------------------------------------------------------------------
    11 · Official-pick banner (the locked winner)

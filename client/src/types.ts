@@ -232,6 +232,8 @@ export interface FinalState {
   total: number;
   myPick: string | null;
   decision: Decision | null;
+  /** Who top-picked each home (listingId → userIds). Members only; absent for guests. */
+  pickers?: Record<string, string[]>;
 }
 
 // ── Admin usage dashboard ────────────────────────────────────────────────────

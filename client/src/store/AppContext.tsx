@@ -786,9 +786,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const cid = aliasToCanon.get(lid) ?? lid;
       counts[cid] = (counts[cid] ?? 0) + n;
     }
+    // Fold each alias copy's top-pickers onto the canonical home.
+    const pickers: Record<string, string[]> = {};
+    for (const [lid, ids] of Object.entries(final.pickers ?? {})) {
+      const cid = aliasToCanon.get(lid) ?? lid;
+      pickers[cid] = [...(pickers[cid] ?? []), ...ids];
+    }
     return {
       ...final,
       counts,
+      pickers: final.pickers ? pickers : undefined,
       myPick: final.myPick ? aliasToCanon.get(final.myPick) ?? final.myPick : final.myPick,
       decision: final.decision
         ? { ...final.decision, listing_id: aliasToCanon.get(final.decision.listing_id) ?? final.decision.listing_id }
