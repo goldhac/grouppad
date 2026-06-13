@@ -249,6 +249,26 @@ function markInsightsStale(tripId) {
 // Final pick: each member's single top choice, plus the organizer-locked decision.
 function loadFinalVotes(tripId)    { return readJson(tripFile(tripId, 'finalvotes.json'), {}); }
 function saveFinalVotes(v, tripId) { writeJsonAtomic(tripFile(tripId, 'finalvotes.json'), v); }
+
+// When someone leaves or is removed, their participation leaves with them: their
+// likes (votes) and top-choice pick are purged. Their submitted listings STAY —
+// the home is still a valid option for the group. Also reconciles any orphaned
+// activity from members removed before this existed (sweep on boot).
+function purgeNonMemberActivity(tripId) {
+  const trip = getTrip(tripId);
+  if (!trip) return;
+  const members = new Set(trip.members || []);
+  const votes = loadVotes(tripId); let vChanged = false;
+  for (const lid of Object.keys(votes)) {
+    const m = votes[lid] || {};
+    for (const uid of Object.keys(m)) if (!members.has(uid)) { delete m[uid]; vChanged = true; }
+    if (Object.keys(m).length === 0) { delete votes[lid]; vChanged = true; }
+  }
+  if (vChanged) saveVotes(votes, tripId);
+  const fv = loadFinalVotes(tripId); let fChanged = false;
+  for (const uid of Object.keys(fv)) if (!members.has(uid)) { delete fv[uid]; fChanged = true; }
+  if (fChanged) saveFinalVotes(fv, tripId);
+}
 // Personal saved/favourite homes — per user, per trip ({ [userId]: listingId[] }).
 function loadFavorites(tripId)     { return readJson(tripFile(tripId, 'favorites.json'), {}); }
 function saveFavorites(f, tripId)  { writeJsonAtomic(tripFile(tripId, 'favorites.json'), f); }
@@ -3337,6 +3357,7 @@ app.post('/api/trips/:tripId/leave', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'The organizer cannot leave their own trip.' });
   trip.members = (trip.members || []).filter(id => id !== req.user.id);
   saveTrips(trips);
+  purgeNonMemberActivity(trip.id); // drop their likes + top pick (keep listings)
   res.json({ ok: true });
 });
 
@@ -3505,6 +3526,7 @@ app.post('/api/trips/:tripId/members/remove', requireTripOwner, (req, res) => {
   trip.members = (trip.members || []).filter((id) => id !== userId);
   trip.organizers = (trip.organizers || []).filter((id) => id !== userId);
   saveTrips(trips);
+  purgeNonMemberActivity(trip.id); // drop their likes + top pick (keep listings)
   res.json({ ok: true });
 });
 
@@ -3728,6 +3750,8 @@ app.listen(PORT, () => {
   console.log(`GroupPad listening on :${PORT}`);
   try { migrateLegacyTripIfNeeded(); } catch (e) { console.error('[migrate] failed:', e.message); }
   try { ensureLaOwner(); } catch (e) { console.error('[repair] failed:', e.message); }
+  // Reconcile likes/picks left behind by members removed before purge existed.
+  try { for (const id of Object.keys(loadTrips())) purgeNonMemberActivity(id); } catch (e) { console.error('[purge] failed:', e.message); }
   // Backfill 3-distance chips on pre-existing community submissions (one-time).
   backfillSubmissionDistances().catch((e) => console.error('[backfill-sub] failed:', e.message));
   schedulePipeline();
