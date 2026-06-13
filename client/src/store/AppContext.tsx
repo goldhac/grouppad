@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useLocation } from 'react-router-dom';
 import { api, ApiError } from '@/lib/api';
 import { netVotes } from '@/lib/utils';
 import { applySkin, readPersonalSkin, writePersonalSkin, type SkinId } from '@/lib/skins';
@@ -538,7 +539,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Theming (skins) ────────────────────────────────────────────────────────
   // Effective skin = personal override (this device) → trip default → classic.
-  useEffect(() => { applySkin(personalSkin || trip?.skin || 'classic'); }, [personalSkin, trip?.skin]);
+  // Public/marketing pages stay on the consistent default brand (no skin) — a
+  // skin only colors the in-trip app, never the landing/legal pages.
+  const location = useLocation();
+  const brandLocked = ['/', '/press', '/terms', '/privacy'].includes(location.pathname);
+  useEffect(() => {
+    applySkin(brandLocked ? 'classic' : (personalSkin || trip?.skin || 'classic'));
+  }, [brandLocked, personalSkin, trip?.skin]);
   const setSkin = useCallback((skin: SkinId | '') => { writePersonalSkin(skin); setPersonalSkinState(skin); }, []);
   const setTripSkin = useCallback(async (skin: SkinId) => {
     const id = tripIdRef.current;
