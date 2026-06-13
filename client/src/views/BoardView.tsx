@@ -43,7 +43,7 @@ const BOARD_TOUR: TourStep[] = [
   { target: '[data-tab="shortlist"]', title: 'Let Scout decide', body: 'In Shortlist, ask Scout to rank the finalists against your group’s criteria. There’s also a box to ask Scout your own question, answered just for you and never shared with the group.' },
   { target: '[data-tab="discussion"]', title: 'Tell Scout what matters', body: 'Request a must-have in Discussion. The organizer approves it, then Scout weighs it.' },
   { target: '[data-tab="decision"]', title: 'Lock the official pick', body: 'Everyone casts one top choice; the organizer seals the winner with the gold lock.' },
-  { target: '[data-tour="theme"]', title: 'Make it yours — themes', body: 'Switch light or dark here, and pick a color theme (Tropical, Forest, Sunset…) from your account menu. Organizers set the trip’s default theme; you can override it just for yourself.' },
+  { target: '[data-tour="account"]', title: 'Make it yours — themes & avatar', body: 'Open your account menu to switch the board’s color theme (Tropical, Forest, Sunset…) or change your avatar. Organizers set the trip’s default theme; you can override it just for yourself.' },
 ];
 
 /** Paste-a-URL add toolbar — collapsed to a button until you start adding,

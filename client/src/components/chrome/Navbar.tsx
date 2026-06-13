@@ -17,7 +17,6 @@ function ThemeToggle() {
   return (
     <button
       onClick={toggle}
-      data-tour="theme"
       aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
       title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
       className="inline-flex h-9 w-9 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-inset hover:text-text"
@@ -103,7 +102,7 @@ function NotifModal({ onClose }: { onClose: () => void }) {
 }
 
 /** Minimal click-away dropdown. */
-function Menu({ label, children }: { label: React.ReactNode; children: (close: () => void) => React.ReactNode }) {
+function Menu({ label, children, tourId }: { label: React.ReactNode; children: (close: () => void) => React.ReactNode; tourId?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -118,6 +117,7 @@ function Menu({ label, children }: { label: React.ReactNode; children: (close: (
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((v) => !v)}
+        data-tour={tourId}
         className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-text hover:bg-panel-2"
       >
         {label}
@@ -223,7 +223,7 @@ export function Navbar() {
                   <Plus className="h-4 w-4" /> New trip
                 </Button>
               )}
-              <Menu label={<span className="flex items-center gap-2 max-w-[150px]"><Avatar name={user.name} avatar={user.avatar} size={24} /><span className="truncate">{user.name}</span></span>}>
+              <Menu tourId="account" label={<span className="flex items-center gap-2 max-w-[150px]"><Avatar name={user.name} avatar={user.avatar} size={24} /><span className="truncate">{user.name}</span></span>}>
                 {(close) => (
                   <>
                     <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Your avatar</div>
