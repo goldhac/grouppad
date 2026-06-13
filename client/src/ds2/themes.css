@@ -1,0 +1,27 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Skins — named brand palettes layered ON TOP of the light/dark mode.
+   `data-theme` (light|dark) sets the lightness; `data-skin` recolors the accent
+   family so a skin reads correctly in BOTH modes. "Classic" = no skin (the
+   default warm teal/gold in tokens.css). Skins only touch the accent family +
+   link/ring; the gold "decision" signal stays gold for brand consistency.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* ── Tropical — turquoise + sand ─────────────────────────────────────────────── */
+[data-skin="tropical"] { --accent: #0E9F98; --accent-hover: #14B3AB; --accent-active: #0B7E78; --official: #0E9F98; --ring: rgba(14,159,152,0.40); }
+[data-theme="light"][data-skin="tropical"] { --accent-text: #0B7A74; --link: #0B7A74; --accent-tint: #E2F5F3; --accent-tint-2: #C8ECE8; --accent-tint-border: #BCE6E1; }
+[data-theme="dark"][data-skin="tropical"]  { --accent-text: #57D6CD; --link: #57D6CD; --accent-tint: #0F2F2C; --accent-tint-2: #143A36; --accent-tint-border: #1E4A45; }
+
+/* ── Coastal — slate-blue + steel (the "city" vibe) ──────────────────────────── */
+[data-skin="coastal"] { --accent: #3A6FB0; --accent-hover: #4A7FC0; --accent-active: #2E5C95; --official: #3A6FB0; --ring: rgba(58,111,176,0.40); }
+[data-theme="light"][data-skin="coastal"] { --accent-text: #2C5187; --link: #2C5187; --accent-tint: #E8EEF8; --accent-tint-2: #D2E0F1; --accent-tint-border: #C4D6EC; }
+[data-theme="dark"][data-skin="coastal"]  { --accent-text: #8FB6E6; --link: #8FB6E6; --accent-tint: #16263C; --accent-tint-2: #1C3148; --accent-tint-border: #28425E; }
+
+/* ── Sunset — terracotta + amber ─────────────────────────────────────────────── */
+[data-skin="sunset"] { --accent: #C2613A; --accent-hover: #D2714A; --accent-active: #A44E2D; --official: #C2613A; --ring: rgba(194,97,58,0.40); }
+[data-theme="light"][data-skin="sunset"] { --accent-text: #9E4524; --link: #9E4524; --accent-tint: #FBE9DF; --accent-tint-2: #F6D6C6; --accent-tint-border: #F0C8B4; }
+[data-theme="dark"][data-skin="sunset"]  { --accent-text: #F0A077; --link: #F0A077; --accent-tint: #38231A; --accent-tint-2: #472C20; --accent-tint-border: #5A3A2A; }
+
+/* ── Forest — deep green (cabin vibe) ────────────────────────────────────────── */
+[data-skin="forest"] { --accent: #2F6B3C; --accent-hover: #3A7E49; --accent-active: #245430; --official: #2F6B3C; --ring: rgba(47,107,60,0.40); }
+[data-theme="light"][data-skin="forest"] { --accent-text: #1F5128; --link: #1F5128; --accent-tint: #E6F1E7; --accent-tint-2: #CFE4D1; --accent-tint-border: #BEDAC1; }
+[data-theme="dark"][data-skin="forest"]  { --accent-text: #7CC089; --link: #7CC089; --accent-tint: #15271A; --accent-tint-2: #1C3522; --accent-tint-border: #27462E; }
