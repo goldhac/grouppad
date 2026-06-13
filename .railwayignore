@@ -1,5 +1,14 @@
-# Keep the deploy upload lean — none of this is needed at runtime.
+# Keep the deploy upload lean — none of this is needed at runtime, and the
+# Docker build reinstalls deps + rebuilds the client from source. A bloated
+# upload (the ~284MB marketing/ dir, node_modules, dist) was timing out
+# `railway up` mid-transfer and dying at INITIALIZING.
 docs/
 design-v2/
 .agents/
+marketing/
+node_modules/
+client/node_modules/
+client/dist/
+.git/
 *.log
+.DS_Store
