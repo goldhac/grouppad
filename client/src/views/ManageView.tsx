@@ -3,13 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Settings, MapPin, Calendar, Users, LayoutGrid, Link2, Copy, Check, Send, ShieldCheck, ShieldOff, UserPlus,
   SlidersHorizontal, ChevronDown, AlertCircle, CheckCircle2, Crown, UserMinus, Activity, Home,
-  ThumbsUp, Star, Info, AlertTriangle, LockOpen, Square, Trash2, BadgeCheck,
+  ThumbsUp, Star, Info, AlertTriangle, LockOpen, Square, Trash2, BadgeCheck, Palette,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { MobileManage } from '@/views/MobileManage';
 import { Icon } from '@/components/ui/Icon';
+import { SkinPicker } from '@/components/ui/SkinPicker';
+import type { SkinId } from '@/lib/skins';
 import { Avatar } from '@/components/ui/Avatar';
 import type { TripPulse, TripMember } from '@/types';
 
@@ -27,7 +29,7 @@ type ConfirmKind = 'reset' | 'close' | 'transfer' | 'promote' | 'demote' | 'remo
 interface ConfirmState { kind: ConfirmKind; member?: TripMember; }
 
 export function ManageView() {
-  const { trip, isOwner, deleteTrip, enterTrip, setDecision, toast } = useApp();
+  const { trip, isOwner, deleteTrip, enterTrip, setDecision, setTripSkin, toast } = useApp();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [pulse, setPulse] = useState<TripPulse | null>(null);
@@ -162,6 +164,13 @@ export function ManageView() {
               <button className="btn btn-primary" onClick={() => void copy()}><Icon icon={copied ? Check : Copy} className="ico" /> {copied ? 'Copied' : 'Copy link'}</button>
             </div>
             <div className="invite-foot"><Icon icon={ShieldCheck} className="ico" /> Only people you share the link with can find this trip.</div>
+            <div className="invite-email" style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 14 }}>
+              <div className="lab"><Icon icon={Palette} className="ico" /> Trip theme</div>
+              <div className="sub">Sets the board's look for the whole group. Members can override it for themselves.</div>
+              <div className="row" style={{ marginTop: 8 }}>
+                <SkinPicker value={(trip.skin as SkinId) || 'classic'} onChange={(s) => { if (s) void setTripSkin(s).then(() => toast('Trip theme updated.', 'success')).catch(() => toast('Could not update theme.', 'error')); }} />
+              </div>
+            </div>
             <div className="invite-email">
               <div className="lab">Or invite by email</div>
               <div className="sub">We’ll email each person a one-tap link to join. Separate addresses with commas.</div>

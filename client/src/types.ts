@@ -46,6 +46,8 @@ export interface TripView extends Trip {
   memberCount: number;
   /** Organizer's first name, for the invite welcome ("Gold invited you"). */
   owner_name?: string | null;
+  /** The trip's UI theme (organizer-set default); 'classic' when unset. */
+  skin?: string;
   created_at?: string;
   /** Cover photo from the trip's top-voted home; null for new trips (client falls back to an editorial image). */
   coverPhoto?: string | null;
@@ -67,6 +69,8 @@ export interface CreateTripInput {
   home_type?: string;
   flex_days?: number;
   itinerary?: string;
+  /** Optional UI theme picked at create time → the trip's default skin. */
+  skin?: string;
 }
 
 export interface TripMember {

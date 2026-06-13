@@ -330,6 +330,11 @@ function isOwner(trip, user)  { return isOrganizer(trip, user); } // back-compat
 function isMember(trip, user) { return !!user && !!trip && Array.isArray(trip.members) && trip.members.includes(user.id); }
 // A member-safe public view of a trip for a given caller (never leaks join_code
 // unless the caller is the owner).
+// Named UI skins (must match client ds2/themes.css). Validate organizer input
+// so only a known value is ever stored / reflected into the DOM's data-skin.
+const SKINS = new Set(['classic', 'tropical', 'coastal', 'sunset', 'pinksummer', 'forest']);
+const cleanSkin = (s) => (SKINS.has(String(s)) ? String(s) : null);
+
 function tripView(trip, user) {
   if (!trip) return null;
   const { join_code, members, organizers, owner_id, ...rest } = trip;
@@ -341,6 +346,7 @@ function tripView(trip, user) {
   return {
     ...rest,
     owner_name,
+    skin: cleanSkin(trip.skin) || 'classic', // the trip's UI theme (organizer-set)
     // isOwner stays the "organizer powers" flag the client gates on; isCreator
     // is the narrower creator-only flag (delete trip, manage organizers).
     isOwner: organizer,
@@ -3284,6 +3290,12 @@ app.post('/api/trips', requireAuth, (req, res) => {
   if (!checkin || !checkout_5n)
     return res.status(400).json({ error: 'Check-in and check-out dates are required.' });
   const trip = createTrip(req.user, { name, destination, checkin, checkout_5n, adults, budget, bedrooms, home_type, flex_days });
+  // Optional UI theme chosen at create time → the trip's default skin.
+  const newSkin = cleanSkin((req.body || {}).skin);
+  if (newSkin && newSkin !== 'classic') {
+    const trips = loadTrips();
+    if (trips[trip.id]) { trips[trip.id].skin = newSkin; saveTrips(trips); trip.skin = newSkin; }
+  }
   // Optional itinerary posted at create time — saved before the search so it can
   // inform the reference points, and so AI compare has it from the start.
   const itinText = String(itinerary || '').slice(0, 8000).trim();
@@ -3400,6 +3412,7 @@ app.patch('/api/trips/:tripId', requireTripOwner, (req, res) => {
   if (has('bedrooms')) trip.bedrooms = b.bedrooms == null || b.bedrooms === '' ? null : Math.max(1, Number(b.bedrooms));
   if (has('flex_days')) trip.flex_days = Math.min(14, Math.max(0, Number(b.flex_days) || 0));
   if (has('voting_closed')) trip.voting_closed = !!b.voting_closed;
+  if (has('skin')) { const s = cleanSkin(b.skin); if (s) trip.skin = s; }
   saveTrips(trips);
   res.json(tripView(trip, req.user));
 });

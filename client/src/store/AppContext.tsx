@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { netVotes } from '@/lib/utils';
+import { applySkin, readPersonalSkin, writePersonalSkin, type SkinId } from '@/lib/skins';
 import type {
   Caveat,
   CompareListingInput,
@@ -120,6 +121,10 @@ interface AppActions {
   // guided site tour (the board "show me around" walkthrough); bump to trigger
   siteTourSignal: number;
   startSiteTour: () => void;
+  // theming — personal skin override ('' = follow the trip's default)
+  personalSkin: SkinId | '';
+  setSkin: (skin: SkinId | '') => void;
+  setTripSkin: (skin: SkinId) => Promise<void>;
   // detail modal
   openDetail: (id: string) => void;
   closeDetail: () => void;
@@ -222,6 +227,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [authModal, setAuthModal] = useState<AuthModalState>({ open: false });
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [siteTourSignal, setSiteTourSignal] = useState(0);
+  const [personalSkin, setPersonalSkinState] = useState<SkinId | ''>(() => readPersonalSkin());
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const userRef = useRef(user);
@@ -529,6 +535,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Bumping this signal asks the board (wherever it's mounted) to run its
   // "show me around" guided tour — used by the invite welcome's "browse" path.
   const startSiteTour = useCallback(() => setSiteTourSignal((n) => n + 1), []);
+
+  // ── Theming (skins) ────────────────────────────────────────────────────────
+  // Effective skin = personal override (this device) → trip default → classic.
+  useEffect(() => { applySkin(personalSkin || trip?.skin || 'classic'); }, [personalSkin, trip?.skin]);
+  const setSkin = useCallback((skin: SkinId | '') => { writePersonalSkin(skin); setPersonalSkinState(skin); }, []);
+  const setTripSkin = useCallback(async (skin: SkinId) => {
+    const id = tripIdRef.current;
+    if (!id) return;
+    const updated = await api.patchTrip(id, { skin });
+    if (tripIdRef.current === id) setTrip(updated);
+  }, []);
 
   // ── Detail modal ─────────────────────────────────────────────────────────────
   const openDetail = useCallback((id: string) => setDetailId(id), []);
@@ -891,7 +908,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       favoriteIds: canonFavoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
-      startOnboarding, endOnboarding, siteTourSignal, startSiteTour, openDetail, closeDetail, findListing,
+      startOnboarding, endOnboarding, siteTourSignal, startSiteTour, personalSkin, setSkin, setTripSkin, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, setSplit, toast, dismissToast,
@@ -904,7 +921,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       canonFavoriteIds, toggleFavorite,
       loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
-      startOnboarding, endOnboarding, siteTourSignal, startSiteTour, openDetail, closeDetail, findListing,
+      startOnboarding, endOnboarding, siteTourSignal, startSiteTour, personalSkin, setSkin, setTripSkin, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, toast, dismissToast,

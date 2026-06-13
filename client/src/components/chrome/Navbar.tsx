@@ -4,6 +4,7 @@ import { ChevronDown, Plus, LogOut, LayoutGrid, Check, Bell, Sun, Moon } from 'l
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { Avatar, AVATAR_CHOICES } from '@/components/ui/Avatar';
+import { SkinPicker } from '@/components/ui/SkinPicker';
 import { Button } from '@/components/ui/Button';
 import { PeakLogo } from '@/components/ui/PeakLogo';
 import { useTheme } from '@/lib/useTheme';
@@ -16,6 +17,7 @@ function ThemeToggle() {
   return (
     <button
       onClick={toggle}
+      data-tour="theme"
       aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
       title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
       className="inline-flex h-9 w-9 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-inset hover:text-text"
@@ -148,7 +150,7 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   );
 
 export function Navbar() {
-  const { user, myTrips, trip, isOwner, signOut, openAuth, setAvatar } = useApp();
+  const { user, myTrips, trip, isOwner, signOut, openAuth, setAvatar, personalSkin, setSkin } = useApp();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -245,6 +247,9 @@ export function Navbar() {
                         <Avatar name={user.name} size={32} />
                       </button>
                     </div>
+                    <div className="my-1 h-px bg-border" />
+                    <div className="px-3 pt-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">Theme</div>
+                    <div className="px-3 pb-2"><SkinPicker value={personalSkin} onChange={setSkin} allowFollow /></div>
                     <div className="my-1 h-px bg-border" />
                     <MenuItem onClick={() => { close(); navigate('/trips'); }}>
                       <LayoutGrid className="h-4 w-4" /> Your trips

@@ -8,6 +8,8 @@ import {
 import { useApp } from '@/store/AppContext';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { MobileCreate } from '@/views/MobileCreate';
+import { SkinPicker } from '@/components/ui/SkinPicker';
+import type { SkinId } from '@/lib/skins';
 
 type SegKey = 'dest' | 'cin' | 'cout' | 'guests';
 
@@ -24,6 +26,7 @@ export function CreateTripView() {
   const [focus, setFocus] = useState<SegKey | null>(null);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [skin, setSkin] = useState<SkinId | ''>('');
 
   useEffect(() => {
     if (!accountLoading && !user) openAuth('create a trip');
@@ -79,6 +82,7 @@ export function CreateTripView() {
         home_type: form.type,
         flex_days: Number(form.flex) || 0,
         itinerary: form.itin.trim() || undefined,
+        skin: skin || undefined,
       });
       // The board owns the SEARCHING state and auto-fires the capped search.
       navigate(`/t/${trip.id}/board`);
@@ -200,6 +204,11 @@ export function CreateTripView() {
                     placeholder="Rough plans help tailor the search, e.g. Fri: arrive + dinner downtown. Sat: pool day. Sun: museum…"
                     value={form.itin} onChange={set('itin')} />
                   <span className="sub"><Info className="ico" /> Helps pick nearby reference points and powers Scout, our AI.</span>
+                </div>
+                <div className="ct-field full">
+                  <label>Theme <span className="hint">· the whole board's vibe</span></label>
+                  <SkinPicker value={skin} onChange={(s) => setSkin(s)} />
+                  <span className="sub"><Info className="ico" /> Sets the board's look for everyone. Members can override it for themselves, and you can change it later in Manage.</span>
                 </div>
               </div>
             </div>
