@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Moon, Sun, Settings, MapPin, Calendar, Users, Activity, Home, ThumbsUp, Star,
   Link2, Copy, Check, ShieldCheck, ShieldOff, UserPlus, Send, SlidersHorizontal, ChevronDown, Crown,
-  UserMinus, AlertTriangle, LockOpen, Square, Trash2,
+  UserMinus, AlertTriangle, LockOpen, Square, Trash2, Palette,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
+import { SkinPicker } from '@/components/ui/SkinPicker';
+import type { SkinId } from '@/lib/skins';
 import { cn } from '@/lib/cn';
 import type { TripMember, TripPulse } from '@/types';
 
@@ -23,7 +25,7 @@ const CONFIRMS: Record<ConfirmKind, { glyph: typeof Crown; tone: string; title: 
 };
 
 export function MobileManage() {
-  const { trip, deleteTrip, enterTrip, setDecision, toast } = useApp();
+  const { trip, deleteTrip, enterTrip, setDecision, setTripSkin, toast } = useApp();
   const navigate = useNavigate();
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
   const [members, setMembers] = useState<TripMember[]>([]);
@@ -122,6 +124,11 @@ export function MobileManage() {
                 <button className="btn btn-primary" onClick={copyLink}><Icon icon={copied ? Check : Copy} className="ico" /> {copied ? 'Copied' : 'Copy link'}</button>
               </div>
               <div className="invite-foot"><Icon icon={ShieldCheck} className="ico" /> Only people you share the link with can find this trip.</div>
+              <div className="invite-email">
+                <div className="lab"><Icon icon={Palette} className="ico" /> Trip theme</div>
+                <div className="sub">Sets the board's look for the whole group. Members can override it for themselves.</div>
+                <div style={{ marginTop: 8 }}><SkinPicker value={(trip.skin as SkinId) || 'classic'} onChange={(s) => { if (s) void setTripSkin(s).then(() => toast('Trip theme updated.', 'success')).catch(() => toast('Could not update theme.', 'error')); }} /></div>
+              </div>
               <div className="invite-email">
                 <div className="lab">Or invite by email</div>
                 <div className="sub">We'll email each person a one-tap link to join. Separate addresses with commas.</div>

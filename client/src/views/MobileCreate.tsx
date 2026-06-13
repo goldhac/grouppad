@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Sparkles, MapPin, Users, Pencil, BedDouble, Wallet, Home, ChevronDown, Info, Check, CheckCircle2, AlertCircle, Search, Calendar } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { SkinPicker } from '@/components/ui/SkinPicker';
+import type { SkinId } from '@/lib/skins';
 
 type Form = { dest: string; cin: string; cout: string; guests: string; name: string; beds: string; budget: string; type: string; flex: string; itin: string };
 const HOME_TYPES = ['Any', 'House', 'Apartment', 'Villa', 'Cabin'];
@@ -15,6 +17,7 @@ export function MobileCreate() {
   const [focus, setFocus] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [skin, setSkin] = useState<SkinId | ''>('');
 
   const set = (k: keyof Form, v: string) => setF((s) => ({ ...s, [k]: v }));
 
@@ -45,6 +48,7 @@ export function MobileCreate() {
         home_type: f.type,
         flex_days: Number(f.flex) || 0,
         itinerary: f.itin.trim() || undefined,
+        skin: skin || undefined,
       });
       navigate(`/t/${trip.id}/board`);
     } catch (e) {
@@ -119,6 +123,11 @@ export function MobileCreate() {
                 { value: '7', label: '± 1 week' },
               ], sub: 'We check availability across this window.', subicon: Info })}
               {field('itin', 'Itinerary', { hint: '(optional)', type: 'textarea', ph: 'Rough plans help tailor the search, e.g. Fri: arrive + dinner. Sat: pool day…', sub: 'Helps pick nearby reference points and powers Scout, our AI.', subicon: Info })}
+              <div className="bfield">
+                <label>Theme <span className="hint"> · the board’s vibe</span></label>
+                <div style={{ marginTop: 8 }}><SkinPicker value={skin} onChange={(s) => setSkin(s)} /></div>
+                <div className="sub"><Icon icon={Info} className="ico" /> Sets the look for everyone. Members can override it for themselves; change it later in Manage.</div>
+              </div>
             </div>
             <div style={{ height: 30 }} />
           </div>

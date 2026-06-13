@@ -4,6 +4,7 @@ import { Moon, Sun, Crown, MapPin, Calendar, Home, ArrowRight, Image as ImageIco
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 import { SafeImg } from '@/components/ui/SafeImg';
+import { SkinPicker } from '@/components/ui/SkinPicker';
 import type { TripView } from '@/types';
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -31,7 +32,7 @@ function Avatars({ count }: { count: number }) {
 }
 
 export function MobileTrips() {
-  const { myTrips, user, signOut, leaveTrip, openAuth } = useApp();
+  const { myTrips, user, signOut, leaveTrip, openAuth, personalSkin, setSkin } = useApp();
   const navigate = useNavigate();
   const [seg, setSeg] = useState<'upcoming' | 'past'>('upcoming');
   const [acctOpen, setAcctOpen] = useState(false);
@@ -140,6 +141,11 @@ export function MobileTrips() {
                   ))}
                 </div>
               )}
+
+              <div className="ash-trips">
+                <div className="ash-lbl">Theme</div>
+                <SkinPicker value={personalSkin} onChange={setSkin} allowFollow />
+              </div>
 
               {user
                 ? <button className="ash-signout" onClick={async () => { await signOut(); setAcctOpen(false); }}><Icon icon={LogOut} className="ico" /> Sign out</button>
