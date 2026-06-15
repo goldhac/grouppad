@@ -707,6 +707,23 @@ function tripRecipients(trip) {
   if (dirty) saveUsers(users);
   return out;
 }
+
+// After a listings refresh, email the trip's members that fresh homes landed.
+// Gated on the digest pref (the broadcast-style opt-in); skips empty refreshes.
+function notifyFreshHomes(tripId) {
+  try {
+    const trip = getTrip(tripId);
+    if (!trip) return;
+    const count = ((loadListings(tripId) || {}).listings || []).length;
+    if (!count) return; // nothing pulled — don't announce an empty board
+    const recips = tripRecipients(trip).filter((r) => r.prefs.digest);
+    for (const r of recips) {
+      const html = Emails.freshHomes({ appBase: APP_BASE_URL, tripName: trip.name, count, boardUrl: boardUrl(tripId), unsub: r.unsub });
+      sendEmail(r.email, `Fresh homes on ${trip.name}`, html).catch(() => {});
+    }
+    logEvent(tripId, 'refresh', `Listings refreshed — ${count} homes, ${recips.length} notified`);
+  } catch (e) { console.error('[freshHomes] failed:', e.message); }
+}
 // Find a listing (curated or community) by id within a trip — to name the pick.
 function findListingByIdInTrip(tripId, id) {
   const sid = String(id);
@@ -2854,6 +2871,7 @@ app.post('/api/admin/run-pipeline', requireAdmin, async (req, res) => {
   const { spawn } = require('child_process');
   console.log('[Admin] Starting pipeline run…');
   const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env: { ...process.env, APIFY_TOKEN: getApifyToken() }, detached: true, stdio: 'ignore' });
+  child.on('exit', (code) => { if (code === 0) notifyFreshHomes(LA_TRIP_ID); }); // email members: fresh homes
   child.unref();
   res.json({ ok: true, message: 'Pipeline started in background — check server logs' });
 });
@@ -3278,13 +3296,15 @@ app.get('/api/admin/trips', requireAdmin, (req, res) => {
 // Spawn the trip-scoped rental search (pipeline.js in TRIP_ID mode) for a newly
 // created trip. Writes a .searching marker immediately so the client's status
 // poll is accurate from t=0; pipeline.js clears it when the run finishes.
-function spawnTripSearch(tripId, maxItems) {
+function spawnTripSearch(tripId, maxItems, notify = false) {
   if (!apifyConfigured() || tripId === LA_TRIP_ID) return false;
   try { fs.writeFileSync(path.join(tripDir(tripId), '.searching'), new Date().toISOString()); } catch {}
   const { spawn } = require('child_process');
   const env = { ...process.env, TRIP_ID: tripId, APIFY_TOKEN: getApifyToken() };
   if (maxItems) env.TRIP_SEARCH_MAX = String(maxItems);
   const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env, detached: true, stdio: 'ignore' });
+  // Notify members of fresh homes on a *refresh* (not the initial create search).
+  if (notify) child.on('exit', (code) => { if (code === 0) notifyFreshHomes(tripId); });
   child.unref();
   console.log(`[trip-search] spawned for ${tripId} (cap ${maxItems || 'default'})`);
   return true;
@@ -3568,7 +3588,7 @@ app.post('/api/trips/:tripId/run-search', requireTripOwner, async (req, res) => 
   if (!(await apifyGuard('a trip search')))
     return res.status(429).json({ error: 'Rental search is paused — Apify usage is near its monthly limit. The site manager has been alerted to rotate the key.' });
   const max = Math.min(20, Math.max(1, Number(req.body && req.body.max) || 10));
-  if (!spawnTripSearch(req.params.tripId, max))
+  if (!spawnTripSearch(req.params.tripId, max, true))
     return res.status(400).json({ error: 'Search is not configured (APIFY_TOKEN missing on server).' });
   res.json({ ok: true });
 });
@@ -3591,7 +3611,7 @@ app.post('/api/trips/:tripId/refresh', requireTripOwner, async (req, res) => {
     return res.status(429).json({ error: 'Rental search is paused — Apify usage is near its monthly limit.' });
   if (tripId === LA_TRIP_ID) {
     runPipelineJob().catch((e) => console.error('[refresh] pipeline error:', e && e.message));
-  } else if (!spawnTripSearch(tripId, 10)) {
+  } else if (!spawnTripSearch(tripId, 10, true)) {
     return res.status(400).json({ error: 'Search is not configured (APIFY_TOKEN missing on server).' });
   }
   const trips = loadTrips();
@@ -3657,6 +3677,7 @@ async function runPipelineJob() {
   const child = spawn('node', ['pipeline.js'], {
     cwd: __dirname, env: { ...process.env, APIFY_TOKEN: getApifyToken() }, detached: true, stdio: 'ignore',
   });
+  child.on('exit', (code) => { if (code === 0) notifyFreshHomes(LA_TRIP_ID); }); // email members: fresh homes
   child.unref();
 }
 

@@ -133,6 +133,20 @@ function joined({ appBase, tripName, who, boardUrl, unsub, memberCount }) {
     foot: `${unsub ? `${link(`${appBase}/api/notify/unsubscribe?u=${unsub}`, 'Manage notifications')} &middot; ` : ''}<span style="color:${MUTED};" class="ec-foot">You’re the organizer, so we let you know when people join.</span>` });
 }
 
+function freshHomes({ appBase, tripName, count, boardUrl, unsub }) {
+  const n = count ? `<strong>${esc(count)} homes</strong>` : 'fresh homes';
+  const body = `<tr><td class="ec-pad" style="padding:28px 40px 0;" align="center">
+    <div>${eyebrow('Fresh homes')}</div>
+    <h1 class="ec-ink" style="margin:8px 0 0;font-family:${DISPLAY};font-size:25px;line-height:1.2;font-weight:700;letter-spacing:-0.02em;color:${TEAL};">New rentals just landed</h1>
+  </td></tr>
+  <tr><td class="ec-pad ec-ink" style="padding:14px 40px 0;font-family:${SANS};" align="center">
+    <p class="ec-ink" style="margin:0 0 22px;font-size:16px;line-height:1.65;color:${INK};text-align:center;">We just refreshed the board for the <strong>${esc(tripName)}</strong> — ${n} are ready to browse, ranked for your dates and budget. Take a look and like the ones you’d actually want.</p>
+    ${btn(boardUrl, 'See the new homes', 200)}
+  </td></tr>`;
+  return frame({ appBase, preheader: `Fresh rentals just dropped on the ${tripName}.`, body,
+    foot: `${unsub ? `${link(`${appBase}/api/notify/unsubscribe?u=${unsub}`, 'Manage notifications')} &middot; ` : ''}<span style="color:${MUTED};" class="ec-foot">You’re on the ${esc(tripName)}, so we let you know when the homes refresh.</span>` });
+}
+
 function decisionLocked({ appBase, tripName, listingName, boardUrl, unsub, photo, area, specs, est5n, perPerson, organizer, votes }) {
   const banner = `<tr><td style="background-color:${TEAL};padding:34px 40px 30px;" align="center">
     <img src="${appBase}/email/seal-2x.png" width="76" height="76" alt="Official pick" style="display:block;width:76px;height:76px;margin:0 auto 16px;"/>
@@ -222,4 +236,4 @@ function creatorTransferred({ appBase, tripName, from, boardUrl, manageUrl, unsu
     foot: `${unsub ? `${link(`${appBase}/api/notify/unsubscribe?u=${unsub}`, 'Manage notifications')} &middot; ` : ''}<span style="color:${MUTED};" class="ec-foot">We let you know when your role on a trip changes.</span>` });
 }
 
-module.exports = { esc, frame, btn, digestRow, magicLink, invite, joined, decisionLocked, digest, welcome, organizerAdded, creatorTransferred, ACCENT };
+module.exports = { esc, frame, btn, digestRow, magicLink, invite, joined, freshHomes, decisionLocked, digest, welcome, organizerAdded, creatorTransferred, ACCENT };
