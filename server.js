@@ -708,20 +708,51 @@ function tripRecipients(trip) {
   return out;
 }
 
-// After a listings refresh, email the trip's members that fresh homes landed.
-// Gated on the digest pref (the broadcast-style opt-in); skips empty refreshes.
+// Signature of the homes the board actually shows for a trip — used to detect a
+// REAL change before emailing. LA's board is served from the pipeline DB; other
+// trips from their own listings file. (getPipelineDb/loadSeedListings are
+// declared later but hoisted.)
+function listingSignature(tripId) {
+  let ids = [];
+  if (tripId === LA_TRIP_ID) {
+    const db = getPipelineDb();
+    if (db) {
+      try { ids = db.prepare('SELECT source, listing_id FROM listings WHERE passed_filter=1').all().map((r) => `${r.source}:${r.listing_id}`); }
+      catch { /* old schema — ignore */ }
+      try { db.close(); } catch { /* ignore */ }
+    }
+  } else {
+    ids = (((loadListings(tripId) || {}).listings) || []).map((l) => String(l.id || l.url || '')).filter(Boolean);
+  }
+  ids.sort();
+  return { count: ids.length, sig: crypto.createHash('sha1').update(ids.join('|')).digest('hex') };
+}
+
+// After a refresh: stamp board freshness, and email members — but ONLY when the
+// actual set of homes changed since the last notice. First run sets a silent
+// baseline (no email), so a no-op refresh never fires a false "fresh homes" blast.
 function notifyFreshHomes(tripId) {
   try {
-    const trip = getTrip(tripId);
+    const { count, sig } = listingSignature(tripId);
+    if (!count) return; // empty board — nothing to announce
+    const trips = loadTrips();
+    const trip = trips[tripId];
     if (!trip) return;
-    const count = ((loadListings(tripId) || {}).listings || []).length;
-    if (!count) return; // nothing pulled — don't announce an empty board
+    trip.refreshed_at = new Date().toISOString().slice(0, 10); // accurate board freshness
+    const firstTime = trip.last_fresh_sig === undefined;
+    const changed = trip.last_fresh_sig !== sig;
+    trip.last_fresh_sig = sig;
+    saveTrips(trips);
+    if (firstTime || !changed) {
+      logEvent(tripId, 'refresh', `Listings refreshed — ${firstTime ? 'baseline set' : 'no change'} (${count} homes)`);
+      return; // never blast on the first run (no baseline) or a no-op refresh
+    }
     const recips = tripRecipients(trip).filter((r) => r.prefs.digest);
     for (const r of recips) {
       const html = Emails.freshHomes({ appBase: APP_BASE_URL, tripName: trip.name, count, boardUrl: boardUrl(tripId), unsub: r.unsub });
       sendEmail(r.email, `Fresh homes on ${trip.name}`, html).catch(() => {});
     }
-    logEvent(tripId, 'refresh', `Listings refreshed — ${count} homes, ${recips.length} notified`);
+    logEvent(tripId, 'refresh', `Fresh homes — ${count}, notified ${recips.length}`);
   } catch (e) { console.error('[freshHomes] failed:', e.message); }
 }
 // Find a listing (curated or community) by id within a trip — to name the pick.
