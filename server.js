@@ -3665,6 +3665,22 @@ app.post('/api/admin/refresh-la', requireAdmin, (req, res) => {
   res.json({ ok: true, started: true });
 });
 
+// Admin: one-off — flag all homes currently on the board as freshly pulled, so the
+// gold "New" badge is visible (used for the Apify→self-host cutover, where the first
+// self-host run re-pulls the whole board). Normal refreshes recompute is_new
+// automatically (only genuinely-new inserts get it). Auth via x-admin-key.
+app.post('/api/admin/flag-fresh', requireAdmin, (req, res) => {
+  try {
+    const Database = require('better-sqlite3');
+    const db = new Database(PIPELINE_DB);
+    try { db.exec('ALTER TABLE listings ADD COLUMN is_new INTEGER DEFAULT 0'); } catch { /* exists */ }
+    const r = db.prepare('UPDATE listings SET is_new = 1 WHERE passed_filter = 1').run();
+    const n = db.prepare('SELECT COUNT(*) n FROM listings WHERE is_new = 1 AND passed_filter = 1').get().n;
+    db.close();
+    res.json({ ok: true, flagged: r.changes, newOnBoard: n });
+  } catch (e) { res.status(500).json({ error: String(e && e.message) }); }
+});
+
 // Search progress for the board (open — anyone viewing can see "finding rentals").
 app.get('/api/trips/:tripId/search-status', loadTripOr404, (req, res) => {
   const marker = path.join(tripDir(req.params.tripId), '.searching');
