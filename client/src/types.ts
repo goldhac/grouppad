@@ -158,6 +158,8 @@ export interface Listing {
   rating?: number | null;
   reviews?: number | null;
   superhost?: boolean;
+  /** Freshly pulled in the latest listings refresh — shows a "New" badge. */
+  is_new?: boolean;
   budget?: BudgetTier;
   /** Availability for the trip dates: true/false when the scrape could tell, else undefined. */
   available?: boolean | null;

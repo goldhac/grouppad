@@ -2481,6 +2481,7 @@ const hPipeline = (req, res) => {
     const cols = db.prepare('PRAGMA table_info(listings)').all().map(c => c.name);
     const hasDistances = cols.includes('distances');
     const hasDistanceMi = cols.includes('distance_mi');
+    const hasIsNew = cols.includes('is_new');
     const rows = db.prepare(`
       SELECT
         l.source, l.listing_id, l.name, l.url, l.location,
@@ -2488,7 +2489,7 @@ const hPipeline = (req, res) => {
         l.amenities, l.photos,
         l.has_pool, l.has_parking,
         l.rating, l.reviews, ${hasDistanceMi ? 'l.distance_mi' : 'NULL AS distance_mi'}, ${hasDistances ? 'l.distances' : "'[]' AS distances"},
-        l.enriched, l.last_seen,
+        l.enriched, l.last_seen, ${hasIsNew ? 'l.is_new' : '0 AS is_new'},
         ps.price_total, ps.run_date
       FROM listings l
       LEFT JOIN price_snapshots ps ON (
@@ -2525,6 +2526,7 @@ const hPipeline = (req, res) => {
       return {
         id:           r.listing_id,
         source:       r.source,
+        is_new:       !!r.is_new,
         url:          r.url,
         name:         r.name,
         area:         r.location,
@@ -3648,6 +3650,19 @@ app.post('/api/trips/:tripId/refresh', requireTripOwner, async (req, res) => {
   const trips = loadTrips();
   if (trips[tripId]) { trips[tripId].last_manual_refresh = new Date(now).toISOString(); saveTrips(trips); }
   res.json({ ok: true });
+});
+
+// Admin: trigger an immediate LA listings refresh (self-host Airbnb + Apify VRBO).
+// Bypasses the organizer once-per-window limit and does NOT email members (it's a
+// verification/ops trigger). Auth via x-admin-key header or a signed-in super-admin.
+app.post('/api/admin/refresh-la', requireAdmin, (req, res) => {
+  const { spawn } = require('child_process');
+  const child = spawn('node', ['pipeline.js'], {
+    cwd: __dirname, env: { ...process.env, APIFY_TOKEN: getApifyToken() }, detached: true, stdio: 'ignore',
+  });
+  child.unref();
+  console.log('[admin] manual LA refresh triggered');
+  res.json({ ok: true, started: true });
 });
 
 // Search progress for the board (open — anyone viewing can see "finding rentals").

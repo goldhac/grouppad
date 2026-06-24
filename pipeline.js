@@ -76,6 +76,12 @@ const AIRBNB_MAX_ITEMS = Number(process.env.AIRBNB_MAX_ITEMS || 200);
 // to the single county-wide query; widen via AIRBNB_LOCATIONS env on a paid plan.
 const AIRBNB_LOCATIONS = (process.env.AIRBNB_LOCATIONS || 'Los Angeles')
   .split(',').map(s => s.trim()).filter(Boolean);
+// Airbnb discovery source: 'selfhost' (free — drive our own Chromium against
+// Airbnb's public search, parse the embedded results JSON) or 'apify' (the paid
+// tri_angle actor). Airbnb has no IP-reputation bot wall, so self-host works from
+// datacenter hosts (Railway) too. VRBO stays on Apify (PerimeterX wall). If
+// self-host returns 0 (Airbnb changed its page shape), we auto-fall back to Apify.
+const AIRBNB_DISCOVERY = (process.env.AIRBNB_DISCOVERY || 'selfhost').toLowerCase();
 const TAX_RATE             = 0.14;
 const CLEANING_PLACEHOLDER = 400;
 const BUDGET               = 7000;
@@ -164,6 +170,7 @@ function openDb() {
       distances     TEXT    DEFAULT '[]',
       passed_filter INTEGER DEFAULT 0,
       enriched      INTEGER DEFAULT 0,
+      is_new        INTEGER DEFAULT 0,
       first_seen    TEXT    DEFAULT (datetime('now')),
       last_seen     TEXT    DEFAULT (datetime('now')),
       PRIMARY KEY (source, listing_id)
@@ -181,6 +188,7 @@ function openDb() {
   // Migration for DBs created before distance_mi existed
   try { db.exec('ALTER TABLE listings ADD COLUMN distance_mi REAL'); } catch { /* already present */ }
   try { db.exec("ALTER TABLE listings ADD COLUMN distances TEXT DEFAULT '[]'"); } catch { /* already present */ }
+  try { db.exec('ALTER TABLE listings ADD COLUMN is_new INTEGER DEFAULT 0'); } catch { /* already present */ }
   return db;
 }
 
@@ -316,6 +324,7 @@ async function runApifyAsync(actorSlug, input, maxWaitMs = 540000) {
 
 async function discoverVrbo() {
   console.log('\n[Stage 1] VRBO');
+  if (!APIFY_TOKEN) { console.log('  no APIFY_TOKEN — skipping VRBO'); return []; }
   const items = await runApify('makework36~vrbo-scraper', {
     locations:    VRBO_LOCATIONS,
     checkIn:      TRIP.checkin,
@@ -357,8 +366,181 @@ async function discoverVrbo() {
   }));
 }
 
+// ── Airbnb self-host discovery (free, no Apify) ───────────────────────────────
+// Airbnb server-renders the first search page into an embedded JSON blob and
+// exposes page cursors for the rest. No bot wall, no API key. We drive our own
+// Chromium (same one the price stage uses), read the blob per page, and map each
+// result to the exact shape the Apify path produced.
+
+function airbnbSearchSlug(loc) {
+  return encodeURIComponent(String(loc).trim().replace(/\s+/g, '-'));
+}
+
+// Find the staysSearch results node (it co-locates searchResults + paginationInfo)
+// anywhere inside the parsed deferred-state JSON.
+function extractAirbnbResults(deferred) {
+  let out = { results: [], cursors: null };
+  const seen = new Set();
+  const walk = (o) => {
+    if (!o || typeof o !== 'object' || out.results.length) return;
+    if (seen.has(o)) return; seen.add(o);
+    if (Array.isArray(o.searchResults) && o.paginationInfo) {
+      out = { results: o.searchResults, cursors: o.paginationInfo.pageCursors || null };
+      return;
+    }
+    for (const k in o) walk(o[k]);
+  };
+  walk(deferred);
+  return out;
+}
+
+// Map one Airbnb StaySearchResult node → the pipeline listing shape.
+function mapAirbnbResult(r) {
+  const dsl = r.demandStayListing || {};
+  let id = null;
+  if (dsl.id) {
+    try { id = (Buffer.from(dsl.id, 'base64').toString('utf8').split(':')[1] || '').trim() || null; } catch {}
+  }
+  if (!id) return null;
+
+  const name = r.nameLocalized?.localizedStringWithTranslationPreference
+            || dsl.description?.name?.localizedStringWithTranslationPreference
+            || r.title || `Airbnb ${id}`;
+  const areaTitle = r.title || '';                       // "Home in El Monte"
+  const area = areaFromAirbnbTitle(areaTitle) || name;
+  const coord = dsl.location?.coordinate || {};
+  const lat = typeof coord.latitude  === 'number' ? coord.latitude  : undefined;
+  const lng = typeof coord.longitude === 'number' ? coord.longitude : undefined;
+
+  let bedrooms = null, beds = null, baths = null;
+  for (const seg of (r.structuredContent?.primaryLine || [])) {
+    const body = seg.body || '';
+    const bd = body.match(/(\d+)\s*bedroom/i);        if (bd) bedrooms = +bd[1];
+    const bk = body.match(/(\d+)\s*beds?\b/i);        if (bk && !/bedroom/i.test(body)) beds = +bk[1];
+    const ba = body.match(/(\d+(?:\.\d+)?)\s*bath/i); if (ba) baths = parseFloat(ba[1]);
+  }
+
+  let rating = null, reviews = null;
+  const rm = String(r.avgRatingLocalized || '').match(/([\d.]+)\s*\((\d[\d,]*)\)/);
+  if (rm) { rating = parseFloat(rm[1]); reviews = parseInt(rm[2].replace(/,/g, ''), 10); }
+
+  // 5-night representative total (undated search), same number the actor returned.
+  const pl = r.structuredDisplayPrice?.primaryLine || {};
+  const price_total = parsePrice(pl.discountedPrice || pl.price || pl.originalPrice || pl.accessibilityLabel || '');
+
+  const photos = (r.contextualPictures || []).map(p => p.picture).filter(Boolean);
+  const badges = Array.isArray(r.badges) ? r.badges.map(b => b.text || b).filter(Boolean) : [];
+  const text = `${name} ${areaTitle}`.toLowerCase();
+
+  return {
+    source:      'airbnb',
+    listing_id:  String(id),
+    name,
+    url:         `https://www.airbnb.com/rooms/${id}`,
+    location:    area,
+    distance_mi: distanceMiFromCoords(lat, lng) ?? distanceFromDTLA(area),
+    bedrooms,
+    bathrooms:   baths ?? parseBathroomsFromName(name),
+    sleeps:      beds,
+    amenities:   badges,
+    photos,
+    has_pool:    /\bpool\b/.test(text) ? 1 : 0,
+    has_parking: /\b(parking|garage|driveway)\b/.test(text) ? 1 : 0,
+    rating,
+    reviews,
+    price_total,
+    distances:   refDistances(lat, lng, LA_REFS),
+  };
+}
+
+async function discoverAirbnbSelfHost() {
+  console.log('\n[Stage 1] Airbnb (self-host / Playwright)');
+  const { chromium } = require('playwright-core');
+  const byId = new Map();
+  let browser;
+  try {
+    browser = await chromium.launch({
+      executablePath: CHROMIUM_PATH,
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    const ctx = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      locale: 'en-US',
+      viewport: { width: 1400, height: 900 },
+    });
+    const page = await ctx.newPage();
+    const maxPages = Math.max(1, Math.ceil(AIRBNB_MAX_ITEMS / 18));
+
+    for (const loc of AIRBNB_LOCATIONS) {
+      const base = `https://www.airbnb.com/s/${airbnbSearchSlug(loc)}/homes?adults=${TRIP.adults}&min_bedrooms=${MIN_BEDROOMS}&currency=USD&locale=en-US`;
+      let cursors = null;
+      for (let p = 0; p < maxPages; p++) {
+        if (p > 0 && (!cursors || !cursors[p])) break;   // no more pages for this location
+        const url = p === 0 ? base : `${base}&cursor=${encodeURIComponent(cursors[p])}`;
+        try {
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40000 });
+          await page.waitForTimeout(2500);
+          const deferred = await page.evaluate(() => {
+            for (const s of document.querySelectorAll('script[type="application/json"]')) {
+              const t = s.textContent || '';
+              if (t.includes('searchResults') && t.includes('paginationInfo')) {
+                try { return JSON.parse(t); } catch { return null; }
+              }
+            }
+            return null;
+          });
+          if (!deferred) { console.log(`  ${loc} page ${p + 1}: no data blob — stopping`); break; }
+          const { results, cursors: c } = extractAirbnbResults(deferred);
+          if (p === 0 && c) cursors = c;
+          let added = 0;
+          for (const r of results) {
+            const m = mapAirbnbResult(r);
+            if (m && !byId.has(m.listing_id)) { byId.set(m.listing_id, m); added++; }
+          }
+          console.log(`  ${loc} page ${p + 1}/${cursors ? cursors.length : '?'}: +${added} (total ${byId.size})`);
+          if (!results.length) break;
+          if (byId.size >= AIRBNB_MAX_ITEMS) break;
+          await page.waitForTimeout(700 + Math.floor(Math.random() * 700)); // polite jitter
+        } catch (e) {
+          console.error(`  ${loc} page ${p + 1} failed: ${e.message.slice(0, 90)}`);
+          break;
+        }
+      }
+      if (byId.size >= AIRBNB_MAX_ITEMS) break;
+    }
+  } catch (e) {
+    console.error('  [Airbnb self-host] failed:', e.message);
+  } finally {
+    if (browser) await browser.close().catch(() => {});
+  }
+
+  const mapped = [...byId.values()];
+  const REGION_MAX_MI = 70;
+  const inRegion = mapped.filter(r => r.distance_mi == null || r.distance_mi <= REGION_MAX_MI);
+  const dropped = mapped.length - inRegion.length;
+  if (dropped > 0) console.log(`  Dropped ${dropped} out-of-region listings (>${REGION_MAX_MI}mi from DTLA)`);
+  console.log(`  Returned ${inRegion.length} Airbnb listings (self-host)`);
+  return inRegion;
+}
+
+// Dispatcher: self-host by default; fall back to the Apify actor if self-host
+// yields nothing (e.g. Airbnb changed its page shape) and a token is available.
 async function discoverAirbnb() {
-  console.log('\n[Stage 1] Airbnb');
+  if (AIRBNB_DISCOVERY !== 'apify') {
+    const items = await discoverAirbnbSelfHost();
+    if (items.length) return items;
+    if (APIFY_TOKEN) {
+      console.log('  [Airbnb] self-host returned 0 — falling back to Apify actor');
+      return discoverAirbnbApify();
+    }
+    return items;
+  }
+  return discoverAirbnbApify();
+}
+
+async function discoverAirbnbApify() {
+  console.log('\n[Stage 1] Airbnb (Apify)');
   // Discover WITHOUT trip dates: far-future Aug 2026 + 16 guests returns 0
   // (availability not loaded), but undated search returns the full set plus a
   // representative 5-night total. Exact dated price comes from the card link /
@@ -450,7 +632,11 @@ function upsertAll(db, rows) {
   `);
 
   let newRows = 0, updatedRows = 0;
+  const newKeys = []; // rows first inserted this run → get the "New" badge
+  const markNew = db.prepare('UPDATE listings SET is_new = 1 WHERE source=? AND listing_id=?');
   const txn = db.transaction(() => {
+    // Clear the badge from everything; only this run's fresh inserts re-earn it.
+    db.prepare('UPDATE listings SET is_new = 0').run();
     for (const row of rows) {
       const exists = db.prepare('SELECT 1 FROM listings WHERE source=? AND listing_id=?')
         .get(row.source, row.listing_id);
@@ -460,7 +646,7 @@ function upsertAll(db, rows) {
         photos:    JSON.stringify((row.photos).slice(0, 16)),
         distances: JSON.stringify(row.distances || []),
       });
-      if (exists) updatedRows++; else newRows++;
+      if (exists) updatedRows++; else { newRows++; newKeys.push(row); }
       if (row.price_total) {
         upsertSnap.run({
           source: row.source, listing_id: row.listing_id,
@@ -468,6 +654,7 @@ function upsertAll(db, rows) {
         });
       }
     }
+    for (const k of newKeys) markNew.run(k.source, k.listing_id);
   });
   txn();
   console.log(`\n[Stage 2] ${rows.length} rows → ${newRows} new, ${updatedRows} updated`);
@@ -956,7 +1143,13 @@ async function runTripSearch(tripId) {
 }
 
 async function main() {
-  if (!APIFY_TOKEN) { console.error('ERROR: APIFY_TOKEN required'); process.exit(1); }
+  // Airbnb runs self-host (no token). Apify is only needed for VRBO discovery
+  // (and the Airbnb fallback). Hard-require a token only when Airbnb is forced
+  // to apify mode; otherwise just warn and run Airbnb-only.
+  if (!APIFY_TOKEN) {
+    if (AIRBNB_DISCOVERY === 'apify') { console.error('ERROR: APIFY_TOKEN required (AIRBNB_DISCOVERY=apify)'); process.exit(1); }
+    console.warn('[Pipeline] No APIFY_TOKEN — VRBO discovery skipped; Airbnb runs self-host.');
+  }
 
   // Trip-scoped search mode: populate one user-created trip, then exit.
   if (process.env.TRIP_ID) {
@@ -1006,4 +1199,23 @@ async function main() {
   db.close();
 }
 
-main().catch(e => { console.error('[Pipeline] Fatal:', e); process.exit(1); });
+// Dev helper: `node pipeline.js airbnb-test` runs ONLY the Airbnb self-host
+// discovery (no Apify, no DB writes, no price/enrich stages) and prints a sample
+// — handy for verifying the parser after Airbnb tweaks its page.
+if (process.argv[2] === 'airbnb-test') {
+  discoverAirbnbSelfHost().then(rows => {
+    console.log(`\nTOTAL ${rows.length} listings`);
+    const priced = rows.filter(r => r.price_total).length;
+    const rated  = rows.filter(r => r.rating != null).length;
+    const coords = rows.filter(r => r.distance_mi != null).length;
+    console.log(`with price: ${priced} · with rating: ${rated} · with distance: ${coords}`);
+    console.log('\nsample:', JSON.stringify(rows.slice(0, 4).map(r => ({
+      id: r.listing_id, name: r.name, area: r.location, bd: r.bedrooms,
+      sleeps: r.sleeps, price5n: r.price_total, rating: r.rating, reviews: r.reviews,
+      mi: r.distance_mi, photos: r.photos.length,
+    })), null, 2));
+    process.exit(0);
+  }).catch(e => { console.error(e); process.exit(1); });
+} else {
+  main().catch(e => { console.error('[Pipeline] Fatal:', e); process.exit(1); });
+}

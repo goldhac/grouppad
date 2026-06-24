@@ -157,6 +157,12 @@
 .gp-mobile .badge-live .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); position: relative; }
 .gp-mobile .badge-live .dot::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 1.5px solid var(--live); opacity: 0.6; animation: gp-ping 1.8s var(--ease-out) infinite; }
 @keyframes gp-ping { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(1.9); opacity: 0; } }
+.gp-mobile .badge-new {
+  background: linear-gradient(135deg, #f3d27e, var(--gold-dot, #e6bc54));
+  color: #3a2c06; border-color: transparent; font-weight: 800;
+  letter-spacing: 0.02em; text-transform: uppercase;
+}
+.gp-mobile .badge-new .ico { color: #3a2c06; }
 
 /* official — teal frame + gold seal (decision signal) */
 .gp-mobile .badge-official { background: var(--official); color: var(--official-fg); border-color: transparent; font-weight: 700; padding: 6px 12px; }

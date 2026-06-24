@@ -163,6 +163,22 @@ code.tok {
 .badge-official { background: var(--official); color: var(--official-fg); border-color: transparent; font-weight: 700; padding: 6px 12px; }
 .badge-official .ico { color: var(--gold-dot); }
 
+/* New — freshly pulled in the latest refresh. Gold, bold, a soft glow pulse. */
+.badge-new {
+  background: linear-gradient(135deg, #f3d27e, var(--gold-dot, #e6bc54));
+  color: #3a2c06; border-color: transparent; font-weight: 800;
+  letter-spacing: 0.02em; text-transform: uppercase;
+  box-shadow: 0 0 0 0 rgba(230, 188, 84, 0.55);
+  animation: gp-new-pulse 2s var(--ease-out, ease-out) infinite;
+}
+.badge-new .ico { color: #3a2c06; }
+@keyframes gp-new-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(230, 188, 84, 0.55); }
+  70%  { box-shadow: 0 0 0 8px rgba(230, 188, 84, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(230, 188, 84, 0); }
+}
+@media (prefers-reduced-motion: reduce) { .badge-new { animation: none; } }
+
 .tag-source { font-size: 11px; font-weight: 600; color: var(--text-2); background: var(--surface-sunken); border: 1px solid var(--border); padding: 2px 8px; border-radius: var(--r-sm); }
 
 /* ---------------------------------------------------------------------------

@@ -158,6 +158,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
         {photo}
         <div className="body compact">
           <div className="badge-row">
+            {l.is_new && <span className="badge badge-new"><Icon icon={Sparkles} className="ico" /> New</span>}
             {primaryBadge}
             <span className={`badge badge-${l.budget ?? 'unknown'}`}>{BUDGET_LABEL[l.budget ?? 'unknown']}</span>
           </div>
@@ -197,6 +198,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
       <div className="card-photowrap">
         {photo}
         <div className="card-badges">
+          {l.is_new && <span className="badge badge-new"><Icon icon={Sparkles} className="ico" /> New</span>}
           {primaryBadge}
           <span className={`badge badge-${l.budget ?? 'unknown'}`}>{BUDGET_LABEL[l.budget ?? 'unknown']}</span>
           {l.available === false && <span className="badge badge-unavailable">Not available for your dates</span>}
