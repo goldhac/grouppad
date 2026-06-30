@@ -3655,8 +3655,12 @@ app.post('/api/trips/:tripId/refresh', requireTripOwner, async (req, res) => {
 // Admin: trigger an immediate LA listings refresh (self-host Airbnb + Apify VRBO).
 // Bypasses the organizer once-per-window limit and does NOT email members (it's a
 // verification/ops trigger). Auth via x-admin-key header or a signed-in super-admin.
-app.post('/api/admin/refresh-la', requireAdmin, (req, res) => {
+app.post('/api/admin/refresh-la', requireAdmin, async (req, res) => {
   const { spawn } = require('child_process');
+  // Run the guard first so a maxed-out primary Apify key rotates to a stacked
+  // backup with headroom before we spawn (otherwise the child inherits the dead
+  // key and VRBO comes back empty).
+  await apifyGuard('a manual LA refresh').catch(() => {});
   // ?fast=1 → skip Playwright re-pricing (use discovery prices) so the board
   // updates in ~2min. Inherit stdio so stage logs reach `railway logs`.
   const env = { ...process.env, APIFY_TOKEN: getApifyToken() };

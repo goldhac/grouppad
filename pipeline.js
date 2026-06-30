@@ -60,7 +60,7 @@ const LOCATIONS = [
 // CA filter. Narrow to one county-wide query + a hard cap so we pay for tens,
 // not thousands, of rows. Tune via env without redeploying code.
 const VRBO_LOCATIONS = ['Los Angeles CA'];
-const VRBO_MAX_RESULTS = Number(process.env.VRBO_MAX_RESULTS || 60);
+const VRBO_MAX_RESULTS = Number(process.env.VRBO_MAX_RESULTS || 40);
 // Airbnb fast scraper is cheap ($0.002/result). NOTE: this actor currently
 // IGNORES maxItems (a 4-location LA search returns ~170/location regardless),
 // so the real Airbnb cost lever is the number of AIRBNB_LOCATIONS, not this cap.
