@@ -3657,10 +3657,12 @@ app.post('/api/trips/:tripId/refresh', requireTripOwner, async (req, res) => {
 // verification/ops trigger). Auth via x-admin-key header or a signed-in super-admin.
 app.post('/api/admin/refresh-la', requireAdmin, (req, res) => {
   const { spawn } = require('child_process');
+  // Inherit stdio so the pipeline's stage logs flow to the container stdout
+  // (visible in `railway logs`) — needed to debug discovery/filter issues.
   const child = spawn('node', ['pipeline.js'], {
-    cwd: __dirname, env: { ...process.env, APIFY_TOKEN: getApifyToken() }, detached: true, stdio: 'ignore',
+    cwd: __dirname, env: { ...process.env, APIFY_TOKEN: getApifyToken() }, stdio: ['ignore', 'inherit', 'inherit'],
   });
-  child.unref();
+  child.on('exit', (code) => console.log(`[admin] LA refresh pipeline exited code ${code}`));
   console.log('[admin] manual LA refresh triggered');
   res.json({ ok: true, started: true });
 });
