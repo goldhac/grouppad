@@ -756,10 +756,14 @@ async function fetchMissingPrices(db) {
   // Bedroom-passing listings that DON'T already have a valid price within the
   // TTL window. Anything priced recently is reused (Stage 3c reads the latest
   // snapshot), saving redundant Playwright renders.
+  // VRBO is EXCLUDED: its price comes from the Apify actor (Stage 2). Playwright
+  // pricing VRBO from a datacenter IP (prod) always hits Expedia's bot wall and
+  // burns ~12s/listing timing out — never worth it. Airbnb only here.
   const candidates = db.prepare(`
     SELECT l.source, l.listing_id, l.bedrooms
     FROM listings l
     WHERE l.bedrooms >= ?
+      AND l.source != 'vrbo'
       AND NOT EXISTS (
         SELECT 1 FROM price_snapshots p
         WHERE p.source = l.source AND p.listing_id = l.listing_id
