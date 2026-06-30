@@ -60,7 +60,7 @@ const LOCATIONS = [
 // CA filter. Narrow to one county-wide query + a hard cap so we pay for tens,
 // not thousands, of rows. Tune via env without redeploying code.
 const VRBO_LOCATIONS = ['Los Angeles CA'];
-const VRBO_MAX_RESULTS = Number(process.env.VRBO_MAX_RESULTS || 40);
+const VRBO_MAX_RESULTS = Number(process.env.VRBO_MAX_RESULTS || 60);
 // Airbnb fast scraper is cheap ($0.002/result). NOTE: this actor currently
 // IGNORES maxItems (a 4-location LA search returns ~170/location regardless),
 // so the real Airbnb cost lever is the number of AIRBNB_LOCATIONS, not this cap.
@@ -85,7 +85,10 @@ const AIRBNB_DISCOVERY = (process.env.AIRBNB_DISCOVERY || 'selfhost').toLowerCas
 const TAX_RATE             = 0.14;
 const CLEANING_PLACEHOLDER = 400;
 const BUDGET               = 7000;
-const MIN_BEDROOMS         = 7;
+// Group of 14 on a $7k budget: VRBO's 7BR homes all exceed budget, so the homes
+// that actually fit are 6BR (sleeping 14-16). Floor is 6 to surface them; budget
+// + sleeps still keep it to real group-size homes. Override via MIN_BEDROOMS env.
+const MIN_BEDROOMS         = Number(process.env.MIN_BEDROOMS || 6);
 
 // Approx driving miles from each LA-area city to Downtown LA (City Hall).
 // Keys matched longest-first so "west covina" beats "covina", etc.
