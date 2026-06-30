@@ -3657,10 +3657,12 @@ app.post('/api/trips/:tripId/refresh', requireTripOwner, async (req, res) => {
 // verification/ops trigger). Auth via x-admin-key header or a signed-in super-admin.
 app.post('/api/admin/refresh-la', requireAdmin, (req, res) => {
   const { spawn } = require('child_process');
-  // Inherit stdio so the pipeline's stage logs flow to the container stdout
-  // (visible in `railway logs`) — needed to debug discovery/filter issues.
+  // ?fast=1 → skip Playwright re-pricing (use discovery prices) so the board
+  // updates in ~2min. Inherit stdio so stage logs reach `railway logs`.
+  const env = { ...process.env, APIFY_TOKEN: getApifyToken() };
+  if (req.query.fast === '1') env.SKIP_PRICE_FETCH = '1';
   const child = spawn('node', ['pipeline.js'], {
-    cwd: __dirname, env: { ...process.env, APIFY_TOKEN: getApifyToken() }, stdio: ['ignore', 'inherit', 'inherit'],
+    cwd: __dirname, env, stdio: ['ignore', 'inherit', 'inherit'],
   });
   child.on('exit', (code) => console.log(`[admin] LA refresh pipeline exited code ${code}`));
   console.log('[admin] manual LA refresh triggered');

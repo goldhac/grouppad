@@ -751,6 +751,14 @@ async function playwrightPrice(listingId, source) {
 const PRICE_TTL_DAYS = Number(process.env.PRICE_TTL_DAYS || 3);
 
 async function fetchMissingPrices(db) {
+  // Fast mode: skip Playwright re-pricing entirely and rely on the prices already
+  // returned by discovery (Airbnb self-host 5-night total + VRBO actor). Lets a
+  // refresh reach Stage 3c (board update) in ~2min instead of grinding through
+  // dozens of per-listing renders. Used by the manual "fast" refresh.
+  if (process.env.SKIP_PRICE_FETCH === '1') {
+    console.log('\n[Stage 3b] SKIPPED (SKIP_PRICE_FETCH=1) — using discovery prices');
+    return;
+  }
   const today = new Date().toISOString().slice(0, 10);
 
   // Bedroom-passing listings that DON'T already have a valid price within the
