@@ -328,11 +328,14 @@ async function runApifyAsync(actorSlug, input, maxWaitMs = 540000) {
 async function discoverVrbo() {
   console.log('\n[Stage 1] VRBO');
   if (!APIFY_TOKEN) { console.log('  no APIFY_TOKEN — skipping VRBO'); return []; }
+  // Search VRBO for the real guest count (14), not the 16-guest buffer: at 16,
+  // Expedia only returns homes that sleep 16+, which are pricier/scarcer and miss
+  // the affordable 6BR-sleeps-15 homes that fit 14. Override via VRBO_ADULTS env.
   const items = await runApify('makework36~vrbo-scraper', {
     locations:    VRBO_LOCATIONS,
     checkIn:      TRIP.checkin,
     checkOut:     TRIP.checkout,
-    adults:       TRIP.adults,
+    adults:       Number(process.env.VRBO_ADULTS || 14),
     maxResults:   VRBO_MAX_RESULTS,
     propertyType: 'VACATION_RENTAL_ONLY',
     currency:     'USD',
