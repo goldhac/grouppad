@@ -459,10 +459,14 @@ function mapAirbnbResult(r) {
   };
 }
 
-async function discoverAirbnbSelfHost() {
-  console.log('\n[Stage 1] Airbnb (self-host / Playwright)');
+// ── Reusable Airbnb self-host search (used by BOTH the LA pipeline and per-trip) ─
+// Drives our own Chromium against Airbnb's public search for ONE location, reads
+// the embedded results JSON, paginates. Returns the raw StaySearchResult nodes
+// (callers map to their own shape). No Apify, no key — works from any IP.
+async function airbnbSelfHostSearch({ location, adults, minBedrooms, maxItems = 200, checkin, checkout }) {
   const { chromium } = require('playwright-core');
-  const byId = new Map();
+  const seen = new Set();
+  const nodes = [];
   let browser;
   try {
     browser = await chromium.launch({
@@ -476,51 +480,104 @@ async function discoverAirbnbSelfHost() {
       viewport: { width: 1400, height: 900 },
     });
     const page = await ctx.newPage();
-    const maxPages = Math.max(1, Math.ceil(AIRBNB_MAX_ITEMS / 18));
-
-    for (const loc of AIRBNB_LOCATIONS) {
-      const base = `https://www.airbnb.com/s/${airbnbSearchSlug(loc)}/homes?adults=${TRIP.adults}&min_bedrooms=${MIN_BEDROOMS}&currency=USD&locale=en-US`;
-      let cursors = null;
-      for (let p = 0; p < maxPages; p++) {
-        if (p > 0 && (!cursors || !cursors[p])) break;   // no more pages for this location
-        const url = p === 0 ? base : `${base}&cursor=${encodeURIComponent(cursors[p])}`;
-        try {
-          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40000 });
-          await page.waitForTimeout(2500);
-          const deferred = await page.evaluate(() => {
-            for (const s of document.querySelectorAll('script[type="application/json"]')) {
-              const t = s.textContent || '';
-              if (t.includes('searchResults') && t.includes('paginationInfo')) {
-                try { return JSON.parse(t); } catch { return null; }
-              }
+    const maxPages = Math.max(1, Math.ceil(maxItems / 18));
+    const dateQs = (checkin && checkout) ? `&check_in=${checkin}&check_out=${checkout}` : '';
+    const base = `https://www.airbnb.com/s/${airbnbSearchSlug(location)}/homes?adults=${adults}&min_bedrooms=${minBedrooms}&currency=USD&locale=en-US${dateQs}`;
+    let cursors = null;
+    for (let p = 0; p < maxPages; p++) {
+      if (p > 0 && (!cursors || !cursors[p])) break;
+      const url = p === 0 ? base : `${base}&cursor=${encodeURIComponent(cursors[p])}`;
+      try {
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40000 });
+        await page.waitForTimeout(2500);
+        const deferred = await page.evaluate(() => {
+          for (const s of document.querySelectorAll('script[type="application/json"]')) {
+            const t = s.textContent || '';
+            if (t.includes('searchResults') && t.includes('paginationInfo')) {
+              try { return JSON.parse(t); } catch { return null; }
             }
-            return null;
-          });
-          if (!deferred) { console.log(`  ${loc} page ${p + 1}: no data blob — stopping`); break; }
-          const { results, cursors: c } = extractAirbnbResults(deferred);
-          if (p === 0 && c) cursors = c;
-          let added = 0;
-          for (const r of results) {
-            const m = mapAirbnbResult(r);
-            if (m && !byId.has(m.listing_id)) { byId.set(m.listing_id, m); added++; }
           }
-          console.log(`  ${loc} page ${p + 1}/${cursors ? cursors.length : '?'}: +${added} (total ${byId.size})`);
-          if (!results.length) break;
-          if (byId.size >= AIRBNB_MAX_ITEMS) break;
-          await page.waitForTimeout(700 + Math.floor(Math.random() * 700)); // polite jitter
-        } catch (e) {
-          console.error(`  ${loc} page ${p + 1} failed: ${e.message.slice(0, 90)}`);
-          break;
+          return null;
+        });
+        if (!deferred) { console.log(`  ${location} page ${p + 1}: no data blob — stopping`); break; }
+        const { results, cursors: c } = extractAirbnbResults(deferred);
+        if (p === 0 && c) cursors = c;
+        let added = 0;
+        for (const r of results) {
+          let id = null;
+          try { id = (Buffer.from((r.demandStayListing || {}).id || '', 'base64').toString('utf8').split(':')[1] || '').trim() || null; } catch {}
+          if (id && !seen.has(id)) { seen.add(id); nodes.push(r); added++; }
         }
+        console.log(`  ${location} page ${p + 1}/${cursors ? cursors.length : '?'}: +${added} (total ${nodes.length})`);
+        if (!results.length || nodes.length >= maxItems) break;
+        await page.waitForTimeout(700 + Math.floor(Math.random() * 700)); // polite jitter
+      } catch (e) {
+        console.error(`  ${location} page ${p + 1} failed: ${e.message.slice(0, 90)}`);
+        break;
       }
-      if (byId.size >= AIRBNB_MAX_ITEMS) break;
     }
   } catch (e) {
-    console.error('  [Airbnb self-host] failed:', e.message);
+    console.error('  [airbnb self-host] launch failed:', e.message);
   } finally {
     if (browser) await browser.close().catch(() => {});
   }
+  return nodes;
+}
 
+// Map a self-host StaySearchResult node → the per-TRIP listing shape (runTripSearch).
+// Distances use the trip's own reference points; budget tier uses the trip's budget.
+function mapAirbnbNodeForTrip(r, { refs, taxRate, budget, hotTubRe }) {
+  const dsl = r.demandStayListing || {};
+  let id = null;
+  try { id = (Buffer.from(dsl.id || '', 'base64').toString('utf8').split(':')[1] || '').trim() || null; } catch {}
+  if (!id) return null;
+  const name = r.nameLocalized?.localizedStringWithTranslationPreference
+            || dsl.description?.name?.localizedStringWithTranslationPreference || r.title || `Airbnb ${id}`;
+  const area = areaFromAirbnbTitle(r.title || '') || name;
+  const coord = dsl.location?.coordinate || {};
+  const lat = typeof coord.latitude === 'number' ? coord.latitude : undefined;
+  const lng = typeof coord.longitude === 'number' ? coord.longitude : undefined;
+  let bedrooms = null, beds = null, baths = null;
+  for (const seg of (r.structuredContent?.primaryLine || [])) {
+    const body = seg.body || '';
+    const bd = body.match(/(\d+)\s*bedroom/i);        if (bd) bedrooms = +bd[1];
+    const bk = body.match(/(\d+)\s*beds?\b/i);        if (bk && !/bedroom/i.test(body)) beds = +bk[1];
+    const ba = body.match(/(\d+(?:\.\d+)?)\s*bath/i); if (ba) baths = parseFloat(ba[1]);
+  }
+  let rating = null, reviews = null;
+  const rm = String(r.avgRatingLocalized || '').match(/([\d.]+)\s*\((\d[\d,]*)\)/);
+  if (rm) { rating = parseFloat(rm[1]); reviews = parseInt(rm[2].replace(/,/g, ''), 10); }
+  const pl = r.structuredDisplayPrice?.primaryLine || {};
+  const displayed = parsePrice(pl.discountedPrice || pl.price || pl.originalPrice || pl.accessibilityLabel || '');
+  const est5n = displayed ? Math.round(displayed * (1 + taxRate)) : null;
+  const tier = est5n == null ? 'unknown' : !budget ? 'unknown' : est5n <= budget ? 'under' : est5n <= budget * 1.1 ? 'marginal' : 'over';
+  const photos = (r.contextualPictures || []).map(p => p.picture).filter(Boolean).slice(0, 16);
+  const distances = refDistances(lat, lng, refs);
+  const text = `${name} ${r.title || ''}`.toLowerCase();
+  return {
+    source: 'Airbnb', id: String(id), url: `https://www.airbnb.com/rooms/${id}`, name, area,
+    distance_mi: distances.find(d => d.icon === '📍')?.mi ?? null, distances,
+    bd: bedrooms, ba: baths, sleeps: beds,
+    pool: /\bpool\b/.test(text) ? 'yes' : 'unknown', hot_tub: hotTubRe.test(text) ? 'yes' : 'unknown',
+    parking: /\b(parking|garage|driveway)\b/.test(text) ? 'yes' : 'unknown',
+    rating, reviews, photos,
+    amenities: Array.isArray(r.badges) ? r.badges.map(b => b.text || b).filter(Boolean) : [],
+    displayed_5n: displayed, est_5n: est5n, est_4n: est5n ? Math.round(est5n * 0.8) : null, budget: tier,
+    check_manual: true,
+  };
+}
+
+async function discoverAirbnbSelfHost() {
+  console.log('\n[Stage 1] Airbnb (self-host / Playwright)');
+  const byId = new Map();
+  for (const loc of AIRBNB_LOCATIONS) {
+    const nodes = await airbnbSelfHostSearch({ location: loc, adults: TRIP.adults, minBedrooms: MIN_BEDROOMS, maxItems: AIRBNB_MAX_ITEMS });
+    for (const r of nodes) {
+      const m = mapAirbnbResult(r);
+      if (m && !byId.has(m.listing_id)) byId.set(m.listing_id, m);
+    }
+    if (byId.size >= AIRBNB_MAX_ITEMS) break;
+  }
   const mapped = [...byId.values()];
   const REGION_MAX_MI = 70;
   const inRegion = mapped.filter(r => r.distance_mi == null || r.distance_mi <= REGION_MAX_MI);
@@ -1053,78 +1110,65 @@ async function runTripSearch(tripId) {
     const daysOut = trip.checkin ? Math.round((new Date(trip.checkin) - Date.now()) / 86400000) : null;
     const tryDated = !!(trip.checkin && (trip.checkout_5n || trip.checkout) && daysOut != null && daysOut > 0 && daysOut < 270);
     let datedSearch = false;
-    let items = [];
     let refs = null;
+    let mapped = [];
 
+    // Self-host Airbnb first (free, no Apify) — same engine the LA pipeline uses.
+    // Dated within the ~9-month horizon (dated search only returns homes bookable
+    // for the dates); else undated. Ref-points fetched alongside.
+    const refsPromise = getRefPoints(trip.destination, itineraryText);
+    let nodes = [];
     if (tryDated) {
-      const datedInput = { ...actorInput, checkIn: trip.checkin, checkOut: trip.checkout_5n || trip.checkout };
-      const [datedItems, refsRes] = await Promise.all([
-        runApifyAsync('tri_angle~new-fast-airbnb-scraper', datedInput),
-        getRefPoints(trip.destination, itineraryText),
-      ]);
-      refs = refsRes;
-      if (datedItems.length >= 5) {
-        items = datedItems;
-        datedSearch = true;
-        console.log(`[trip-search] dated search ok (${items.length} items, all available ${trip.checkin}→${trip.checkout_5n || trip.checkout})`);
+      nodes = await airbnbSelfHostSearch({ location: trip.destination, adults, minBedrooms, maxItems: poolSize, checkin: trip.checkin, checkout: trip.checkout_5n || trip.checkout });
+      if (nodes.length >= 5) datedSearch = true;
+      else { console.log(`[trip-search] dated self-host thin (${nodes.length}) — retrying undated`); nodes = await airbnbSelfHostSearch({ location: trip.destination, adults, minBedrooms, maxItems: poolSize }); }
+    } else {
+      nodes = await airbnbSelfHostSearch({ location: trip.destination, adults, minBedrooms, maxItems: poolSize });
+    }
+    refs = await refsPromise;
+
+    if (nodes.length) {
+      console.log(`[trip-search] self-host returned ${nodes.length} (${datedSearch ? 'dated' : 'undated'}); ref-points ${refs ? 'ok' : 'none'}`);
+      mapped = nodes.map(r => mapAirbnbNodeForTrip(r, { refs, taxRate, budget, hotTubRe })).filter(Boolean);
+      if (datedSearch) mapped.forEach(m => { m.available = true; });
+    } else if (APIFY_TOKEN) {
+      // Fallback: the paid Apify actor, only if self-host returned nothing
+      // (e.g. Airbnb changed its page or transiently blocked this run).
+      console.log('[trip-search] self-host returned 0 — Apify actor fallback');
+      let items = [];
+      if (tryDated) {
+        items = await runApifyAsync('tri_angle~new-fast-airbnb-scraper', { ...actorInput, checkIn: trip.checkin, checkOut: trip.checkout_5n || trip.checkout });
+        if (items.length >= 5) datedSearch = true; else items = await runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput);
       } else {
-        console.log(`[trip-search] dated search thin (${datedItems.length}) — retrying undated`);
         items = await runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput);
       }
-    } else {
-      const [undatedItems, refsRes] = await Promise.all([
-        runApifyAsync('tri_angle~new-fast-airbnb-scraper', actorInput),
-        getRefPoints(trip.destination, itineraryText),
-      ]);
-      items = undatedItems;
-      refs = refsRes;
-    }
-    console.log(`[trip-search] returned ${items.length} items (${datedSearch ? 'dated' : 'undated'}); ref-points ${refs ? 'ok' : 'none'}`);
-
-    const mapped = items
-      .filter(it => it && it.id)
-      .map(it => {
+      mapped = items.filter(it => it && it.id).map(it => {
         const { bedrooms, beds } = parseAirbnbSubtitles(it.subtitles);
         const area   = areaFromAirbnbTitle(it.title) || it.name || trip.destination;
         const photos = Array.isArray(it.images) ? it.images.map(im => im.url).filter(Boolean).slice(0, 16) : [];
         const text   = `${it.name || ''} ${it.title || ''}`.toLowerCase();
-        const lat    = it.coordinates?.latitude;
-        const lng    = it.coordinates?.longitude;
+        const lat = it.coordinates?.latitude, lng = it.coordinates?.longitude;
         const distances = refDistances(lat, lng, refs);
         const displayed = parsePrice(it.pricing?.price || it.pricing?.label);
         const est5n = displayed ? Math.round(displayed * (1 + taxRate)) : null;
-        const tier = est5n == null ? 'unknown'
-          : !budget                ? 'unknown'
-          : est5n <= budget        ? 'under'
-          : est5n <= budget * 1.1  ? 'marginal'
-          : 'over';
+        const tier = est5n == null ? 'unknown' : !budget ? 'unknown' : est5n <= budget ? 'under' : est5n <= budget * 1.1 ? 'marginal' : 'over';
         return {
-          source:       'Airbnb',
-          id:           String(it.id),
-          url:          `https://www.airbnb.com/rooms/${it.id}`,
-          name:         it.name || area || `Airbnb ${it.id}`,
-          area,
-          distance_mi:  distances.find(d => d.icon === '📍')?.mi ?? null,
-          distances,
-          bd:           bedrooms,
-          ba:           parseBathroomsFromName(it.name),
-          sleeps:       beds,
-          pool:         /\bpool\b/.test(text) ? 'yes' : 'unknown',
-          hot_tub:      hotTubRe.test(text) ? 'yes' : 'unknown',
-          parking:      /\b(parking|garage|driveway)\b/.test(text) ? 'yes' : 'unknown',
-          rating:       typeof it.rating?.average === 'number' ? it.rating.average : null,
-          reviews:      typeof it.rating?.reviewsCount === 'number' ? it.rating.reviewsCount : null,
-          photos,
-          amenities:    Array.isArray(it.badges) ? it.badges : [],
-          displayed_5n: displayed,
-          est_5n:       est5n,
-          est_4n:       est5n ? Math.round(est5n * 0.8) : null,
-          budget:       tier,
-          // Dated search results are bookable for the trip's dates by definition.
-          ...(datedSearch ? { available: true } : {}),
-          check_manual: true, // representative price — members verify at booking
+          source: 'Airbnb', id: String(it.id), url: `https://www.airbnb.com/rooms/${it.id}`,
+          name: it.name || area || `Airbnb ${it.id}`, area,
+          distance_mi: distances.find(d => d.icon === '📍')?.mi ?? null, distances,
+          bd: bedrooms, ba: parseBathroomsFromName(it.name), sleeps: beds,
+          pool: /\bpool\b/.test(text) ? 'yes' : 'unknown', hot_tub: hotTubRe.test(text) ? 'yes' : 'unknown',
+          parking: /\b(parking|garage|driveway)\b/.test(text) ? 'yes' : 'unknown',
+          rating: typeof it.rating?.average === 'number' ? it.rating.average : null,
+          reviews: typeof it.rating?.reviewsCount === 'number' ? it.rating.reviewsCount : null,
+          photos, amenities: Array.isArray(it.badges) ? it.badges : [],
+          displayed_5n: displayed, est_5n: est5n, est_4n: est5n ? Math.round(est5n * 0.8) : null, budget: tier,
+          ...(datedSearch ? { available: true } : {}), check_manual: true,
         };
       });
+    } else {
+      console.log('[trip-search] self-host returned 0 and no Apify fallback available');
+    }
 
     // Keep homes near the group's size, then surface under-budget + cheapest first.
     const within = mapped.filter(l => l.bd == null || (l.bd >= minBedrooms && l.bd <= maxBedrooms));
@@ -1135,7 +1179,21 @@ async function runTripSearch(tripId) {
       ((a.est_5n ?? Infinity) - (b.est_5n ?? Infinity)) ||      // then cheapest
       ((b.rating || 0) - (a.rating || 0))                      // then best-rated
     );
-    const final = pool.slice(0, finalCap).map((l, i) => ({ rank: i + 1, ...l }));
+    // "New" badge: flag homes not present in the previous listings for this trip
+    // (so a refresh highlights just the fresh arrivals). Same semantic as the LA
+    // pipeline's is_new. First run = nothing flagged (everything is "new" only
+    // relative to a prior board).
+    let prevIds = new Set();
+    let hadPrev = false;
+    try {
+      const prev = JSON.parse(fs.readFileSync(listingsFile, 'utf8'));
+      if (Array.isArray(prev) && prev.length) { hadPrev = true; prev.forEach(p => prevIds.add(String(p.id))); }
+    } catch {}
+    const final = pool.slice(0, finalCap).map((l, i) => ({
+      rank: i + 1,
+      is_new: hadPrev && !prevIds.has(String(l.id)),
+      ...l,
+    }));
 
     const tmp = `${listingsFile}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(final, null, 2));
