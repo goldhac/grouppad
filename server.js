@@ -738,6 +738,14 @@ function notifyFreshHomes(tripId) {
     const trips = loadTrips();
     const trip = trips[tripId];
     if (!trip) return;
+    // The group already picked a place — new homes are no longer news. Keep the
+    // board fresh but stop emailing about it (the decision email is the last one).
+    if (loadDecision(tripId)) {
+      trip.refreshed_at = new Date().toISOString().slice(0, 10);
+      saveTrips(trips);
+      logEvent(tripId, 'refresh', `Listings refreshed — ${count} homes (decision locked, members not emailed)`);
+      return;
+    }
     trip.refreshed_at = new Date().toISOString().slice(0, 10); // accurate board freshness
     const firstTime = trip.last_fresh_sig === undefined;
     const changed = trip.last_fresh_sig !== sig;
@@ -804,8 +812,13 @@ async function emailDecisionLocked(tripId, listingId, actorId) {
     est5n: usd(listing?.est_5n),
     perPerson: listing?.est_5n != null ? usd(Math.ceil(listing.est_5n / split)) : undefined,
     organizer: (loadUsers()[actorId] || {}).name || undefined,
+    // Take them straight to the home they won (primary CTA in the email).
+    listingUrl: listing?.url || undefined,
+    source: listing?.source || undefined,
   };
-  const recips = tripRecipients(trip).filter((r) => r.prefs.instant && r.id !== actorId);
+  // Everyone on the trip gets the result — including the organizer who locked it
+  // (it's the record of the decision, with the booking link).
+  const recips = tripRecipients(trip).filter((r) => r.prefs.instant);
   for (const r of recips) {
     const html = Emails.decisionLocked({
       appBase: APP_BASE_URL, tripName: trip.name, listingName: name,
@@ -3795,6 +3808,9 @@ async function runDigestJob() {
   const now = Date.now();
   for (const trip of Object.values(trips)) {
     try {
+      // Decided trips are done: the pick is locked, so stop the daily recap. The
+      // decision email is the last thing a member hears about this trip.
+      if (loadDecision(trip.id)) continue;
       const since = trip.last_digest_at ? Date.parse(trip.last_digest_at) : (now - 24 * 3600 * 1000);
       const digest = buildDigest(trip.id, since);
       if (digest) {

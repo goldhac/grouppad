@@ -147,7 +147,7 @@ function freshHomes({ appBase, tripName, count, boardUrl, unsub }) {
     foot: `${unsub ? `${link(`${appBase}/api/notify/unsubscribe?u=${unsub}`, 'Manage notifications')} &middot; ` : ''}<span style="color:${MUTED};" class="ec-foot">You’re on the ${esc(tripName)}, so we let you know when the homes refresh.</span>` });
 }
 
-function decisionLocked({ appBase, tripName, listingName, boardUrl, unsub, photo, area, specs, est5n, perPerson, organizer, votes }) {
+function decisionLocked({ appBase, tripName, listingName, boardUrl, unsub, photo, area, specs, est5n, perPerson, organizer, votes, listingUrl, source }) {
   const banner = `<tr><td style="background-color:${TEAL};padding:34px 40px 30px;" align="center">
     <img src="${appBase}/email/seal-2x.png" width="76" height="76" alt="Official pick" style="display:block;width:76px;height:76px;margin:0 auto 16px;"/>
     <div style="font-family:${SANS};font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:${GOLD_EYE};">Official pick &middot; locked</div>
@@ -163,9 +163,16 @@ function decisionLocked({ appBase, tripName, listingName, boardUrl, unsub, photo
   const nameRow = `<tr><td class="ec-pad" style="padding:18px 40px 0;">
     <h2 class="ec-ink" style="margin:0;font-family:${DISPLAY};font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-0.01em;color:${TEAL};">${esc(listingName)}</h2>
     ${area || specs ? `<p class="ec-muted" style="margin:7px 0 0;font-family:${SANS};font-size:14px;color:${BODY};">${[area, specs].filter(Boolean).map(esc).join(' &middot; ')}</p>` : ''}</td></tr>`;
-  const note = `Locked${organizer ? ` by ${esc(organizer)}` : ''}${votes ? ` &middot; ${esc(votes)}` : ''}. Heads-up: GroupPad doesn’t book — open the listing to reserve, and verify the all-in total at checkout.`;
+  const note = `Locked${organizer ? ` by ${esc(organizer)}` : ''}${votes ? ` &middot; ${esc(votes)}` : ''}. Heads-up: GroupPad doesn’t book — open the listing to reserve, and verify the all-in total at checkout. This is the last email you’ll get about choosing a place.`;
+  // The whole point of this email: take them straight to the home they won.
+  // Primary CTA = the actual listing; the board is the secondary link.
+  const srcLabel = source ? String(source).charAt(0).toUpperCase() + String(source).slice(1).toLowerCase() : 'the listing';
+  const cta = listingUrl
+    ? `${btn(listingUrl, `Open on ${esc(srcLabel)}`, 240)}
+       <p style="margin:12px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;">${link(boardUrl, 'Or see it on the board')}</p>`
+    : btn(boardUrl, 'See the official pick', 240);
   const body = `${photoRow}${nameRow}${priceRow}
-  <tr><td class="ec-pad" style="padding:22px 40px 0;" align="center">${btn(boardUrl, 'See the official pick', 240)}
+  <tr><td class="ec-pad" style="padding:22px 40px 0;" align="center">${cta}
     <p class="ec-muted" style="margin:16px 0 0;font-family:${SANS};font-size:13px;line-height:1.6;color:${MUTED};">${note}</p>
   </td></tr>`;
   return frame({ appBase, preheader: `${listingName} is the pick for ${tripName}.`, header: banner, body,
