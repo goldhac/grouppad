@@ -1,0 +1,130 @@
+/* ============================================================================
+   Decision celebration — the payoff moment. When you open the board after the
+   group locked an official pick, the winner is revealed centre-stage with a
+   confetti burst and a direct link to book it. Shown once per locked home.
+   Motion: gold/seal keeps the brand's settle beat; confetti is purely decorative
+   and disappears entirely under prefers-reduced-motion.
+   ============================================================================ */
+
+.dc-scrim {
+  position: fixed; inset: 0; z-index: 95;
+  background: var(--scrim);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  overflow: hidden; /* confetti must not scroll the page */
+}
+
+/* ── The card ──────────────────────────────────────────────────────────── */
+.dc-card {
+  position: relative; z-index: 2;
+  width: 100%; max-width: 460px;
+  max-height: calc(100dvh - 48px); overflow-y: auto;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-lg, 0 40px 90px rgba(0, 0, 0, 0.45));
+  padding: 30px 28px 24px;
+  text-align: center;
+}
+.dc-x {
+  position: absolute; top: 12px; right: 12px;
+  width: 34px; height: 34px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-muted); background: transparent; border: 0; cursor: pointer;
+}
+.dc-x:hover { background: var(--surface-sunken); color: var(--text); }
+
+.dc-seal {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 62px; height: 62px; border-radius: 50%;
+  background: linear-gradient(160deg, #f3d27e, var(--gold-dot, #e6bc54));
+  color: #134e4a;
+  box-shadow: 0 10px 26px rgba(230, 188, 84, 0.35);
+  margin-bottom: 14px;
+}
+.dc-seal .ico { width: 26px; height: 26px; }
+
+.dc-eyebrow {
+  font-size: 11.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--gold-dot, #e6bc54);
+}
+.dc-title {
+  font-family: var(--font-display); font-size: 30px; font-weight: 800;
+  letter-spacing: -0.02em; margin: 6px 0 0; color: var(--text);
+}
+.dc-sub { font-size: 14.5px; color: var(--text-2); margin: 7px 0 0; }
+
+.dc-photo {
+  width: 100%; height: 176px; object-fit: cover;
+  border-radius: 14px; border: 1px solid var(--border);
+  margin: 18px 0 0; display: block;
+}
+.dc-name {
+  font-family: var(--font-display); font-size: 19px; font-weight: 700;
+  letter-spacing: -0.01em; margin: 16px 0 0; color: var(--text);
+}
+.dc-meta { font-size: 13.5px; color: var(--text-muted); margin: 5px 0 0; }
+
+.dc-money {
+  display: flex; gap: 10px; margin: 16px 0 0;
+  background: var(--surface-sunken); border: 1px solid var(--border);
+  border-radius: 14px; padding: 12px 14px;
+}
+.dc-money .m { flex: 1; text-align: left; }
+.dc-money .m + .m { border-left: 1px solid var(--border); padding-left: 14px; }
+.dc-money .k {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 11.5px; color: var(--text-muted); font-weight: 600;
+}
+.dc-money .k .ico { width: 13px; height: 13px; }
+.dc-money .v {
+  display: block; font-family: var(--font-display); font-size: 20px;
+  font-weight: 700; color: var(--text); margin-top: 2px;
+}
+.dc-money .pp .k, .dc-money .pp .v { color: var(--under, var(--accent-text)); }
+
+.dc-actions { display: flex; flex-direction: column; gap: 9px; margin: 18px 0 0; }
+/* The primary CTA is an <a> (it leaves the app for the listing) — kill the
+   anchor underline so it reads as a button. */
+.dc-actions .btn { width: 100%; justify-content: center; text-decoration: none; }
+.dc-fine { font-size: 11.5px; color: var(--text-muted); margin: 12px 0 0; }
+
+/* ── Confetti ──────────────────────────────────────────────────────────── */
+.dc-confetti { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.dc-bit {
+  position: absolute; top: -6vh;
+  width: 8px; height: 13px; border-radius: 2px;
+  opacity: 0;
+}
+.dc-bit.rd { border-radius: 50%; width: 8px; height: 8px; }
+.dc-bit.h0 { background: var(--gold-dot, #e6bc54); }
+.dc-bit.h1 { background: var(--accent-text, #2e8c7c); }
+.dc-bit.h2 { background: #e7d9bd; }
+.dc-bit.h3 { background: var(--under, #1f7a50); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-bit { animation-name: dc-fall; animation-timing-function: cubic-bezier(0.3, 0.6, 0.4, 1); animation-iteration-count: 1; animation-fill-mode: forwards; }
+  .dc-card { animation: dc-pop var(--dur-slow, 420ms) var(--ease-settle, cubic-bezier(0.175, 0.885, 0.32, 1.275)) both; }
+  .dc-seal { animation: dc-seal-in 520ms var(--ease-settle, cubic-bezier(0.175, 0.885, 0.32, 1.275)) both; }
+}
+
+@keyframes dc-fall {
+  0%   { transform: translate3d(0, 0, 0) rotate(var(--rot)); opacity: 0; }
+  8%   { opacity: 1; }
+  100% { transform: translate3d(var(--drift), 108vh, 0) rotate(calc(var(--rot) + 540deg)); opacity: 0; }
+}
+@keyframes dc-pop {
+  0%   { transform: translateY(14px) scale(0.94); opacity: 0; }
+  100% { transform: none; opacity: 1; }
+}
+@keyframes dc-seal-in {
+  0%   { transform: scale(2.1); opacity: 0; }
+  60%  { opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 640px) {
+  .dc-card { padding: 26px 20px 20px; max-width: 100%; }
+  .dc-title { font-size: 26px; }
+  .dc-photo { height: 150px; }
+}

@@ -8,6 +8,7 @@ import { AuthModal } from '@/components/modals/AuthModal';
 import { OnboardingModal } from '@/components/modals/OnboardingModal';
 import { DetailModal } from '@/components/modals/DetailModal';
 import { InviteWelcome } from '@/components/modals/InviteWelcome';
+import { DecisionCelebration } from '@/components/modals/DecisionCelebration';
 import { TripGate } from '@/routing/TripGate';
 import { LandingView } from '@/views/LandingView';
 import { TripsView } from '@/views/TripsView';
@@ -86,6 +87,7 @@ export function App() {
 
       <AuthModal />
       <InviteWelcome />
+      <DecisionCelebration />
       <OnboardingModal />
       <DetailModal />
       <ToastStack />

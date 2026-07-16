@@ -14,6 +14,7 @@ import './ds2/boardx.css';
 import './ds2/detail.css';
 import './ds2/manage.css';
 import './ds2/auth.css';
+import './ds2/celebrate.css';
 import './ds2/util.css';
 import './ds2/signature.css';
 import './ds2/motion.css';
