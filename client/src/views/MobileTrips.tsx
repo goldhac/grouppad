@@ -35,6 +35,9 @@ export function MobileTrips() {
   const { myTrips, user, signOut, leaveTrip, openAuth, personalSkin, setSkin } = useApp();
   const navigate = useNavigate();
   const [seg, setSeg] = useState<'upcoming' | 'past'>('upcoming');
+  // Trips whose dates have passed archive into the "Past" tab.
+  const upcoming = myTrips.filter((t) => !t.past);
+  const past = myTrips.filter((t) => t.past);
   const [acctOpen, setAcctOpen] = useState(false);
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
 
@@ -84,7 +87,7 @@ export function MobileTrips() {
         <div className="mb-scroll" style={{ paddingBottom: 104 }}>
           <div className="tp-title">
             <h1>Your trips</h1>
-            <p>{myTrips.length ? <><b>{myTrips.length} active board{myTrips.length === 1 ? '' : 's'}</b>. Pick up where your group left off.</> : 'No boards yet. Start one and invite your group.'}</p>
+            <p>{upcoming.length ? <><b>{upcoming.length} active board{upcoming.length === 1 ? '' : 's'}</b>. Pick up where your group left off.</> : 'No boards yet. Start one and invite your group.'}</p>
           </div>
           {myTrips.length > 0 && (
             <div className="tp-seg">
@@ -93,10 +96,16 @@ export function MobileTrips() {
             </div>
           )}
           {seg === 'past' ? (
-            <div className="tp-empty" style={{ paddingTop: 40 }}><div style={{ textAlign: 'center', color: 'var(--text-muted)' }}><Icon icon={Check} className="ico" /><div style={{ marginTop: 10, fontSize: 14 }}>No past trips yet.</div></div></div>
-          ) : myTrips.length ? (
+            past.length ? (
+              <div className="tp-list tp-past">
+                {past.map((t, i) => card(t, i))}
+              </div>
+            ) : (
+              <div className="tp-empty" style={{ paddingTop: 40 }}><div style={{ textAlign: 'center', color: 'var(--text-muted)' }}><Icon icon={Check} className="ico" /><div style={{ marginTop: 10, fontSize: 14 }}>No past trips yet.</div></div></div>
+            )
+          ) : upcoming.length ? (
             <div className="tp-list">
-              {myTrips.map((t, i) => card(t, i))}
+              {upcoming.map((t, i) => card(t, i))}
               <div className="tnew" onClick={() => navigate('/trips/new')} role="button" tabIndex={0}><span className="ic"><Icon icon={Plus} className="ico" /></span><span className="t">New trip</span><span className="s">Start planning a group stay</span></div>
             </div>
           ) : (

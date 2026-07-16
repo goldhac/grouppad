@@ -1028,6 +1028,8 @@
 
 /* ---- trip cards (image-forward) ---- */
 .gp-mobile .tp-list { display: flex; flex-direction: column; gap: 20px; padding: 16px; }
+/* Archived (dates passed) — quieter, still readable. */
+.gp-mobile .tp-past .tcard { opacity: 0.72; }
 .gp-mobile .tcard { position: relative; cursor: pointer; border-radius: var(--r-card); overflow: hidden; background: var(--surface-raised); border: 1px solid var(--border); box-shadow: var(--shadow-sm); -webkit-tap-highlight-color: transparent; transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-base) var(--ease-out); }
 .gp-mobile .tcard:active { transform: scale(0.99); }
 .gp-mobile .tcard .tph { position: relative; aspect-ratio: 20 / 12; background: var(--surface-sunken); }

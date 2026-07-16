@@ -92,7 +92,11 @@ export function TripsView() {
 
   if (isMobile) return <MobileTrips />;
 
-  const count = myTrips.length;
+  // Trips whose dates have passed are archived into "Previous trips" — they stay
+  // readable (the board + the pick) but are out of the way of live planning.
+  const active = myTrips.filter((t) => !t.past);
+  const previous = myTrips.filter((t) => t.past);
+  const count = active.length;
 
   return (
     <div className="tp-main">
@@ -113,7 +117,7 @@ export function TripsView() {
           )}
         </div>
 
-        {count === 0 ? (
+        {count === 0 && previous.length === 0 ? (
           <div className="trips-empty">
             <div className="editorial">
               <div className="bg" style={{ backgroundImage: `url(${photoFor(0)})` }} />
@@ -129,12 +133,25 @@ export function TripsView() {
           </div>
         ) : (
           <div className="trips-grid">
-            {myTrips.map((t, i) => <TripCard key={t.id} trip={t} i={i} />)}
+            {active.map((t, i) => <TripCard key={t.id} trip={t} i={i} />)}
             <button className="trip-new" onClick={() => navigate('/trips/new')}>
               <span className="ic"><Icon icon={Plus} className="ico" /></span>
               <span className="t">New trip</span>
               <span className="s">Start a fresh board</span>
             </button>
+          </div>
+        )}
+
+        {previous.length > 0 && (
+          <div className="trips-prev">
+            <div className="trips-prev-head">
+              <h2>Previous trips</h2>
+              <span className="ct tnum">{previous.length}</span>
+            </div>
+            <p className="trips-prev-sub">These dates have passed. The board and the official pick are still here.</p>
+            <div className="trips-grid">
+              {previous.map((t, i) => <TripCard key={t.id} trip={t} i={active.length + i} />)}
+            </div>
           </div>
         )}
       </div>

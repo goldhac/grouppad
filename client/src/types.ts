@@ -49,6 +49,10 @@ export interface TripView extends Trip {
   /** The trip's UI theme (organizer-set default); 'classic' when unset. */
   skin?: string;
   created_at?: string;
+  /** The trip's dates have passed — archived into "Previous trips"; stops refreshing. */
+  past?: boolean;
+  /** The group locked an official pick — stops refreshing and notifying. */
+  settled?: boolean;
   /** Cover photo from the trip's top-voted home; null for new trips (client falls back to an editorial image). */
   coverPhoto?: string | null;
   // organizer-only fields

@@ -355,6 +355,19 @@ function isMember(trip, user) { return !!user && !!trip && Array.isArray(trip.me
 const SKINS = new Set(['classic', 'tropical', 'coastal', 'sunset', 'pinksummer', 'forest']);
 const cleanSkin = (s) => (SKINS.has(String(s)) ? String(s) : null);
 
+// ── Trip lifecycle ────────────────────────────────────────────────────────────
+// A trip is SETTLED once the group locked an official pick, and PAST once its
+// checkout date has gone by. Either way it's DORMANT: nothing left to decide, so
+// we stop refreshing listings (no scrape spend) and stop emailing members. Past
+// trips are archived into "Previous trips" in the dashboard.
+function tripCheckout(t) { return (t && (t.checkout_5n || t.checkout || t.checkout_4n)) || null; }
+function isTripPast(t) {
+  const co = tripCheckout(t);
+  return !!co && String(co) < new Date().toISOString().slice(0, 10); // date-only compare
+}
+function isTripSettled(t) { return !!(t && loadDecision(t.id)); }
+function isTripDormant(t) { return isTripPast(t) || isTripSettled(t); }
+
 function tripView(trip, user) {
   if (!trip) return null;
   const { join_code, members, organizers, owner_id, ...rest } = trip;
@@ -373,6 +386,10 @@ function tripView(trip, user) {
     isCreator: isCreator(trip, user),
     isMember: isMember(trip, user),
     memberCount: Array.isArray(members) ? members.length : 0,
+    // Lifecycle: past = dates gone (archived into "Previous trips"); settled =
+    // official pick locked. Both stop refreshes + notifications.
+    past: isTripPast(trip),
+    settled: isTripSettled(trip),
     // Organizers see the invite code, member list, owner id, and organizer list.
     ...(organizer ? { join_code, members, organizers: organizers || [], owner_id } : {}),
   };
@@ -738,9 +755,9 @@ function notifyFreshHomes(tripId) {
     const trips = loadTrips();
     const trip = trips[tripId];
     if (!trip) return;
-    // The group already picked a place — new homes are no longer news. Keep the
-    // board fresh but stop emailing about it (the decision email is the last one).
-    if (loadDecision(tripId)) {
+    // Decided or past — new homes are no longer news. Keep the board fresh but
+    // stop emailing about it (the decision email is the last one).
+    if (isTripDormant(trip)) {
       trip.refreshed_at = new Date().toISOString().slice(0, 10);
       saveTrips(trips);
       logEvent(tripId, 'refresh', `Listings refreshed — ${count} homes (decision locked, members not emailed)`);
@@ -3343,7 +3360,14 @@ app.get('/api/admin/trips', requireAdmin, (req, res) => {
 // created trip. Writes a .searching marker immediately so the client's status
 // poll is accurate from t=0; pipeline.js clears it when the run finishes.
 function spawnTripSearch(tripId, maxItems, notify = false) {
-  if (!apifyConfigured() || tripId === LA_TRIP_ID) return false;
+  if (tripId === LA_TRIP_ID) return false;
+  // Decided or past → stop updating. (Airbnb discovery is self-hosted so no Apify
+  // key is required; the actor is only a fallback.)
+  const t = getTrip(tripId);
+  if (t && isTripDormant(t)) {
+    console.log(`[trip-search] skipped for ${tripId} — trip is ${isTripSettled(t) ? 'decided' : 'past'}`);
+    return false;
+  }
   try { fs.writeFileSync(path.join(tripDir(tripId), '.searching'), new Date().toISOString()); } catch {}
   const { spawn } = require('child_process');
   const env = { ...process.env, TRIP_ID: tripId, APIFY_TOKEN: getApifyToken() };
@@ -3635,7 +3659,7 @@ app.post('/api/trips/:tripId/run-search', requireTripOwner, async (req, res) => 
     return res.status(429).json({ error: 'Rental search is paused — Apify usage is near its monthly limit. The site manager has been alerted to rotate the key.' });
   const max = Math.min(20, Math.max(1, Number(req.body && req.body.max) || 10));
   if (!spawnTripSearch(req.params.tripId, max, true))
-    return res.status(400).json({ error: 'Search is not configured (APIFY_TOKEN missing on server).' });
+    return res.status(400).json({ error: 'Search could not start — this trip is decided or has already happened.' });
   res.json({ ok: true });
 });
 
@@ -3653,12 +3677,17 @@ app.post('/api/trips/:tripId/refresh', requireTripOwner, async (req, res) => {
       nextRefreshAt: new Date(last + windowMs).toISOString(),
     });
   }
+  // Decided or past → the trip is done; refreshing would just burn spend.
+  if (isTripSettled(req.trip))
+    return res.status(400).json({ error: 'This trip has an official pick — listings no longer refresh. Unlock the pick to search again.' });
+  if (isTripPast(req.trip))
+    return res.status(400).json({ error: 'This trip has already happened — it lives in Previous trips now.' });
   if (!(await apifyGuard('a manual refresh')))
     return res.status(429).json({ error: 'Rental search is paused — Apify usage is near its monthly limit.' });
   if (tripId === LA_TRIP_ID) {
     runPipelineJob().catch((e) => console.error('[refresh] pipeline error:', e && e.message));
   } else if (!spawnTripSearch(tripId, 10, true)) {
-    return res.status(400).json({ error: 'Search is not configured (APIFY_TOKEN missing on server).' });
+    return res.status(400).json({ error: 'Search could not start for this trip.' });
   }
   const trips = loadTrips();
   if (trips[tripId]) { trips[tripId].last_manual_refresh = new Date(now).toISOString(); saveTrips(trips); }
@@ -3750,6 +3779,12 @@ const PIPELINE_HOUR_UTC     = Number(process.env.PIPELINE_HOUR_UTC ?? 15);
 const PIPELINE_INTERVAL_DAYS = Math.max(1, Number(process.env.PIPELINE_INTERVAL_DAYS ?? 3));
 
 async function runPipelineJob() {
+  // Decided or finished → nothing left to shop for. Skip the scrape entirely.
+  const laTrip = getTrip(LA_TRIP_ID);
+  if (laTrip && isTripDormant(laTrip)) {
+    console.log(`[Cron] Skipping pipeline run — trip is ${isTripSettled(laTrip) ? 'decided' : 'past'}`);
+    return;
+  }
   if (!apifyConfigured()) {
     console.log('[Cron] Skipping pipeline run — no Apify key configured');
     return;
@@ -3808,9 +3843,9 @@ async function runDigestJob() {
   const now = Date.now();
   for (const trip of Object.values(trips)) {
     try {
-      // Decided trips are done: the pick is locked, so stop the daily recap. The
-      // decision email is the last thing a member hears about this trip.
-      if (loadDecision(trip.id)) continue;
+      // Decided or past trips are done — stop the daily recap. The decision email
+      // is the last thing a member hears about this trip.
+      if (isTripDormant(trip)) continue;
       const since = trip.last_digest_at ? Date.parse(trip.last_digest_at) : (now - 24 * 3600 * 1000);
       const digest = buildDigest(trip.id, since);
       if (digest) {
