@@ -102,25 +102,30 @@
 .dc-bit.h2 { background: #e7d9bd; }
 .dc-bit.h3 { background: var(--under, #1f7a50); }
 
+/* Entrance follows the house modal beat (auth.css): the scrim FADES and the card
+   rises gently — a dialog is a heavy element, so no overshoot on the card itself.
+   The gold seal is the one accent that carries the celebration: it keeps the
+   brand's --ease-settle "lock" beat, landing just after the card settles. */
 @media (prefers-reduced-motion: no-preference) {
-  .dc-bit { animation-name: dc-fall; animation-timing-function: cubic-bezier(0.3, 0.6, 0.4, 1); animation-iteration-count: 1; animation-fill-mode: forwards; }
-  .dc-card { animation: dc-pop var(--dur-slow, 420ms) var(--ease-settle, cubic-bezier(0.175, 0.885, 0.32, 1.275)) both; }
-  .dc-seal { animation: dc-seal-in 520ms var(--ease-settle, cubic-bezier(0.175, 0.885, 0.32, 1.275)) both; }
+  .dc-scrim { animation: dc-scrim-in var(--dur-base) var(--ease-out) both; }
+  .dc-card  { animation: dc-rise var(--dur-slow) var(--ease-out) both; }
+  .dc-seal  { animation: dc-seal-in var(--dur-lock) var(--ease-settle) 110ms both; }
+  .dc-bit   { animation-name: dc-fall; animation-timing-function: cubic-bezier(0.3, 0.6, 0.4, 1); animation-iteration-count: 1; animation-fill-mode: forwards; }
 }
 
+@keyframes dc-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dc-rise {
+  from { transform: translateY(10px) scale(0.985); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@keyframes dc-seal-in {
+  from { transform: scale(0.5); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
 @keyframes dc-fall {
   0%   { transform: translate3d(0, 0, 0) rotate(var(--rot)); opacity: 0; }
   8%   { opacity: 1; }
   100% { transform: translate3d(var(--drift), 108vh, 0) rotate(calc(var(--rot) + 540deg)); opacity: 0; }
-}
-@keyframes dc-pop {
-  0%   { transform: translateY(14px) scale(0.94); opacity: 0; }
-  100% { transform: none; opacity: 1; }
-}
-@keyframes dc-seal-in {
-  0%   { transform: scale(2.1); opacity: 0; }
-  60%  { opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
 }
 
 @media (max-width: 640px) {

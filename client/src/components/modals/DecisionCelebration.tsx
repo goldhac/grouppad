@@ -40,10 +40,11 @@ export function DecisionCelebration() {
   }, [open]);
 
   // Deterministic-enough confetti: each bit gets its own lane, delay, spin and hue.
+  // Offset past the card's entrance so the card leads and the confetti follows.
   const bits = useMemo(
     () => Array.from({ length: BITS }, (_, i) => ({
       left: (i / BITS) * 100 + (Math.random() * 4 - 2),
-      delay: Math.random() * 1.6,
+      delay: 0.18 + Math.random() * 1.5,
       dur: 2.4 + Math.random() * 1.8,
       rot: Math.random() * 360,
       drift: (Math.random() * 2 - 1) * 60,
