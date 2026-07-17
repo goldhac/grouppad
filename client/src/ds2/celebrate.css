@@ -15,24 +15,35 @@
 }
 
 /* ── The card ──────────────────────────────────────────────────────────── */
+/* Column layout: only .dc-body scrolls, so the actions (the way out) are pinned
+   and always on screen — on a short phone the card used to scroll the close
+   button off the bottom, which left no reachable way to dismiss it. */
 .dc-card {
   position: relative; z-index: 2;
+  display: flex; flex-direction: column;
   width: 100%; max-width: 460px;
-  max-height: calc(100dvh - 48px); overflow-y: auto;
+  max-height: calc(100dvh - 48px); overflow: hidden;
   background: var(--surface-raised);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
   box-shadow: var(--shadow-lg, 0 40px 90px rgba(0, 0, 0, 0.45));
-  padding: 30px 28px 24px;
   text-align: center;
 }
+.dc-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 30px 28px 4px; }
+.dc-actions { flex: 0 0 auto; padding: 16px 28px 20px; }
+
+/* 44px touch target with a visible surface so it reads as pressable. Sits on the
+   card, above the scrolling body, so it never scrolls away. */
 .dc-x {
-  position: absolute; top: 12px; right: 12px;
-  width: 34px; height: 34px; border-radius: 50%;
+  position: absolute; top: 10px; right: 10px; z-index: 3;
+  width: 44px; height: 44px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  color: var(--text-muted); background: transparent; border: 0; cursor: pointer;
+  color: var(--text-muted); cursor: pointer;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  -webkit-tap-highlight-color: transparent;
 }
-.dc-x:hover { background: var(--surface-sunken); color: var(--text); }
+.dc-x:hover, .dc-x:active { background: var(--surface-inset); color: var(--text); }
 
 .dc-seal {
   display: inline-flex; align-items: center; justify-content: center;
@@ -83,11 +94,11 @@
 }
 .dc-money .pp .k, .dc-money .pp .v { color: var(--under, var(--accent-text)); }
 
-.dc-actions { display: flex; flex-direction: column; gap: 9px; margin: 18px 0 0; }
+.dc-actions { display: flex; flex-direction: column; gap: 9px; }
 /* The primary CTA is an <a> (it leaves the app for the listing) — kill the
    anchor underline so it reads as a button. */
 .dc-actions .btn { width: 100%; justify-content: center; text-decoration: none; }
-.dc-fine { font-size: 11.5px; color: var(--text-muted); margin: 12px 0 0; }
+.dc-fine { font-size: 11.5px; color: var(--text-muted); margin: 4px 0 0; }
 
 /* ── Confetti ──────────────────────────────────────────────────────────── */
 .dc-confetti { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
@@ -129,7 +140,27 @@
 }
 
 @media (max-width: 640px) {
-  .dc-card { padding: 26px 20px 20px; max-width: 100%; }
+  .dc-scrim { padding: 16px; }
+  .dc-card { max-width: 100%; max-height: calc(100dvh - 32px); }
+  .dc-body { padding: 26px 18px 4px; }
+  .dc-actions { padding: 14px 18px 18px; }
   .dc-title { font-size: 26px; }
   .dc-photo { height: 150px; }
+}
+
+/* Short phones (iPhone SE and friends): tighten the hero so the whole card fits
+   with no scrolling — measured to reclaim the ~40px that clipped the price row. */
+@media (max-height: 760px) {
+  .dc-seal { width: 44px; height: 44px; margin-bottom: 8px; }
+  .dc-seal .ico { width: 20px; height: 20px; }
+  .dc-eyebrow { font-size: 10.5px; }
+  .dc-title { font-size: 22px; }
+  .dc-sub { font-size: 13px; margin-top: 5px; }
+  .dc-photo { height: 92px; margin-top: 12px; }
+  .dc-name { font-size: 16px; margin-top: 10px; }
+  .dc-meta { font-size: 12.5px; margin-top: 3px; }
+  .dc-money { margin-top: 10px; padding: 9px 12px; }
+  .dc-money .v { font-size: 18px; }
+  .dc-body { padding-top: 18px; }
+  .dc-actions { padding-top: 12px; gap: 7px; }
 }

@@ -95,39 +95,44 @@ export function DecisionCelebration() {
       </div>
 
       <div className="dc-card">
+        {/* Sits on the card (not the scrolling body) so it never scrolls away. */}
         <button className="dc-x" onClick={markSeen} aria-label="Close">
           <Icon icon={X} className="ico" />
         </button>
 
-        <span className="dc-seal"><Icon icon={Lock} className="ico" /></span>
-        <div className="dc-eyebrow">Official pick · locked</div>
-        <h2 id="dc-title" className="dc-title">It&rsquo;s official</h2>
-        <p className="dc-sub">Your group picked the place for {trip.name}.</p>
+        {/* Only this scrolls on short screens — the actions below stay pinned. */}
+        <div className="dc-body">
+          <span className="dc-seal"><Icon icon={Lock} className="ico" /></span>
+          <div className="dc-eyebrow">Official pick · locked</div>
+          <h2 id="dc-title" className="dc-title">It&rsquo;s official</h2>
+          <p className="dc-sub">Your group picked the place for {trip.name}.</p>
 
-        {listing.photos?.[0] && (
-          <img className="dc-photo" src={listing.photos[0]} alt={listing.name} loading="lazy" />
-        )}
+          {listing.photos?.[0] && (
+            <img className="dc-photo" src={listing.photos[0]} alt={listing.name} loading="lazy" />
+          )}
 
-        <h3 className="dc-name">{listing.name}</h3>
-        {(listing.area || specs) && (
-          <p className="dc-meta">{[listing.area, specs].filter(Boolean).join(' · ')}</p>
-        )}
+          <h3 className="dc-name">{listing.name}</h3>
+          {(listing.area || specs) && (
+            <p className="dc-meta">{[listing.area, specs].filter(Boolean).join(' · ')}</p>
+          )}
 
-        {listing.est_5n != null && (
-          <div className="dc-money">
-            <div className="m">
-              <span className="k">Est. all-in · 5 nights</span>
-              <span className="v tnum">{fmt(listing.est_5n)}</span>
-            </div>
-            {pp != null && (
-              <div className="m pp">
-                <span className="k"><Icon icon={Users} className="ico" /> Your share</span>
-                <span className="v tnum">{fmt(pp)}</span>
+          {listing.est_5n != null && (
+            <div className="dc-money">
+              <div className="m">
+                <span className="k">Est. all-in · 5 nights</span>
+                <span className="v tnum">{fmt(listing.est_5n)}</span>
               </div>
-            )}
-          </div>
-        )}
+              {pp != null && (
+                <div className="m pp">
+                  <span className="k"><Icon icon={Users} className="ico" /> Your share</span>
+                  <span className="v tnum">{fmt(pp)}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
+        {/* Pinned: the way out is always on screen, whatever the phone height. */}
         <div className="dc-actions">
           <a
             className="btn btn-primary btn-lg"
@@ -139,8 +144,8 @@ export function DecisionCelebration() {
             Open on {srcLabel} <Icon icon={ExternalLink} className="ico" />
           </a>
           <button className="btn btn-lg" onClick={markSeen}>See the board</button>
+          <p className="dc-fine">GroupPad doesn&rsquo;t book — verify the all-in total at checkout.</p>
         </div>
-        <p className="dc-fine">GroupPad doesn&rsquo;t book — verify the all-in total at checkout.</p>
       </div>
     </div>
   );
