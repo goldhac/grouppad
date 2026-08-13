@@ -3401,8 +3401,13 @@ function saveExpAbout(tripId, v) { writeJsonAtomic(tripFile(tripId, 'exp-about.j
 
 // Keyed on the facts a description is built from, so it regenerates when those
 // change and NOT when some unrelated field (photo, url) churns on a refresh.
+// Bump when the PROMPT changes materially — the first production run wrote
+// title restatements ("Hike to X on this 90-minute activity for $17"), and
+// without a version in the key those entries would never be rewritten.
+const ABOUT_PROMPT_V = 'v2';
 function expAboutHash(x) {
   return crypto.createHash('sha1').update([
+    ABOUT_PROMPT_V,
     x.title || '', x.category || '', x.source || 'airbnb',
     x.duration ?? '', x.price ?? '', x.priceUnit || '', x.rating ?? '',
   ].join('|')).digest('hex').slice(0, 12);
@@ -3445,6 +3450,19 @@ function templateAbout(x, trip) {
 // One fill per trip at a time: GET /experiences is hit by every member on the
 // board, and without this each of them would kick off their own batch.
 const _describing = new Set();
+// A row sitting on its template line is still WORK TO DO. The first production
+// run exposed this: one batch is capped at 40, and because the template was
+// written with the row's final hash, the other 33 rows looked "done" forever.
+// Templates are therefore retried — bounded by attempts and a cooldown so a
+// model that keeps failing can't turn every board read into a Gemini call.
+const ABOUT_RETRY_MS = 60 * 60 * 1000;
+const ABOUT_MAX_TRIES = 2;
+function aboutNeedsWork(entry, hash) {
+  if (!entry || entry.hash !== hash) return true;
+  if (entry.by !== 'template') return false;
+  if ((entry.tries || 0) >= ABOUT_MAX_TRIES) return false;
+  return Date.now() - new Date(entry.at || 0).getTime() > ABOUT_RETRY_MS;
+}
 
 async function fillExpDescriptions(tripId, trip) {
   if (_describing.has(tripId)) return;
@@ -3452,36 +3470,58 @@ async function fillExpDescriptions(tripId, trip) {
   try {
     const rows = loadExperiences(tripId);
     const about = loadExpAbout(tripId);
-    const missing = rows.filter((x) => about[x.id]?.hash !== expAboutHash(x));
+    const missing = rows.filter((x) => aboutNeedsWork(about[x.id], expAboutHash(x)));
     if (!missing.length) return;
 
     // Deterministic line first — committed before any network call, so a capped
     // or keyless deploy still ends up with a real description on every row.
-    for (const x of missing) about[x.id] = { text: templateAbout(x, trip), by: 'template', hash: expAboutHash(x) };
+    for (const x of missing) {
+      const prev = about[x.id];
+      const hash = expAboutHash(x);
+      about[x.id] = {
+        text: prev && prev.hash === hash ? prev.text : templateAbout(x, trip),
+        by: 'template', hash,
+        at: new Date().toISOString(),
+        tries: prev && prev.hash === hash ? (prev.tries || 0) + 1 : 1,
+      };
+    }
     saveExpAbout(tripId, about);
     if (!GEMINI_API_KEY || !geminiGuard()) return;
 
+    // Work through ALL of them, 40 per call. Capping at a single batch left a
+    // 73-row board with 33 rows stuck on their template line.
+    let done = 0, rejected = 0;
+    for (let off = 0; off < missing.length && off < 200; off += 40) {
+    if (!geminiGuard()) break;
     // Compact keyed candidates — same discipline as the other Scout jobs: the
     // model never sees a raw id, a url or anything resembling PII.
-    const batch = missing.slice(0, 40);
+    const batch = missing.slice(off, off + 40);
     const keyToId = {};
     const compact = batch.map((x, i) => {
       const k = 'e' + i; keyToId[k] = String(x.id);
+      // Send the HUMAN duration: given raw minutes the model wrote "a
+      // 135-minute activity" in 39 of 40 first-run descriptions.
       return { k, title: (x.title || '').slice(0, 80), category: x.category || null,
-               mins: x.duration ?? null, price: x.price ?? null, unit: x.priceUnit || null,
+               runs: durWords(x.duration), price: x.price ?? null, unit: x.priceUnit || null,
                rating: x.rating ?? null, kind: x.source === 'osm' ? 'place' : 'bookable activity' };
     });
     const prompt = `You are Scout. For each item below, write the ONE line a group reads while deciding what to do on a trip to ${trip?.destination || 'their destination'}.
 
 Items (JSON): ${JSON.stringify(compact)}
 
-Write 12-24 words per item, plain and concrete. Say what the group would actually be doing there, or who it suits.
+THE READER CAN ALREADY SEE the title, how long it runs, the price and the rating — they are printed on the card right above your line. Restating them is wasted space and is the single most common failure here. Your job is the thing the card does NOT say: what the group is actually doing, who it suits, or what to know before picking it.
+
+Write 12-24 words per item, plain and concrete.
+
+Good: "Small groups, lots of stopping and starting — better for people who want photos than a workout."
+Bad:  "Hike to the Hollywood Sign with comics and canines on this 90-minute activity for \$17 per guest." (this is just the title and the facts again)
 
 HARD RULES — these describe real places and businesses:
 - Use ONLY the facts given above. NEVER invent an address, opening hours, history, a menu, a price, a rating, or any claim about what is inside.
 - If all you have is a name and a category, describe the category honestly and say nothing specific.
+- Never repeat the title's wording. Never state the duration or the price.
 - No marketing voice. Banned: unforgettable, hidden gem, must-see, iconic, breathtaking, nestled.
-- Do not repeat the title verbatim. No emoji.
+- No emoji.
 
 Return ONLY JSON: {"d":[{"k":"<key>","t":"<the sentence>"}]}`;
 
@@ -3491,22 +3531,29 @@ Return ONLY JSON: {"d":[{"k":"<key>","t":"<the sentence>"}]}`;
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, responseMimeType: 'application/json', maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } } }),
     });
     const data = await r.json();
-    if (!r.ok) { console.error('[describe] gemini', r.status); return; }
+    if (!r.ok) { console.error('[describe] gemini', r.status); break; }
     const um = data.usageMetadata || {};
     bumpUsage('gemini', { calls: 1, promptTokens: um.promptTokenCount || 0, candidatesTokens: um.candidatesTokenCount || 0, totalTokens: um.totalTokenCount || 0 });
     const raw = JSON.parse(data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
     const fresh = loadExpAbout(tripId); // re-read: a refresh may have landed meanwhile
-    let n = 0;
+    let n = 0, skipped = 0;
     for (const d of Array.isArray(raw.d) ? raw.d : []) {
       const id = keyToId[d?.k];
       const text = typeof d?.t === 'string' ? d.t.trim().replace(/\s+/g, ' ').slice(0, 220) : '';
       if (!id || text.length < 12) continue;
       const row = batch.find((x) => String(x.id) === id);
-      fresh[id] = { text, by: 'scout', hash: expAboutHash(row) };
+      // Don't accept a line that just replays the title — the template already
+      // says that much, and more honestly. Leave it for a later attempt.
+      const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+      const t = norm(row && row.title);
+      if (t.length >= 18 && norm(text).includes(t.slice(0, 24))) { skipped++; continue; }
+      fresh[id] = { text, by: 'scout', hash: expAboutHash(row), at: new Date().toISOString() };
       n++;
     }
     saveExpAbout(tripId, fresh);
-    console.log(`[describe] ${n}/${batch.length} descriptions for ${tripId}`);
+    done += n; rejected += skipped;
+    }
+    console.log(`[describe] ${done}/${missing.length} descriptions for ${tripId}${rejected ? ` (${rejected} rejected as title restatements)` : ''}`);
   } catch (e) {
     console.error('[describe]', e.message); // descriptions are a bonus — never fatal
   } finally {
@@ -3539,7 +3586,9 @@ app.get('/api/trips/:tripId/experiences', loadTripOr404, (req, res) => {
     const a = about[x.id];
     return a ? { ...x, description: a.text, descriptionBy: a.by } : x;
   });
-  if (rows.some((x) => about[x.id]?.hash !== expAboutHash(x))) fillExpDescriptions(tripId, req.trip);
+  // Same predicate the fill uses — checking only the hash here meant a row
+  // sitting on its template line never triggered an upgrade attempt.
+  if (rows.some((x) => aboutNeedsWork(about[x.id], expAboutHash(x)))) fillExpDescriptions(tripId, req.trip);
   res.json({ experiences: out, pending });
 });
 
