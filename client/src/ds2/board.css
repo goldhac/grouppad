@@ -785,3 +785,52 @@ body { background: var(--surface); }
 
 /* The entry point, sitting with the filters because it filters intent. */
 .chip-filter.xpick.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+
+/* ── Plan studio ────────────────────────────────────────────────────────────
+   "Test out a plan" is a transient experiment — try a combination, look at it,
+   keep or discard. Enter, do one thing, get a result, exit. That is exactly the
+   shape a modal is for, and it is a different job from the group's plan, which
+   is a persistent reference document and stays on its own surface.
+   The framing matters too: "test out" lowers the stakes, and a sandbox should
+   feel disposable. */
+.xstudio { display: flex; flex-direction: column; gap: 0; max-height: min(86dvh, 820px); }
+.xstudio-h { display: flex; align-items: flex-start; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); flex: none; }
+.xstudio-h .mk { width: 38px; height: 38px; border-radius: var(--r-md); background: var(--accent-tint); color: var(--accent-text); display: flex; align-items: center; justify-content: center; flex: none; }
+.xstudio-h .mk .ico { width: 19px; height: 19px; }
+.xstudio-h .hh { flex: 1; min-width: 0; }
+.xstudio-h .t { font-family: var(--font-display); font-size: 18px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); }
+.xstudio-h .s { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.xstudio-b { overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px 20px; flex: 1; min-height: 0; }
+.xstudio-f { display: flex; align-items: center; gap: 8px; padding: 13px 20px; border-top: 1px solid var(--border); background: var(--surface-inset); flex: none; flex-wrap: wrap; }
+.xstudio-f .sp { margin-left: auto; }
+
+/* Generating. Three layers of motion, per the house motion rules: the ring is
+   primary, the pulsing mark is secondary, the copy swap is ambient. Entrance
+   easing decelerates; nothing loops faster than ~1.2s so it reads calm rather
+   than anxious — this takes a few seconds and panic is the wrong feeling. */
+.xgen { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 44px 16px 48px; }
+.xgen .orb { position: relative; width: 62px; height: 62px; display: grid; place-items: center; margin-bottom: 20px; }
+.xgen .orb .ring { position: absolute; inset: 0; border-radius: 50%; border: 2.5px solid var(--accent-tint-border); border-top-color: var(--accent); animation: xspin 1.15s cubic-bezier(0.5, 0, 0.5, 1) infinite; }
+.xgen .orb .ico { width: 24px; height: 24px; color: var(--accent-text); animation: xpulse 2s var(--ease-standard) infinite; }
+@keyframes xpulse { 0%, 100% { transform: scale(1); opacity: 0.75; } 50% { transform: scale(1.12); opacity: 1; } }
+.xgen .t { font-size: 16px; font-weight: 700; color: var(--text); }
+.xgen .s { font-size: 13px; color: var(--text-muted); margin-top: 6px; max-width: 38ch; line-height: 1.55; animation: xfade var(--dur-slow, 420ms) var(--ease-out) both; }
+@keyframes xfade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .xgen .orb .ring { animation-duration: 2.6s; }
+  .xgen .orb .ico, .xgen .s { animation: none; }
+}
+
+/* The result lands a day at a time — a short stagger so the eye follows the
+   day order instead of the whole plan appearing at once. Budget stays under
+   400ms total, so it never feels like waiting. */
+.xstudio-b .itin-day { animation: xrise var(--dur-base) var(--ease-out) both; }
+.xstudio-b .itin-day:nth-child(2) { animation-delay: 70ms; }
+.xstudio-b .itin-day:nth-child(3) { animation-delay: 140ms; }
+.xstudio-b .itin-day:nth-child(4) { animation-delay: 210ms; }
+@keyframes xrise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .xstudio-b .itin-day { animation: none; } }
+
+/* Copy-link confirmation, inline rather than a toast that covers the plan. */
+.xcopied { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--up); }
+.xcopied .ico { width: 14px; height: 14px; }

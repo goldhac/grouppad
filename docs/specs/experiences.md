@@ -548,3 +548,46 @@ good, then share it to the group and compare), so:
 * The My-plan panel's button became **"Pick things" / "Change picks · N"**,
   which switches to Browse with pick mode on, rather than pretending you can
   pick from a panel with no cards.
+
+---
+
+## 4h. The plan studio: "Test out a plan" (SHIPPED 2026-08-13)
+
+The personal lane got its own shape. Flow: **Test out a plan → every card
+becomes selectable → Generate → a modal shows the routed result → copy a link
+someone else can open.**
+
+### Why this one IS a modal (and the group's plan still isn't)
+Two different jobs, and the distinction is the whole argument:
+* The **group's** plan is a persistent reference document you read against the
+  items, return to, and link into the itinerary → it belongs on a surface.
+* **Testing a combination** is a transient experiment: enter, do one thing,
+  look at the result, export or discard. That is exactly what dialogs are for.
+
+The wording is load-bearing too. **"Test out"** says *throwaway*, and a sandbox
+has to feel disposable or nobody tries anything in it. "Build my plan" implied
+a commitment the feature doesn't actually ask for.
+
+### Motion (three layers, per the house motion rules)
+* **Primary** — the ring: 1.15s, symmetric ease, never faster; generation takes
+  a few seconds and a frantic spinner reads as *something is wrong*.
+* **Secondary** — the Scout mark pulses at 2s, scale 1→1.12.
+* **Ambient** — the line under it rotates through what is actually happening
+  ("working out the order and the driving between them"). It carries no
+  information; it makes waiting feel attended to.
+* The result **staggers a day at a time** (70ms steps, <400ms total) so the eye
+  follows day order rather than the whole plan appearing at once.
+* Everything collapses under `prefers-reduced-motion`.
+
+### The shared page is watermarked — with a claim, not a brand stamp
+A tiled diagonal **GroupPad** mark sits behind the content at 3.2% opacity,
+plus an explicit chip: **"Gold's idea · not the group's decision"**.
+
+This is deliberately *not* the "unlicensed sample" kind of watermark. It
+carries something true and load-bearing: a shared personal plan is one member's
+proposal, and it must never be mistaken for what the group settled on — the
+same honesty rule that makes Scout always attributed. The brand mark rides
+along for free.
+
+`print-color-adjust: exact` forces the watermark into the PDF, where the
+distinction matters most, in a darker ink that survives on white.

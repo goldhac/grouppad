@@ -514,6 +514,148 @@ export function expPlanPerPerson(plan: ExpPlan, byId: Map<string, Experience>, s
 /** "Things to do" board tab — scraped Airbnb Experiences the group can vote on.
  *  Spec: docs/specs/experiences.md. Votes surface a "group's list" at the top
  *  (the homes-shortlist analog) which the organizer can send to the itinerary. */
+/**
+ * The plan studio — "test out a plan".
+ *
+ * This is the one place a modal is right on this tab. The group's plan is a
+ * persistent reference document, so it lives on a surface; testing a
+ * combination is a transient experiment — enter, do one thing, look at it,
+ * export or discard. That is modal-shaped, and the "test out" framing is
+ * deliberate: a sandbox should feel disposable, or people won't try things.
+ *
+ * Portal-rendered like every other dialog here. This is NOT optional — the
+ * board's .tab-panel animates a transform, which makes it the containing block
+ * for position:fixed children, so an inline overlay sizes to the panel and you
+ * get a dark screen with no dialog. See ExperienceModal.
+ */
+function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, onRegenerate, onClose }: {
+  plan: ExpPlan | null; generating: boolean; count: number;
+  shareUrl: string | null; pdfUrl: string | null;
+  byId: Map<string, Experience>; onOpen: (x: Experience) => void;
+  onRegenerate: () => void; onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  // Rotate the line under the spinner. Ambient layer only — it carries no
+  // information, it just makes a few seconds of waiting feel attended to.
+  const NOTES = [
+    'Reading what you picked…',
+    'Working out the order and the driving between them…',
+    'Costing the day per person…',
+  ];
+  const [note, setNote] = useState(0);
+  useEffect(() => {
+    if (!generating) { setNote(0); return; }
+    const t = setInterval(() => setNote((n) => (n + 1) % NOTES.length), 2200);
+    return () => clearInterval(t);
+  }, [generating, NOTES.length]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const copy = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      track('my_plan_shared', { via: 'studio_copy' });
+      setTimeout(() => setCopied(false), 2400);
+    } catch { /* clipboard blocked — the link is still on screen */ }
+  };
+
+  const days = plan?.days.filter((d) => d.items.length > 0) ?? [];
+
+  return (
+    <DialogPrimitive.Root open onOpenChange={(o) => !o && onClose()}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="dx-scrim" />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className="dx-modalwrap"
+          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+        >
+          <DialogPrimitive.Title className="sr-only">Test out a plan</DialogPrimitive.Title>
+          <div className="dx-modal" style={{ maxWidth: 720 }}>
+            <div className="xstudio">
+              <div className="xstudio-h">
+                <div className="mk"><Icon icon={Sparkles} className="ico" /></div>
+                <div className="hh">
+                  <div className="t">{generating ? 'Building your plan' : 'Your plan'}</div>
+                  <div className="s">
+                    {generating
+                      ? `${count} thing${count === 1 ? '' : 's'} you picked`
+                      : 'Yours to keep or throw away — the group only sees it if you share it.'}
+                  </div>
+                </div>
+                <button className="iconbtn" onClick={onClose} aria-label="Close"><Icon icon={X} className="ico" /></button>
+              </div>
+
+              <div className="xstudio-b">
+                {generating ? (
+                  <div className="xgen">
+                    <div className="orb">
+                      <span className="ring" />
+                      <Icon icon={Sparkles} className="ico" />
+                    </div>
+                    <div className="t">Scout is routing your day</div>
+                    <div className="s" key={note}>{NOTES[note]}</div>
+                  </div>
+                ) : days.length ? (
+                  days.map((d, i) => (
+                    d.route && d.route.rows.length > 0
+                      ? <RoutedDay key={i} day={d.day} route={d.route} byId={byId} onOpen={onOpen} />
+                      : (
+                        <div className="xplan-day" key={i}>
+                          <div className="xplan-dh">{dayLabel(d.day)}</div>
+                          {d.items.map((it) => {
+                            const x = byId.get(it.id);
+                            if (!x) return null;
+                            return (
+                              <button key={it.id} className="xplan-it" onClick={() => onOpen(x)}>
+                                {x.photo ? <img src={x.photo} alt="" loading="lazy" /> : <span className="ph" />}
+                                <span className="tx"><b>{x.title}</b><small>{it.why || ''}</small></span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )
+                  ))
+                ) : (
+                  <p className="text-text-muted" style={{ textAlign: 'center', padding: '32px 0' }}>
+                    Nothing to show yet — pick a few things and generate again.
+                  </p>
+                )}
+              </div>
+
+              <div className="xstudio-f">
+                <button className="btn btn-ghost btn-sm" onClick={onRegenerate} disabled={generating}>
+                  <Icon icon={RefreshCw} className="ico" /> Try again
+                </button>
+                <span className="sp" />
+                {copied ? (
+                  <span className="xcopied"><Icon icon={Check} className="ico" /> Link copied</span>
+                ) : (
+                  <button className="btn btn-ghost btn-sm" onClick={() => void copy()} disabled={generating || !days.length}>
+                    <Icon icon={Share2} className="ico" /> Copy link
+                  </button>
+                )}
+                {pdfUrl && (
+                  <a className="btn btn-ghost btn-sm" href={pdfUrl} onClick={() => track('my_plan_pdf', { via: 'studio' })}>
+                    <Icon icon={FileDown} className="ico" /> PDF
+                  </a>
+                )}
+                <button className="btn btn-primary btn-sm" onClick={onClose} disabled={generating}>Done</button>
+              </div>
+            </div>
+          </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
 export function ExperiencesSection() {
   const { trip, tripId, experiences, expPending, expFailed, expVotes, user, refreshExperiences, retryExperiences, final, findListing, isOwner, itinerary, saveItinerary, toast, split, requireSignIn } = useApp();
   const [nearest, setNearest] = useState(false);
@@ -536,6 +678,8 @@ export function ExperiencesSection() {
   // sequence) are different modes, so they get their own screen instead of
   // stacking three tall panels above the grid.
   const [view, setView] = useState<'browse' | 'plan'>('browse');
+  // The studio is open while you look at the result of an experiment.
+  const [studioOpen, setStudioOpen] = useState(false);
   useEffect(() => {
     if (!tripId || !user) return;
     let dead = false;
@@ -758,6 +902,17 @@ export function ExperiencesSection() {
         <span className="cnt tnum">{sorted.length}</span>
         <span className="sub">near {trip?.destination} · vote for what you&rsquo;d actually do — booking happens on Airbnb</span>
         <div className="rh-right">
+          {/* The entry to the personal lane. It is the most inviting thing on
+              the tab on purpose: "test out" says throwaway, which is what makes
+              people actually try a combination. */}
+          {view === 'browse' && user && !pickMode && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => { setPickMode(true); track('experiences_pickmode_on', { from: 'cta' }); }}
+            >
+              <Icon icon={Sparkles} className="ico" /> Test out a plan
+            </button>
+          )}
           {/* Sorting and refreshing act on the grid, so they belong to Browse. */}
           {view === 'browse' && anchor && (
             <button
@@ -979,7 +1134,7 @@ export function ExperiencesSection() {
               >
                 <Icon icon={Check} className="ico" /> {picked.size ? `Change picks · ${picked.size}` : 'Pick things'}
               </button>
-              <button className="btn btn-sm" onClick={() => void buildMyPlan()} disabled={myPlanning}>
+              <button className="btn btn-sm" onClick={() => { setStudioOpen(true); void buildMyPlan(); }} disabled={myPlanning}>
                 <Icon icon={Sparkles} className="ico" /> {myPlanning ? 'Planning…' : myPlan ? 'Re-plan mine' : 'Plan my days'}
               </button>
               {myPlan && (
@@ -1067,17 +1222,6 @@ export function ExperiencesSection() {
               {v.label} <span className="tnum" style={{ opacity: 0.6 }}>{v.n}</span>
             </button>
           ))}
-          {/* Building your own plan is a mix-and-match against the items, so
-              the switch belongs HERE, not in the panel that shows the result. */}
-          {user && (
-            <button
-              className={cn('chip-filter', 'xpick', pickMode && 'on')}
-              onClick={() => { setPickMode((v) => !v); if (!pickMode) track('experiences_pickmode_on', { from: 'browse' }); }}
-              title="Pick the things you'd do, then let Scout plan just those"
-            >
-              <Icon icon={Check} className="ico" /> {pickMode ? 'Done picking' : 'Build my plan'}
-            </button>
-          )}
         </div>
       )}
 
@@ -1122,16 +1266,31 @@ export function ExperiencesSection() {
           {picked.size > 0 && (
             <button className="lnk" onClick={() => setPicked(new Set())}>Clear</button>
           )}
+          <button className="lnk" onClick={() => { setPickMode(false); setPicked(new Set()); }}>Cancel</button>
           <button
             className="btn btn-primary btn-sm"
             disabled={myPlanning || picked.size === 0}
-            onClick={async () => { if (await buildMyPlan()) { setPickMode(false); setView('plan'); } }}
+            onClick={() => { setStudioOpen(true); void buildMyPlan(); }}
           >
-            <Icon icon={Sparkles} className="ico" /> {myPlanning ? 'Planning…' : 'Plan my days'}
+            <Icon icon={Sparkles} className="ico" /> Generate plan
           </button>
         </div>
       )}
       </>
+      )}
+
+      {studioOpen && (
+        <PlanStudio
+          plan={myPlan}
+          generating={myPlanning}
+          count={picked.size || saved.size}
+          shareUrl={tripId && user ? `${window.location.origin}/s/plan/${encodeURIComponent(tripId)}/${encodeURIComponent(user.id)}` : null}
+          pdfUrl={tripId && user ? `/s/plan/${encodeURIComponent(tripId)}/${encodeURIComponent(user.id)}.pdf` : null}
+          byId={byId}
+          onOpen={(x) => { setStudioOpen(false); setOpenX(x); }}
+          onRegenerate={() => void buildMyPlan()}
+          onClose={() => { setStudioOpen(false); setPickMode(false); }}
+        />
       )}
 
       {openX && (

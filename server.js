@@ -333,6 +333,16 @@ ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px
 .go{flex:none;color:var(--ac);text-decoration:none;font-size:13px;font-weight:600;border:1px solid var(--line);padding:6px 11px;border-radius:8px}
 .cta{display:block;margin-top:26px;text-align:center;background:var(--ac);color:#08120f;font-weight:700;text-decoration:none;padding:13px;border-radius:12px}
 .ft{margin-top:14px;text-align:center;color:var(--mut);font-size:12px}
+/* Watermark. NOT the "unlicensed sample" kind — it carries a claim that is both
+   true and load-bearing: this is ONE MEMBER'S proposal, not what the group
+   decided. Same honesty rule as Scout's attribution. Kept faint enough that it
+   never fights the text it sits behind. */
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='190'%3E%3Ctext x='6' y='120' transform='rotate(-24 150 95)' font-family='system-ui,sans-serif' font-size='23' font-weight='700' fill='%23ffffff' fill-opacity='0.032'%3EGroupPad%3C/text%3E%3C/svg%3E")}
+.wrap{position:relative;z-index:1}
+.mark{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--ac);background:rgba(63,168,138,.12);border:1px solid rgba(63,168,138,.3);padding:5px 11px;border-radius:999px;margin-bottom:12px}
+.mark i{width:6px;height:6px;border-radius:50%;background:var(--ac);display:block}
 .tools{display:flex;gap:8px;justify-content:flex-end;margin-bottom:14px}
 .tools a{color:var(--mut);text-decoration:none;font-size:12.5px;border:1px solid var(--line);padding:6px 11px;border-radius:8px}
 /* Printing / PDF: ink-friendly light theme, no interactive chrome, never split a
@@ -340,6 +350,12 @@ ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px
 @media print{
   :root{color-scheme:light}
   body{background:#fff;color:#111}
+  /* Force the watermark through — browsers drop background images in print
+     unless told otherwise, and a printed plan is exactly where "this is a
+     proposal, not the decision" matters most. */
+  body::before{-webkit-print-color-adjust:exact;print-color-adjust:exact;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='190'%3E%3Ctext x='6' y='120' transform='rotate(-24 150 95)' font-family='system-ui,sans-serif' font-size='23' font-weight='700' fill='%23000000' fill-opacity='0.045'%3EGroupPad%3C/text%3E%3C/svg%3E")}
+  .mark{color:#137a5f;background:#eef7f3;border-color:#cfe6dc}
   .wrap{max-width:none;padding:0}
   .it{background:#fff;border-color:#dcdcdc;break-inside:avoid}
   section{break-inside:avoid}
@@ -350,7 +366,7 @@ ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px
 }
 </style></head><body><div class="wrap">
 ${req.query.print ? '' : `<div class="tools"><a href="${base}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(req.params.userId)}.pdf">Download PDF</a><a href="javascript:window.print()">Print</a></div>`}
-<div class="hd"><h1>${ogEsc(who)}&rsquo;s plan</h1><p>${ogEsc(trip.name)} · ${ogEsc(ogDateRange(trip.checkin, trip.checkout_5n))}</p></div>
+<div class="hd"><span class="mark"><i></i> ${ogEsc(who)}&rsquo;s idea &middot; not the group&rsquo;s decision</span><h1>${ogEsc(who)}&rsquo;s plan</h1><p>${ogEsc(trip.name)} · ${ogEsc(ogDateRange(trip.checkin, trip.checkout_5n))}</p></div>
 ${sections || '<p style="color:var(--mut)">No activities picked yet.</p>'}
 ${req.query.print ? '' : `<a class="cta" href="${boardHash(trip.id, '', base)}">Open the board &amp; build your own plan</a>`}
 <p class="ft">Made with GroupPad · booking happens on Airbnb</p>
