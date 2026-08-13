@@ -1,5 +1,5 @@
-# GroupPad — https://goldhac.com
+# GroupPad — https://grouppad.goldhac.com
 User-agent: *
 Allow: /
 
-Sitemap: https://goldhac.com/sitemap.xml
+Sitemap: https://grouppad.goldhac.com/sitemap.xml

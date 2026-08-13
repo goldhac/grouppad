@@ -4,7 +4,7 @@ import {
   ThumbsUp, ThumbsDown, Star, ExternalLink, MapPin, Plane, FerrisWheel, Link2, X,
   ChevronLeft, ChevronRight, Maximize2, Navigation, Wallet, Users, BedDouble, Bath,
   ListChecks, Sparkles, Waves, SquareParking, Wifi, Utensils, Wind, WashingMachine,
-  Award, BadgeCheck, GitCompare, Lock, HelpCircle, Check, Clapperboard, Bookmark,
+  Award, BadgeCheck, GitCompare, Lock, HelpCircle, Check, Clapperboard, Bookmark, Compass,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -12,8 +12,9 @@ import { MobileDetail } from '@/views/MobileDetail';
 import { Icon } from '@/components/ui/Icon';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { cn } from '@/lib/cn';
-import { fmt, fmtMins, tallyVotes } from '@/lib/utils';
+import { fmt, fmtMins, tallyVotes, expAnchor, expDistanceMi } from '@/lib/utils';
 import { useCountUp } from '@/lib/useCountUp';
+import { track } from '@/lib/analytics';
 import type { ListingTour } from '@/types';
 
 /** The signature per-person figure — counts up when the modal opens. */
@@ -53,7 +54,7 @@ export function DetailModal() {
   const {
     detailId, closeDetail, findListing, trip, split, setSplit,
     user, votes, final, isOwner, selected, favoriteIds, castVote, toggleFinalPick, toggleFavorite, setDecision, toggleSelect, requireSignIn,
-    reviewsMap, loadReviewsFor, toursMap, generateTour, toast, aiWhy,
+    reviewsMap, loadReviewsFor, toursMap, generateTour, toast, aiWhy, experiences,
   } = useApp();
   const isMobile = useIsMobile();
 
@@ -118,6 +119,17 @@ export function DetailModal() {
   const rev = reviewsMap[`${l.source}:${l.id}`];
   const tour = toursMap[l.id];
   const hasTour = tour?.status === 'ready' && tour.clips.some((c) => c.videoUrl);
+
+  // "Things to do nearby" (spec: experiences.md §4 Phase 2.3) — the 4 closest
+  // experiences to this home. Anchor = the home's own coords when the scrape
+  // captured them, else the trip's primary ref point (labeled honestly); when
+  // neither exists, or nothing has coords, the strip doesn't render at all.
+  const nearAnchor = expAnchor(l, trip);
+  const nearby = experiences
+    .map((x) => ({ x, mi: expDistanceMi(nearAnchor, x) }))
+    .filter((e): e is { x: typeof e.x; mi: number } => e.mi != null)
+    .sort((a, b) => a.mi - b.mi)
+    .slice(0, 4);
 
   const leftBadge = isDecision ? (
     <span className="badge badge-rank"><Icon icon={BadgeCheck} className="ico" /> Official pick</span>
@@ -233,6 +245,29 @@ export function DetailModal() {
                       <div className="dx-map">
                         <iframe key={mapSrc} title="Map" loading="lazy" referrerPolicy="no-referrer-when-downgrade" src={mapSrc} />
                         <span className="map-pin"><Icon icon={MapPin} className="ico" /></span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* things to do nearby — surroundings inform the home vote (Phase 2.3) */}
+                  {nearby.length > 0 && (
+                    <div>
+                      <div className="dx-section-label"><Icon icon={Compass} className="ico" /> Things to do nearby</div>
+                      <div className="dx-nearby">
+                        {nearby.map(({ x, mi }) => (
+                          <a
+                            key={x.id}
+                            className="dx-nearcard"
+                            href={x.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => track('experience_nearby_clicked', { experience_id: x.id, listing_id: l.id, mi })}
+                          >
+                            <img src={x.photo ?? ''} alt="" loading="lazy" onError={(e) => (e.currentTarget.style.opacity = '0')} />
+                            <span className="t">{x.title}</span>
+                            <span className="m tnum">{mi} mi from {nearAnchor!.label}{x.price != null ? ` · from $${x.price}` : ''}</span>
+                          </a>
+                        ))}
                       </div>
                     </div>
                   )}

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import { Plus, MapPin, Calendar, Crown, ArrowRight } from 'lucide-react';
+import { Plus, MapPin, Calendar, Crown, ArrowRight, RotateCw } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { MobileTrips } from '@/views/MobileTrips';
@@ -73,7 +73,7 @@ function TripCard({ trip, i }: { trip: TripView; i: number }) {
 }
 
 export function TripsView() {
-  const { user, myTrips, accountLoading, refreshMyTrips, openAuth } = useApp();
+  const { user, myTrips, accountLoading, refreshMyTrips, openAuth, tripsError } = useApp();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
@@ -117,7 +117,17 @@ export function TripsView() {
           )}
         </div>
 
-        {count === 0 && previous.length === 0 ? (
+        {tripsError && count === 0 && previous.length === 0 ? (
+          /* A failed fetch and an empty account look identical otherwise, so a
+             network blip used to tell a returning user they had no trips. */
+          <div className="flex flex-col items-center gap-3 py-16 text-center">
+            <p className="text-lg font-semibold">Could not load your trips</p>
+            <p className="max-w-sm text-sm text-text-muted">{tripsError}</p>
+            <button className="btn btn-primary" onClick={() => void refreshMyTrips()}>
+              <Icon icon={RotateCw} className="ico" /> Try again
+            </button>
+          </div>
+        ) : count === 0 && previous.length === 0 ? (
           <div className="trips-empty">
             <div className="editorial">
               <div className="bg" style={{ backgroundImage: `url(${photoFor(0)})` }} />

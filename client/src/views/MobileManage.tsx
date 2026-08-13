@@ -59,7 +59,7 @@ export function MobileManage() {
   const sendInvites = async () => { if (!emails.trim()) return toast('Add an email address first.', 'error'); try { const r = await api.invite(trip.id, emails.trim()); toast(`Invite sent to ${r.sent} ${r.sent === 1 ? 'person' : 'people'}.`, 'success'); setEmails(''); } catch (e) { toast(e instanceof Error ? e.message : 'Could not send invites.', 'error'); } };
   const saveSettings = async () => {
     if (!form.name.trim() || !form.destination.trim() || !form.checkin || !form.checkout_5n || form.checkout_5n <= form.checkin || Number(form.adults) < 2 || Number(form.budget) <= 0) return toast('Check the highlighted fields.', 'error');
-    try { await api.patchTrip(trip.id, { name: form.name.trim(), destination: form.destination.trim(), checkin: form.checkin, checkout_5n: form.checkout_5n, adults: Number(form.adults), budget: Number(form.budget), home_type: form.home_type }); await enterTrip(trip.id); toast('Trip settings saved.', 'success'); } catch (e) { toast(e instanceof Error ? e.message : 'Could not save.', 'error'); }
+    try { await api.patchTrip(trip.id, { name: form.name.trim(), destination: form.destination.trim(), checkin: form.checkin, checkout_5n: form.checkout_5n, adults: Number(form.adults), budget: Number(form.budget), home_type: form.home_type }); await enterTrip(trip.id, true); toast('Trip settings saved.', 'success'); } catch (e) { toast(e instanceof Error ? e.message : 'Could not save.', 'error'); }
   };
   const run = async () => {
     const c = confirm; if (!c) return;
@@ -67,8 +67,8 @@ export function MobileManage() {
     setConfirm(null); setDelText('');
     try {
       if (c.kind === 'reset') { await setDecision(null); toast('Official pick reset.', 'success'); api.tripPulse(trip.id).then(setPulse).catch(() => {}); }
-      else if (c.kind === 'close') { const next = !trip.voting_closed; await api.patchTrip(trip.id, { voting_closed: next }); await enterTrip(trip.id); toast(next ? 'Voting closed.' : 'Voting reopened.', 'success'); }
-      else if (c.kind === 'transfer' && c.member) { await api.transferOrganizer(trip.id, c.member.id); toast(`${c.member.name} is now the trip creator.`, 'success'); await enterTrip(trip.id); navigate(`/t/${trip.id}/board`); }
+      else if (c.kind === 'close') { const next = !trip.voting_closed; await api.patchTrip(trip.id, { voting_closed: next }); await enterTrip(trip.id, true); toast(next ? 'Voting closed.' : 'Voting reopened.', 'success'); }
+      else if (c.kind === 'transfer' && c.member) { await api.transferOrganizer(trip.id, c.member.id); toast(`${c.member.name} is now the trip creator.`, 'success'); await enterTrip(trip.id, true); navigate(`/t/${trip.id}/board`); }
       else if (c.kind === 'promote' && c.member) { await api.makeOrganizer(trip.id, c.member.id); setMembers((m) => m.map((x) => x.id === c.member!.id ? { ...x, role: 'organizer' } : x)); toast(`${c.member.name} is now an organizer.`, 'success'); }
       else if (c.kind === 'demote' && c.member) { await api.removeOrganizer(trip.id, c.member.id); setMembers((m) => m.map((x) => x.id === c.member!.id ? { ...x, role: 'member' } : x)); toast(`${c.member.name} is a member again.`, 'success'); }
       else if (c.kind === 'remove' && c.member) { await api.removeMember(trip.id, c.member.id); setMembers((m) => m.filter((x) => x.id !== c.member!.id)); toast('Member removed.', 'success'); }

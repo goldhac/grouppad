@@ -5,6 +5,10 @@ import type {
   CompareListingInput,
   ScoutVerdict,
   CreateTripInput,
+  Experience,
+  ExpVotesMap,
+  ExpPlan,
+  ExpDaysMap,
   FinalState,
   Insights,
   Itinerary,
@@ -185,6 +189,30 @@ export const api = {
   final: (tripId: string) => request<FinalState>(`${t(tripId)}/final`),
   finalVote: (tripId: string, listing_id: string | null) =>
     request<FinalState>(`${t(tripId)}/final-vote`, { method: 'POST', body: { listing_id } }),
+  // Experiences ("things to do") — scraped list + its own votes store.
+  experiences: (tripId: string) =>
+    request<{ experiences: Experience[]; pending: boolean }>(`${t(tripId)}/experiences`),
+  refreshExperiences: (tripId: string) =>
+    request<{ ok: true; started: boolean }>(`${t(tripId)}/experiences/refresh`, { method: 'POST' }),
+  expVotes: (tripId: string) => request<ExpVotesMap>(`${t(tripId)}/exp-votes`),
+  expReviews: (tripId: string, experienceId: string) =>
+    request<ListingReviews | null>(`${t(tripId)}/experiences/${encodeURIComponent(experienceId)}/reviews`),
+  expPlan: (tripId: string) => request<ExpPlan | null>(`${t(tripId)}/exp-plan`),
+  tripDays: (tripId: string) => request<{ days: string[] }>(`${t(tripId)}/days`),
+  expDays: (tripId: string) => request<ExpDaysMap>(`${t(tripId)}/exp-days`),
+  expSaves: (tripId: string) => request<{ ids: string[] }>(`${t(tripId)}/exp-saves`),
+  toggleExpSave: (tripId: string, experience_id: string, on?: boolean) =>
+    request<{ ids: string[] }>(`${t(tripId)}/exp-saves`, { method: 'POST', body: { experience_id, on } }),
+  myPlan: (tripId: string) => request<ExpPlan | null>(`${t(tripId)}/my-plan`),
+  buildMyPlan: (tripId: string, ids?: string[]) =>
+    request<ExpPlan>(`${t(tripId)}/my-plan`, { method: 'POST', body: { ids } }),
+  setExpDay: (tripId: string, experience_id: string, day: string | null) =>
+    request<ExpDaysMap>(`${t(tripId)}/exp-days`, { method: 'POST', body: { experience_id, day } }),
+  planExperiences: (tripId: string, force?: boolean) =>
+    request<ExpPlan>(`${t(tripId)}/plan-experiences`, { method: 'POST', body: { force } }),
+  expVote: (tripId: string, experience_id: string, vote: VoteDir | null) =>
+    request<ExpVotesMap>(`${t(tripId)}/exp-votes`, { method: 'POST', body: { experience_id, vote } }),
+
   favorites: (tripId: string) => request<{ ids: string[] }>(`${t(tripId)}/favorites`),
   toggleFavorite: (tripId: string, listing_id: string, on?: boolean) =>
     request<{ ids: string[] }>(`${t(tripId)}/favorites`, { method: 'POST', body: { listing_id, on } }),

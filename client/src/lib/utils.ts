@@ -1,4 +1,4 @@
-import type { Listing, VoteDir, VotesMap, YesNoUnknown } from '@/types';
+import type { Experience, Listing, TripView, VoteDir, VotesMap, YesNoUnknown } from '@/types';
 
 /** Hardcoded trip params used to build "open with dates" links (matches legacy app). */
 export const TRIP = {
@@ -179,6 +179,58 @@ export function mdToHtml(md: string): string {
   }
   closeList();
   return out.join('\n');
+}
+
+/**
+ * Straight-line miles between two coordinates (haversine), one decimal.
+ * Client sibling of server.js/pipeline.js `haversineMi` — but WITHOUT their
+ * 1.25 road factor: experience distances read "X mi from …", not drive
+ * estimates, so we don't fake routing. Returns null on any bad input.
+ */
+export function haversineMi(lat1: number, lng1: number, lat2: number, lng2: number): number | null {
+  if ([lat1, lng1, lat2, lng2].some((v) => typeof v !== 'number' || isNaN(v))) return null;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const R = 3958.8;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 10) / 10;
+}
+
+/** Where experience distances are measured FROM (spec: experiences.md §4 Phase 2). */
+export interface ExpAnchor {
+  lat: number;
+  lng: number;
+  /** Honest label for the UI: "your place" or the ref point's name. */
+  label: string;
+  /** True when anchored on the home itself (real coords), not an area ref point. */
+  fromHome: boolean;
+}
+
+/**
+ * Best available anchor for "X mi from …" on experiences: the home's own
+ * coords when the scrape captured them (submitted homes often do), else the
+ * trip's primary reference point (downtown → airport → attraction). Curated
+ * and pipeline homes carry precomputed `distances` chips but NO lat/lng, so
+ * the ref-point fallback keeps the label honest rather than faking a
+ * from-the-home number. Null → hide all distance UI.
+ */
+export function expAnchor(l: Listing | null | undefined, trip: TripView | null): ExpAnchor | null {
+  if (l && typeof l.lat === 'number' && typeof l.lng === 'number') {
+    return { lat: l.lat, lng: l.lng, label: 'your place', fromHome: true };
+  }
+  const refs = trip?.ref_points;
+  const p = refs?.downtown ?? refs?.airport ?? refs?.attraction;
+  if (p && typeof p.lat === 'number' && typeof p.lng === 'number') {
+    return { lat: p.lat, lng: p.lng, label: p.name || 'the area center', fromHome: false };
+  }
+  return null;
+}
+
+/** Miles from an anchor to an experience, or null when it has no coords. */
+export function expDistanceMi(anchor: ExpAnchor | null, x: Experience): number | null {
+  if (!anchor || x.lat == null || x.lng == null) return null;
+  return haversineMi(anchor.lat, anchor.lng, x.lat, x.lng);
 }
 
 /** Minutes → "14 min" / "1h 5m". */

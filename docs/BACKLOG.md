@@ -47,6 +47,27 @@ removed? Currently they remain. Decide and, if yes, extend
 
 ---
 
+## GP-4 · PostHog-driven Tier-2 review (autonomous) — PARKED
+**Type:** Analytics / planning · **Priority:** Low (revisit ~2026-08-18)
+PostHog analytics + error tracking are LIVE (US project 548004). Plan was a 7-day
+autonomous cloud routine that queries the funnel via a PostHog personal API key and
+re-ranks Tier 2 in `docs/AUDIT.md`. **Parked:** creating the personal API key needs a
+PostHog security re-auth only the user can complete. Resume: user re-auths → create a
+read-only key → embed in a one-time cloud routine (run_once_at ~2026-08-18). Until then,
+data is still accumulating; do the Tier-2 review manually with the user when they're active.
+
+---
+
+## GP-5 · "Experiences" — things to do near the chosen rental — DESIGN
+**Type:** Product / feature · **Priority:** High (next big feature)
+GroupPad's take on Airbnb Experiences: once a group is looking at / has picked a rental,
+surface things to do nearby — browsable during selection, votable like homes, feedable into
+Scout's AI decision, and roll-up-able into a generated day-list/itinerary. Data via a FREE
+self-hosted Airbnb Experiences scraper (same self-host approach as homes; built in `experiences.js`).
+Feature list drafted 2026-08-11 (see chat). Scraper build in progress. Decide scope, then build.
+
+---
+
 ## Done (recent)
 - Themes system (6 skins) — organizer default + personal override, web + mobile,
   onboarding + guided tour; never themes public/landing pages. **Shipped.**

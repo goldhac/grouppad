@@ -1,4 +1,6 @@
 const express = require('express');
+const compression = require('compression');
+const helmet = require('helmet');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -37,6 +39,15 @@ function isSuperAdmin(user) {
 // persistent volume so it survives deploys/restarts. Static base data
 // (listings.json, seed snapshot) stays bundled in the image.
 const DATA_DIR = process.env.PIPELINE_DATA_DIR || path.join(__dirname, 'data');
+// Durability guard: in production the mutable store MUST live on the mounted
+// persistent volume (PIPELINE_DATA_DIR), never inside the image at __dirname/data
+// — that path is ephemeral and wiped on every deploy, silently taking every
+// account, vote, and locked decision with it. Refuse to boot rather than run a
+// data-losing config that looks fine until the next redeploy.
+if (process.env.NODE_ENV === 'production' && DATA_DIR === path.join(__dirname, 'data')) {
+  console.error('[data] FATAL: PIPELINE_DATA_DIR is not set in production — refusing to boot on the ephemeral image filesystem (data would be wiped on every deploy). Point it at the mounted Railway volume.');
+  process.exit(1);
+}
 try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch {}
 
 // The curated main list lives bundled in the image as a seed, but edits
@@ -56,13 +67,71 @@ const FINALVOTES_FILE = path.join(DATA_DIR, 'finalvotes.json');      // persiste
 const DECISION_FILE   = path.join(DATA_DIR, 'decision.json');        // persisted (admin-locked final pick)
 const USAGE_FILE      = path.join(DATA_DIR, 'usage.json');           // persisted (app-side API meter, by month)
 
+// Security headers. Anti-clickjacking (X-Frame-Options), nosniff, HSTS, and a
+// tightened Referrer-Policy, plus hiding X-Powered-By. CSP is intentionally OFF
+// for now — a correct policy has to allow Google Fonts, PostHog, Google OAuth,
+// and Airbnb/VRBO image CDNs, and shipping a wrong one silently breaks the app;
+// tracked as a follow-up. COEP/CORP are relaxed because the app loads cross-origin
+// images and fonts, and the OG image is fetched cross-origin by social scrapers.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  hsts: { maxAge: 15552000, includeSubDomains: true },
+}));
+
+// Gzip/brotli every response (HTML, JS, CSS, JSON API payloads). Railway's proxy
+// does not compress for us, so without this the client downloads ~3.5× the bytes.
+// Must come before the static + API middleware so their output is compressed.
+app.use(compression());
 app.use(express.json({ limit: '256kb' }));
 app.use((req, res, next) => attachUser(req, res, next));
 // Serve the compiled React client (Vite build) first; fall back to the legacy
 // static `public/` assets for anything not produced by the build. The client
 // uses HashRouter, so the server only ever needs to serve `/` → index.html.
-app.use(express.static(path.join(__dirname, 'client', 'dist')));
-app.use(express.static(path.join(__dirname, 'public')));
+//
+// Cache policy: Vite emits content-hashed files under /assets/ (safe to cache
+// forever — a change means a new filename), so mark those immutable. index.html
+// must stay revalidated so a deploy's new asset hashes are picked up promptly.
+// Other bundled statics (videos, og.jpg, favicon, manifest) get a modest TTL.
+const setStaticCache = (res, filePath) => {
+  if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  } else if (filePath.endsWith('.html')) {
+    res.setHeader('Cache-Control', 'no-cache');
+  } else {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
+};
+// Public runtime config injected into the SPA shell. This lets client-side keys
+// (PostHog analytics/error-monitoring) be configured with a normal Railway
+// variable — no rebuild to change, and nothing secret here (the PostHog *project*
+// key is publishable by design). Built once at boot; empty key → client no-ops.
+const CLIENT_DIST = path.join(__dirname, 'client', 'dist');
+const PUBLIC_CONFIG = {
+  posthogKey: process.env.POSTHOG_KEY || '',
+  posthogHost: process.env.POSTHOG_HOST || 'https://us.i.posthog.com',
+};
+function buildIndexHtml() {
+  try {
+    const html = fs.readFileSync(path.join(CLIENT_DIST, 'index.html'), 'utf8');
+    // Escape '<' so a value can't break out of the inline <script>.
+    const cfg = JSON.stringify(PUBLIC_CONFIG).replace(/</g, '\\u003c');
+    return html.replace('</head>', `<script>window.__PUBLIC_CONFIG__=${cfg};</script></head>`);
+  } catch { return null; }
+}
+let INDEX_HTML = buildIndexHtml();
+// Serve the injected shell for the SPA entry. HashRouter means only '/' (and a
+// direct '/index.html') ever need the shell; deep links live in the '#' fragment.
+app.get(['/', '/index.html'], (req, res, next) => {
+  if (!INDEX_HTML) INDEX_HTML = buildIndexHtml();
+  if (!INDEX_HTML) return next(); // dev without a build → fall through to static
+  res.setHeader('Cache-Control', 'no-cache');
+  res.type('html').send(INDEX_HTML);
+});
+
+app.use(express.static(path.join(__dirname, 'client', 'dist'), { setHeaders: setStaticCache }));
+app.use(express.static(path.join(__dirname, 'public'), { setHeaders: setStaticCache }));
 
 // ── Scenario-specific link previews (Open Graph) ───────────────────────────────
 // The app is a HashRouter SPA, so a crawler hitting a shared "#/..." link only
@@ -170,6 +239,124 @@ app.get('/s/b/:tripId', (req, res) => {
   }));
 });
 
+// "This is my plan" — a member's personal itinerary as a real, self-contained
+// page they can paste into the group chat. Unlike the other /s/* routes this
+// RENDERS the content (it isn't a preview that bounces to the app), because the
+// whole point is that people without the app can read it in the thread.
+// Downloadable PDF of the same plan page. Rendered with the Chromium we already
+// ship for scraping — no new dependency. MUST be registered before the HTML route
+// below: Express's `:userId` would otherwise swallow the ".pdf" suffix.
+// Falls back to a clear message (not a broken download) if Chromium is missing.
+app.get('/s/plan/:tripId/:userId.pdf', rateLimit({ windowMs: 300000, max: 10 }), async (req, res) => {
+  const { tripId } = req.params;
+  const userId = String(req.params.userId || '');
+  const trip = getTrip(tripId);
+  const plan = trip && loadMyPlans(tripId)[userId];
+  if (!plan) return res.status(404).send('No plan to export yet.');
+
+  const url = `${reqBase(req)}/s/plan/${encodeURIComponent(tripId)}/${encodeURIComponent(userId)}?print=1`;
+  let browser;
+  try {
+    const { chromium } = require('playwright-core');
+    browser = await chromium.launch({
+      executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium',
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 20000 });
+    const pdf = await page.pdf({
+      format: 'Letter', printBackground: true,
+      margin: { top: '14mm', bottom: '14mm', left: '12mm', right: '12mm' },
+    });
+    const who = (plan.owner_name || 'my').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${who}-plan-${tripId}.pdf"`,
+      'Cache-Control': 'private, max-age=60',
+    }).send(pdf);
+  } catch (e) {
+    console.error('[plan-pdf]', e.message);
+    res.status(503).send('Could not build the PDF right now — open the plan page and use your browser\'s Print → Save as PDF.');
+  } finally {
+    try { await browser?.close(); } catch {}
+  }
+});
+
+app.get('/s/plan/:tripId/:userId', (req, res) => {
+  const base = reqBase(req);
+  const trip = getTrip(req.params.tripId);
+  if (!trip) return res.redirect(302, `${base}/`);
+  const plan = loadMyPlans(req.params.tripId)[req.params.userId];
+  if (!plan) return res.redirect(302, boardHash(trip.id, '', base));
+  const byId = new Map(loadExperiences(trip.id).map((x) => [String(x.id), x]));
+  const who = plan.owner_name || 'A member';
+  const dayName = (d) => {
+    if (!d) return 'Any day';
+    try { return new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }); }
+    catch { return d; }
+  };
+  let firstPhoto = null;
+  const sections = plan.days.map((d) => {
+    const items = d.items.map((it) => byId.get(String(it.id))).filter(Boolean);
+    if (!items.length) return '';
+    if (!firstPhoto) firstPhoto = items[0].photo;
+    const thumb = (u) => (u && !u.includes('?') ? `${u}?im_w=240` : u);
+    const li = items.map((x) => `<li class="it">
+      ${x.photo ? `<img src="${ogEsc(thumb(x.photo))}" alt="" loading="lazy">` : '<span class="ph"></span>'}
+      <span class="tx"><b>${ogEsc(x.title)}</b><small>${[x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : '', x.duration != null ? `${Math.round(x.duration / 60 * 10) / 10}h` : ''].filter(Boolean).join(' · ')}</small></span>
+      <a class="go" href="${ogEsc(x.url)}" target="_blank" rel="noopener">Open</a></li>`).join('');
+    return `<section><h2>${ogEsc(dayName(d.day))}</h2><ul>${li}</ul></section>`;
+  }).join('');
+
+  const title = `${who}'s plan for ${trip.name}`;
+  const desc = `${who} put together a day-by-day plan of things to do in ${trip.destination}. See it and build your own on GroupPad.`;
+  res.set('Cache-Control', 'public, max-age=120').send(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${ogEsc(title)}</title><meta name="description" content="${ogEsc(desc)}">
+<meta property="og:type" content="website"><meta property="og:title" content="${ogEsc(title)}">
+<meta property="og:description" content="${ogEsc(desc)}">
+<meta property="og:image" content="${ogEsc(ogImage(firstPhoto, base))}">
+<meta property="og:url" content="${base}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(req.params.userId)}">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+:root{color-scheme:dark;--bg:#121a18;--card:#182421;--line:#24322e;--tx:#eaf2ef;--mut:#9db3ac;--ac:#3fa88a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+.wrap{max-width:640px;margin:0 auto;padding:28px 18px 60px}
+.hd{margin-bottom:22px}.hd h1{font-size:24px;margin:0 0 4px}.hd p{margin:0;color:var(--mut);font-size:14px}
+section{margin:0 0 18px}section h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--ac);margin:0 0 8px}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.it{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+.it img,.it .ph{width:52px;height:52px;border-radius:8px;object-fit:cover;flex:none;background:#20302b}
+.tx{flex:1;min-width:0}.tx b{display:block;font-size:14.5px;font-weight:600}
+.tx small{color:var(--mut);font-size:12.5px}
+.go{flex:none;color:var(--ac);text-decoration:none;font-size:13px;font-weight:600;border:1px solid var(--line);padding:6px 11px;border-radius:8px}
+.cta{display:block;margin-top:26px;text-align:center;background:var(--ac);color:#08120f;font-weight:700;text-decoration:none;padding:13px;border-radius:12px}
+.ft{margin-top:14px;text-align:center;color:var(--mut);font-size:12px}
+.tools{display:flex;gap:8px;justify-content:flex-end;margin-bottom:14px}
+.tools a{color:var(--mut);text-decoration:none;font-size:12.5px;border:1px solid var(--line);padding:6px 11px;border-radius:8px}
+/* Printing / PDF: ink-friendly light theme, no interactive chrome, never split a
+   day across pages. Same markup, so the PDF matches what people see on the page. */
+@media print{
+  :root{color-scheme:light}
+  body{background:#fff;color:#111}
+  .wrap{max-width:none;padding:0}
+  .it{background:#fff;border-color:#dcdcdc;break-inside:avoid}
+  section{break-inside:avoid}
+  section h2{color:#137a5f}
+  .tx small{color:#555}
+  .go,.cta,.tools{display:none!important}
+  .hd p,.ft{color:#555}
+}
+</style></head><body><div class="wrap">
+${req.query.print ? '' : `<div class="tools"><a href="${base}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(req.params.userId)}.pdf">Download PDF</a><a href="javascript:window.print()">Print</a></div>`}
+<div class="hd"><h1>${ogEsc(who)}&rsquo;s plan</h1><p>${ogEsc(trip.name)} · ${ogEsc(ogDateRange(trip.checkin, trip.checkout_5n))}</p></div>
+${sections || '<p style="color:var(--mut)">No activities picked yet.</p>'}
+${req.query.print ? '' : `<a class="cta" href="${boardHash(trip.id, '', base)}">Open the board &amp; build your own plan</a>`}
+<p class="ft">Made with GroupPad · booking happens on Airbnb</p>
+</div></body></html>`);
+});
+
 // ── File helpers ─────────────────────────────────────────────────────────────
 
 // Atomic write: write to a temp file then rename, so a crash mid-write can't
@@ -224,6 +411,16 @@ function saveListings(d, tripId) {
 
 function loadVotes(tripId)     { return readJson(tripFile(tripId, 'votes.json'), {}); }
 function saveVotes(v, tripId)  { writeJsonAtomic(tripFile(tripId, 'votes.json'), v); }
+
+// Experiences ("things to do") — scraped rows + their own votes store. Kept in a
+// SEPARATE file from home votes so group-pulse "% voted" and the decision math
+// never see experience ids.
+function loadExperiences(tripId) {
+  const rows = readJson(tripFile(tripId, 'experiences.json'), []);
+  return Array.isArray(rows) ? rows : [];
+}
+function loadExpVotes(tripId)    { return readJson(tripFile(tripId, 'exp-votes.json'), {}); }
+function saveExpVotes(v, tripId) { writeJsonAtomic(tripFile(tripId, 'exp-votes.json'), v); }
 
 function loadSubmitted(tripId)    { return readJson(tripFile(tripId, 'submitted.json'), []); }
 function saveSubmitted(l, tripId) { writeJsonAtomic(tripFile(tripId, 'submitted.json'), l); }
@@ -306,7 +503,10 @@ function createTrip(owner, f) {
   const trips = loadTrips();
   // Always append random entropy so the id is unguessable — the id itself is the
   // "view-by-link" secret (unlisted trips), while join_code gates participation.
-  const id = `${slugify(f.name || f.destination)}-${crypto.randomBytes(4).toString('hex')}`;
+  // 10 bytes = 80 bits: the slug is guessable (from the destination), so the suffix
+  // is the real secret — 4 bytes (32 bits) was brute-forceable against the open
+  // read routes; 80 bits makes enumeration infeasible. Existing shorter ids still work.
+  const id = `${slugify(f.name || f.destination)}-${crypto.randomBytes(10).toString('hex')}`;
   const trip = {
     id,
     name: String(f.name || `${f.destination} trip`).slice(0, 80),
@@ -390,6 +590,10 @@ function tripView(trip, user) {
     // official pick locked. Both stop refreshes + notifications.
     past: isTripPast(trip),
     settled: isTripSettled(trip),
+    // Distance reference points (downtown/airport/attraction) so the client can
+    // compute "X mi from …" on experiences (spec: experiences.md §4 Phase 2).
+    // LA's live in the fixed LA_REFS constant; other trips carry their own.
+    ref_points: tripRefPoints(trip.id) || null,
     // Organizers see the invite code, member list, owner id, and organizer list.
     ...(organizer ? { join_code, members, organizers: organizers || [], owner_id } : {}),
   };
@@ -679,19 +883,31 @@ const boardUrl = (tripId) => `${APP_BASE_URL}/#/t/${tripId}/board`;
 
 // Generic transactional send (member digests, instant alerts, invites).
 // Returns true on success; never throws — email is best-effort.
-async function sendEmail(to, subject, html) {
+// Bounded retry on TRANSIENT failures (429 rate-limit, 5xx, network blips). A
+// dropped magic link is a silent login outage for that person, so it is worth a
+// couple of extra seconds here. 4xx other than 429 is permanent (bad address,
+// unverified domain) — retrying those just burns time.
+async function sendEmail(to, subject, html, { attempts = 3 } = {}) {
   const key = process.env.RESEND_API_KEY;
   if (!key || !isEmail(to)) { console.log(`[mail] (skipped) ${subject} → ${to}`); return false; }
   const from = process.env.MAIL_FROM || 'GroupPad <onboarding@resend.dev>';
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, html }),
-    });
-    if (!res.ok) { console.error('[mail] send failed:', res.status); return false; }
-    return true;
-  } catch (e) { console.error('[mail] send error:', e.message); return false; }
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      const res = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to: [to], subject, html }),
+      });
+      if (res.ok) { if (i > 1) console.log(`[mail] sent on attempt ${i}: ${subject}`); return true; }
+      const transient = res.status === 429 || res.status >= 500;
+      console.error(`[mail] send failed (${res.status})${transient ? `, attempt ${i}/${attempts}` : ', permanent'}: ${subject}`);
+      if (!transient) return false;
+    } catch (e) {
+      console.error(`[mail] send error (attempt ${i}/${attempts}): ${e.message}`);
+    }
+    if (i < attempts) await new Promise((r) => setTimeout(r, 400 * 2 ** (i - 1))); // 400ms, 800ms
+  }
+  return false;
 }
 
 // Per-user prefs live on the user record: { notif:{digest,instant}, unsub }.
@@ -2096,8 +2312,16 @@ app.post('/api/auth/request-link', rateLimit({ windowMs: 60000, max: 5 }), async
   // request Host header (a caller can spoof Host to point a valid token at their
   // own domain and harvest it on click → account takeover).
   const link = `${APP_BASE_URL}/api/auth/verify?token=${token}`;
-  try { await sendMagicLink(email, link); }
-  catch { return res.status(502).json({ error: 'Could not send the email. Try again shortly.' }); }
+  // sendMagicLink RETURNS false on failure (it doesn't throw), so a try/catch
+  // alone silently reported success and left the person unable to sign in with
+  // no idea why. Check the result and tell them the truth so they can retry.
+  let sent = false;
+  try { sent = await sendMagicLink(email, link); }
+  catch (e) { console.error('[auth] magic link threw:', e.message); }
+  if (!sent) {
+    console.error(`[auth] magic link NOT delivered → ${email}`);
+    return res.status(502).json({ error: 'We could not send that email right now. Try again in a moment, or use Google sign-in.' });
+  }
   res.json({ ok: true });
 });
 
@@ -3136,7 +3360,425 @@ const hFetchReviews = async (req, res) => {
   res.json(shaped);
 };
 app.post('/api/reviews/fetch', requireAuth, rateLimit({ windowMs: 60000, max: 12 }), hFetchReviews);
-app.post('/api/trips/:tripId/reviews/fetch', requireAuth, loadTripOr404, rateLimit({ windowMs: 60000, max: 12 }), hFetchReviews);
+app.post('/api/trips/:tripId/reviews/fetch', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 12 }), hFetchReviews);
+
+// ── Experiences: things to do near the trip ───────────────────────────────────
+// Scraped from Airbnb Experiences by the free self-hosted scraper (experiences.js)
+// via scripts/run-experiences.js, spawned detached like the homes trip-search.
+// Spec: docs/specs/experiences.md.
+function spawnExperiencesSearch(tripId) {
+  const t = getTrip(tripId);
+  if (!t) return false;
+  // Unlike homes, a LOCKED DECISION must not freeze experiences — "you've picked
+  // your place, now plan what to do" is the feature's second anchor moment.
+  // Only a trip whose dates have passed stops updating.
+  if (isTripPast(t)) return false;
+  const marker = tripFile(tripId, '.exp-searching');
+  try { if (fs.existsSync(marker)) return false; } catch {} // already running
+  const { spawn } = require('child_process');
+  const env = { ...process.env, TRIP_ID: tripId, EXP_OUT: tripFile(tripId, 'experiences.json') };
+  // stdio inherited so a failed scrape leaves a trail in the server logs.
+  const child = spawn('node', [path.join('scripts', 'run-experiences.js')], { cwd: __dirname, env, detached: true, stdio: ['ignore', 'inherit', 'inherit'] });
+  child.unref();
+  console.log(`[experiences] spawned for ${tripId}`);
+  return true;
+}
+
+// Open view-by-link, like listings: guests browsing a shared board can see the
+// list; only voting requires membership. Lazily kicks off the first scrape.
+app.get('/api/trips/:tripId/experiences', loadTripOr404, (req, res) => {
+  const tripId = req.params.tripId;
+  const rows = loadExperiences(tripId);
+  let pending = false;
+  try { pending = fs.existsSync(tripFile(tripId, '.exp-searching')); } catch {}
+  if (rows.length === 0 && !pending) pending = spawnExperiencesSearch(tripId);
+  // Staleness respawn: quietly refresh day-old data in the background (serving
+  // the current rows meanwhile). Also how existing files pick up newly-added
+  // fields (e.g. originalPrice/priceUnit) after a deploy — no manual refresh.
+  else if (!pending) {
+    try {
+      const ageMs = Date.now() - fs.statSync(tripFile(tripId, 'experiences.json')).mtimeMs;
+      // Respawn when stale OR when rows predate a schema addition (missing keys).
+      if (ageMs > 24 * 3600 * 1000 || !('originalPrice' in rows[0])) spawnExperiencesSearch(tripId);
+    } catch {}
+  }
+  res.json({ experiences: rows, pending });
+});
+
+app.post('/api/trips/:tripId/experiences/refresh', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 3600000, max: 6 }), (req, res) => {
+  if (isTripPast(req.trip)) return res.status(409).json({ error: 'This trip has ended.' });
+  const started = spawnExperiencesSearch(req.params.tripId);
+  res.json({ ok: true, started });
+});
+
+app.get('/api/trips/:tripId/exp-votes', loadTripOr404, (req, res) => {
+  res.json(loadExpVotes(req.params.tripId));
+});
+
+// Experience reviews — free detail-page fetch (fetchExperienceReviews mirrors the
+// homes ListingReviews shape + an aggregate summary). Cached per trip for 7 days:
+// review churn is slow and the group only needs a flavor. The id must be on the
+// trip's own experiences list so this can't be used as an open proxy.
+const EXP_REVIEWS_TTL_MS = 7 * 24 * 3600 * 1000;
+app.get('/api/trips/:tripId/experiences/:id/reviews', loadTripOr404, rateLimit({ windowMs: 60000, max: 20 }), async (req, res) => {
+  const tripId = req.params.tripId;
+  const expId = String(req.params.id || '');
+  // Namespaced ids: `airbnb:3951041`, `osm:node/123`. Keep the character class
+  // tight (no slashes into path segments beyond what providers use, no traversal).
+  if (!/^[a-z]+:[A-Za-z0-9/_-]{1,64}$/.test(expId)) return res.status(400).json({ error: 'Invalid experience id' });
+  if (!loadExperiences(tripId).some((x) => String(x.id) === expId))
+    return res.status(404).json({ error: 'Experience not on this trip' });
+  // Guest reviews are an Airbnb-page scrape; other providers have none.
+  if (!expId.startsWith('airbnb:')) return res.status(204).json(null);
+  const cacheFile = tripFile(tripId, 'exp-reviews.json');
+  const cache = readJson(cacheFile, {});
+  const hit = cache[expId];
+  if (hit && Date.now() - new Date(hit.fetched_at).getTime() < EXP_REVIEWS_TTL_MS) return res.json(hit);
+  try {
+    const { fetchExperienceReviews } = require('./experiences');
+    const shaped = await fetchExperienceReviews(expId);
+    if (!shaped) return res.status(hit ? 200 : 204).json(hit || null); // soft fail → stale-if-any
+    cache[expId] = shaped;
+    writeJsonAtomic(cacheFile, cache);
+    res.json(shaped);
+  } catch (e) {
+    console.error('[exp-reviews] fetch failed:', e.message);
+    res.status(hit ? 200 : 204).json(hit || null);
+  }
+});
+
+// ── One-time migration: namespace experience ids ─────────────────────────────
+// Experience ids used to be the bare Airbnb id ("3951041"). They key FIVE stores
+// (votes, saves, days, reviews, my-plans), so adding any second provider whose
+// ids are also numeric would silently collide and land a member's vote on the
+// wrong activity. Ids are now `airbnb:3951041`. This rewrites existing per-trip
+// data in place, once, guarded by a marker file.
+function migrateExperienceIds() {
+  const ns = (k) => (/^[a-z]+:/.test(String(k)) ? String(k) : `airbnb:${k}`);
+  let trips = {};
+  try { trips = loadTrips(); } catch { return; }
+  for (const tripId of Object.keys(trips)) {
+    let marker;
+    try { marker = tripFile(tripId, '.exp-ids-namespaced'); } catch { continue; }
+    if (fs.existsSync(marker)) continue;
+    try {
+      const rewriteKeys = (file) => {
+        const f = tripFile(tripId, file);
+        const m = readJson(f, null);
+        if (!m || typeof m !== 'object') return 0;
+        const out = {}; let n = 0;
+        for (const [k, v] of Object.entries(m)) { const k2 = ns(k); if (k2 !== k) n++; out[k2] = v; }
+        if (n) writeJsonAtomic(f, out);
+        return n;
+      };
+      let touched = 0;
+      touched += rewriteKeys('exp-votes.json');
+      touched += rewriteKeys('exp-days.json');
+      touched += rewriteKeys('exp-reviews.json');
+
+      // experiences.json — an ARRAY of rows
+      const ef = tripFile(tripId, 'experiences.json');
+      const rows = readJson(ef, null);
+      if (Array.isArray(rows) && rows.some((r) => r && !/^[a-z]+:/.test(String(r.id)))) {
+        writeJsonAtomic(ef, rows.map((r) => ({ ...r, id: ns(r.id), source: r.source || 'airbnb' })));
+        touched++;
+      }
+      // exp-saves.json — userId → [ids]
+      const sf = tripFile(tripId, 'exp-saves.json');
+      const saves = readJson(sf, null);
+      if (saves && typeof saves === 'object') {
+        const out = {}; let n = 0;
+        for (const [u, ids] of Object.entries(saves)) {
+          out[u] = (Array.isArray(ids) ? ids : []).map((i) => { const j = ns(i); if (j !== i) n++; return j; });
+        }
+        if (n) { writeJsonAtomic(sf, out); touched += n; }
+      }
+      // exp-myplans.json — userId → { days:[{ items:[{id}] }] }
+      const pf = tripFile(tripId, 'exp-myplans.json');
+      const plans = readJson(pf, null);
+      if (plans && typeof plans === 'object') {
+        let n = 0;
+        for (const p of Object.values(plans)) {
+          for (const d of (p?.days || [])) for (const it of (d.items || [])) {
+            const j = ns(it.id); if (j !== it.id) { it.id = j; n++; }
+          }
+        }
+        if (n) { writeJsonAtomic(pf, plans); touched += n; }
+      }
+      // exp-plan.json — the GROUP plan, same nested shape
+      const gf = tripFile(tripId, 'exp-plan.json');
+      const gplan = readJson(gf, null);
+      if (gplan && Array.isArray(gplan.days)) {
+        let n = 0;
+        for (const d of gplan.days) for (const it of (d.items || [])) {
+          const j = ns(it.id); if (j !== it.id) { it.id = j; n++; }
+        }
+        if (n) { writeJsonAtomic(gf, gplan); touched += n; }
+      }
+
+      fs.writeFileSync(marker, new Date().toISOString());
+      if (touched) console.log(`[migrate] namespaced experience ids for ${tripId} (${touched} change(s))`);
+    } catch (e) { console.error(`[migrate] experience ids failed for ${tripId}:`, e.message); }
+  }
+}
+
+// ── Scout · Plan (Experiences) ────────────────────────────────────────────────
+// The 4th Scout job — see docs/specs/scout.md §2. Turns the group's UP-VOTED
+// experiences into a day-by-day plan for the trip's dates. Deliberate (never
+// automatic), group-shared, cached by a votes+dates hash so re-opening is free,
+// with a non-AI fallback so the button always produces something.
+function loadExpPlan(tripId) { return readJson(tripFile(tripId, 'exp-plan.json'), null); }
+function saveExpPlan(tripId, v) { writeJsonAtomic(tripFile(tripId, 'exp-plan.json'), v); }
+
+// Days of the trip as YYYY-MM-DD (capped — nobody plans 30 days of activities).
+function tripDays(trip, cap = 7) {
+  const out = [];
+  try {
+    const start = new Date(`${trip.checkin}T00:00:00`);
+    const end = new Date(`${trip.checkout_5n || trip.checkout}T00:00:00`);
+    for (let d = new Date(start); d < end && out.length < cap; d.setDate(d.getDate() + 1)) {
+      out.push(d.toISOString().slice(0, 10));
+    }
+  } catch {}
+  return out;
+}
+
+// No-AI fallback: spread the top-voted experiences across the days in vote order.
+function heuristicPlan(days, picks) {
+  if (!days.length) return [{ day: null, items: picks.slice(0, 6).map((p) => ({ id: p.id, why: null })) }];
+  const per = Math.max(1, Math.ceil(Math.min(picks.length, days.length * 2) / days.length));
+  return days.map((day, i) => ({ day, items: picks.slice(i * per, i * per + per).map((p) => ({ id: p.id, why: null })) }))
+             .filter((d) => d.items.length);
+}
+
+app.post('/api/trips/:tripId/plan-experiences', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 3600000, max: 10 }), async (req, res) => {
+  const tripId = req.params.tripId;
+  const trip = req.trip;
+  const rows = loadExperiences(tripId);
+  const votes = loadExpVotes(tripId);
+  // Candidates = what the group actually likes (net up-votes), best first.
+  const netOf = (id) => Object.values(votes[id] || {}).reduce((n, d) => n + (d === 'up' ? 1 : -1), 0);
+  const picks = rows.filter((x) => netOf(x.id) >= 1)
+                    .sort((a, b) => netOf(b.id) - netOf(a.id) || ((b.rating ?? 0) - (a.rating ?? 0)))
+                    .slice(0, 12);
+  if (!picks.length) return res.status(400).json({ error: 'Vote on a few things first — Scout plans from what the group likes.' });
+
+  const days = tripDays(trip);
+  const hash = crypto.createHash('sha1')
+    .update(JSON.stringify(picks.map((p) => [p.id, netOf(p.id)])) + days.join(','))
+    .digest('hex');
+  const cached = loadExpPlan(tripId);
+  if (cached && cached.hash === hash && !req.body?.force) return res.json(cached);
+
+  const fallback = () => {
+    const out = { hash, days: heuristicPlan(days, picks), planned_at: new Date().toISOString(), fallback: true };
+    saveExpPlan(tripId, out);
+    return out;
+  };
+  if (!GEMINI_API_KEY || !geminiGuard()) return res.json(fallback());
+
+  // Compact, keyed candidates — same discipline as ai-rank (never raw ids/PII).
+  const keyToId = {};
+  const compact = picks.map((p, i) => {
+    const k = 'e' + i; keyToId[k] = String(p.id);
+    return {
+      k, title: (p.title || '').slice(0, 70), category: p.category,
+      price: p.price, unit: p.priceUnit || 'guest', mins: p.duration,
+      rating: p.rating, likes: netOf(p.id),
+    };
+  });
+  const prompt = `You are Scout, planning what a group of ${trip.adults || 2} will DO on a trip to ${trip.destination}. They already voted on these activities; higher "likes" means the group wants it more.
+
+Activities (JSON): ${JSON.stringify(compact)}
+Trip days: ${days.length ? days.join(', ') : 'unknown dates — just group them sensibly'}
+
+Build a realistic day-by-day plan. Rules: at most 2 activities per day; keep total time per day under ~6 hours (use "mins"); put the most-liked activities on earlier days; don't repeat an activity; it's fine to leave a day empty for rest. Only use the activities given.
+Return ONLY JSON: {"days":[{"day":"<one of the trip days, or null>","items":[{"k":"<key>","why":"<≤12 words on why it fits that day>"}]}]}`;
+
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const r = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, responseMimeType: 'application/json', maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } } }),
+    });
+    const data = await r.json();
+    if (!r.ok) { console.error('[plan-experiences] gemini', r.status); return res.json(fallback()); }
+    const um = data.usageMetadata || {};
+    bumpUsage('gemini', { calls: 1, promptTokens: um.promptTokenCount || 0, candidatesTokens: um.candidatesTokenCount || 0, totalTokens: um.totalTokenCount || 0 });
+    const raw = JSON.parse(data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
+    const used = new Set();
+    const planDays = (Array.isArray(raw.days) ? raw.days : [])
+      .map((d) => ({
+        day: typeof d.day === 'string' && days.includes(d.day) ? d.day : null,
+        items: (Array.isArray(d.items) ? d.items : [])
+          .filter((it) => it && keyToId[it.k] && !used.has(it.k) && used.add(it.k) !== false)
+          .map((it) => ({ id: keyToId[it.k], why: typeof it.why === 'string' ? it.why.trim().slice(0, 90) : null })),
+      }))
+      .filter((d) => d.items.length);
+    if (!planDays.length) return res.json(fallback());
+    const out = { hash, days: planDays, planned_at: new Date().toISOString() };
+    saveExpPlan(tripId, out);
+    res.json(out);
+  } catch (e) {
+    console.error('[plan-experiences]', e.message);
+    res.json(fallback());
+  }
+});
+
+app.get('/api/trips/:tripId/exp-plan', loadTripOr404, (req, res) => res.json(loadExpPlan(req.params.tripId)));
+
+// ── Phase 4 · assign-to-day ───────────────────────────────────────────────────
+// The group PINNING an activity to a specific day ("we're doing the hike Thursday").
+// Distinct from Scout's Plan: this is the human override, and it always wins.
+function loadExpDays(tripId) { return readJson(tripFile(tripId, 'exp-days.json'), {}); }
+function saveExpDays(v, tripId) { writeJsonAtomic(tripFile(tripId, 'exp-days.json'), v); }
+
+app.get('/api/trips/:tripId/exp-days', loadTripOr404, (req, res) => res.json(loadExpDays(req.params.tripId)));
+
+app.post('/api/trips/:tripId/exp-days', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 60 }), (req, res) => {
+  const tripId = req.params.tripId;
+  const { experience_id, day } = req.body || {};
+  if (!experience_id || UNSAFE_KEY.test(String(experience_id)))
+    return res.status(400).json({ error: 'expected { experience_id, day: "YYYY-MM-DD"|null }' });
+  if (day !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(day || '')))
+    return res.status(400).json({ error: 'day must be YYYY-MM-DD or null' });
+  // Only days inside the trip window — no pinning an activity to next year.
+  if (day !== null && !tripDays(req.trip, 14).includes(day))
+    return res.status(400).json({ error: 'That day is outside the trip.' });
+  const map = loadExpDays(tripId);
+  if (day === null) delete map[experience_id];
+  else map[experience_id] = day;
+  saveExpDays(map, tripId);
+  res.json(map);
+});
+
+// The trip's days, so the client can render a day picker without re-deriving them.
+app.get('/api/trips/:tripId/days', loadTripOr404, (req, res) => res.json({ days: tripDays(req.trip, 14) }));
+
+// ── Personal lane: saved experiences + your own plan ─────────────────────────
+// Mirrors homes favorites (userId → [ids]) — private to each member. The group
+// lane stays the vote leaderboard; this is "my plan", which can be shared.
+function loadExpSaves(tripId) { return readJson(tripFile(tripId, 'exp-saves.json'), {}); }
+function saveExpSaves(v, tripId) { writeJsonAtomic(tripFile(tripId, 'exp-saves.json'), v); }
+function loadMyPlans(tripId) { return readJson(tripFile(tripId, 'exp-myplans.json'), {}); }
+function saveMyPlans(v, tripId) { writeJsonAtomic(tripFile(tripId, 'exp-myplans.json'), v); }
+
+app.get('/api/trips/:tripId/exp-saves', requireAuth, loadTripOr404, (req, res) => {
+  res.json({ ids: loadExpSaves(req.params.tripId)[req.user.id] || [] });
+});
+
+app.post('/api/trips/:tripId/exp-saves', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 90 }), (req, res) => {
+  const id = String((req.body && req.body.experience_id) || '').slice(0, 80);
+  if (!id || UNSAFE_KEY.test(id)) return res.status(400).json({ error: 'experience_id required' });
+  const all = loadExpSaves(req.params.tripId);
+  const set = new Set(all[req.user.id] || []);
+  const on = req.body && req.body.on;
+  if (on === false || (on == null && set.has(id))) set.delete(id); else set.add(id);
+  all[req.user.id] = [...set];
+  saveExpSaves(all, req.params.tripId);
+  res.json({ ids: all[req.user.id] });
+});
+
+// "My plan" — the personal counterpart of the group plan. Scout plans from the
+// ids the member picked (their saves / selection), stored per user so it can be
+// shared as a link ("this is my plan") without touching the group's plan.
+app.post('/api/trips/:tripId/my-plan', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 3600000, max: 20 }), async (req, res) => {
+  const tripId = req.params.tripId;
+  const trip = req.trip;
+  const rows = loadExperiences(tripId);
+  const wanted = Array.isArray(req.body?.ids) && req.body.ids.length
+    ? req.body.ids.map(String)
+    : (loadExpSaves(tripId)[req.user.id] || []);
+  const picks = rows.filter((x) => wanted.includes(String(x.id))).slice(0, 12);
+  if (!picks.length) return res.status(400).json({ error: 'Save or select a few things first.' });
+
+  const days = tripDays(trip);
+  const build = async () => {
+    if (!GEMINI_API_KEY || !geminiGuard()) return { days: heuristicPlan(days, picks), fallback: true };
+    const keyToId = {};
+    const compact = picks.map((p, i) => {
+      const k = 'e' + i; keyToId[k] = String(p.id);
+      return { k, title: (p.title || '').slice(0, 70), category: p.category, price: p.price, mins: p.duration, rating: p.rating };
+    });
+    const prompt = `You are Scout, planning ONE person's days on a trip to ${trip.destination}. These are the activities THEY chose.
+
+Activities (JSON): ${JSON.stringify(compact)}
+Trip days: ${days.length ? days.join(', ') : 'unknown'}
+
+Build a realistic day-by-day plan: at most 2 per day, under ~6 hours a day (use "mins"), no repeats, empty days are fine. Only use what's given.
+Return ONLY JSON: {"days":[{"day":"<a trip day or null>","items":[{"k":"<key>","why":"<≤12 words>"}]}]}`;
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, responseMimeType: 'application/json', maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } } }),
+      });
+      const data = await r.json();
+      if (!r.ok) return { days: heuristicPlan(days, picks), fallback: true };
+      const um = data.usageMetadata || {};
+      bumpUsage('gemini', { calls: 1, promptTokens: um.promptTokenCount || 0, candidatesTokens: um.candidatesTokenCount || 0, totalTokens: um.totalTokenCount || 0 });
+      const raw = JSON.parse(data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
+      const used = new Set();
+      const out = (Array.isArray(raw.days) ? raw.days : []).map((d) => ({
+        day: typeof d.day === 'string' && days.includes(d.day) ? d.day : null,
+        items: (Array.isArray(d.items) ? d.items : [])
+          .filter((it) => it && keyToId[it.k] && !used.has(it.k) && used.add(it.k) !== false)
+          .map((it) => ({ id: keyToId[it.k], why: typeof it.why === 'string' ? it.why.trim().slice(0, 90) : null })),
+      })).filter((d) => d.items.length);
+      return out.length ? { days: out } : { days: heuristicPlan(days, picks), fallback: true };
+    } catch { return { days: heuristicPlan(days, picks), fallback: true }; }
+  };
+
+  const built = await build();
+  const all = loadMyPlans(tripId);
+  all[req.user.id] = {
+    ...built,
+    owner_name: (req.user.name || 'A member').split(' ')[0],
+    planned_at: new Date().toISOString(),
+  };
+  saveMyPlans(all, tripId);
+  res.json(all[req.user.id]);
+});
+
+app.get('/api/trips/:tripId/my-plan', requireAuth, loadTripOr404, (req, res) => {
+  res.json(loadMyPlans(req.params.tripId)[req.user.id] || null);
+});
+
+// Public read for the share page (no auth: the URL is the secret, same model as
+// the board share links).
+app.get('/api/trips/:tripId/plans/:userId', loadTripOr404, (req, res) => {
+  const p = loadMyPlans(req.params.tripId)[req.params.userId];
+  if (!p) return res.status(404).json({ error: 'No plan yet' });
+  const byId = new Map(loadExperiences(req.params.tripId).map((x) => [String(x.id), x]));
+  res.json({
+    owner_name: p.owner_name || 'A member', planned_at: p.planned_at, fallback: !!p.fallback,
+    trip: { name: req.trip.name, destination: req.trip.destination, checkin: req.trip.checkin, checkout: req.trip.checkout_5n },
+    days: p.days.map((d) => ({
+      day: d.day,
+      items: d.items.map((it) => {
+        const x = byId.get(String(it.id));
+        return x ? { id: x.id, title: x.title, photo: x.photo, price: x.price, priceUnit: x.priceUnit, duration: x.duration, url: x.url, why: it.why } : null;
+      }).filter(Boolean),
+    })).filter((d) => d.items.length),
+  });
+});
+
+// Same contract as home votes (identity from the session, up/down/null toggle),
+// but NOT gated on voting_closed — closing the home vote shouldn't stop the
+// group planning what to do.
+app.post('/api/trips/:tripId/exp-votes', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 60000, max: 90 }), (req, res) => {
+  const tripId = req.params.tripId;
+  const { experience_id, vote } = req.body || {};
+  if (!experience_id || !['up', 'down', null].includes(vote))
+    return res.status(400).json({ error: 'expected { experience_id, vote: "up"|"down"|null }' });
+  if (UNSAFE_KEY.test(String(experience_id))) return res.status(400).json({ error: 'Invalid experience id' });
+  const voter = req.user.id;
+  const votes = loadExpVotes(tripId);
+  if (!Object.prototype.hasOwnProperty.call(votes, experience_id)) votes[experience_id] = {};
+  if (vote === null) delete votes[experience_id][voter];
+  else votes[experience_id][voter] = vote;
+  saveExpVotes(votes, tripId);
+  res.json(votes);
+});
 
 // Organizer: fetch reviews for every listing still missing them (one click, guarded).
 const hRefreshReviews = async (req, res) => {
@@ -3392,7 +4034,7 @@ app.get('/api/me/trips', requireAuth, (req, res) => {
 });
 
 // Create a new trip; the caller becomes the organizer.
-app.post('/api/trips', requireAuth, (req, res) => {
+app.post('/api/trips', requireAuth, rateLimit({ windowMs: 3600000, max: 12 }), (req, res) => {
   const { name, destination, checkin, checkout_5n, adults, budget, bedrooms, home_type, flex_days, itinerary } =
     req.body || {};
   if (!destination || !String(destination).trim())
@@ -3875,15 +4517,22 @@ function scheduleDigest() {
 
 // ── Crash safety ─────────────────────────────────────────────────────────────
 // One unhandled error must not take the whole single-process server down for
-// everyone. Express error middleware catches sync/async route throws; the process
-// handlers log (and lean on Railway's auto-restart) rather than exit silently.
+// everyone. Express error middleware catches sync/async route throws and keeps
+// the process alive.
 app.use((err, req, res, _next) => {
   console.error('[express] unhandled route error:', (err && err.stack) || err);
   if (res.headersSent) return;
   res.status(500).json({ error: 'Something went wrong on our end. Try again.' });
 });
 process.on('unhandledRejection', (reason) => { console.error('[unhandledRejection]', reason); });
-process.on('uncaughtException', (err) => { console.error('[uncaughtException]', (err && err.stack) || err); });
+// An uncaughtException leaves Node in an undefined state (half-open handles,
+// partially-mutated memory) — continuing to serve requests and WRITE FILES from
+// there risks corrupt data. Log, then exit non-zero so Railway's ON_FAILURE
+// policy restarts a clean process. The short delay lets the log flush first.
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException] exiting for a clean restart:', (err && err.stack) || err);
+  setTimeout(() => process.exit(1), 100).unref();
+});
 
 // Public, unauthenticated health check for uptime monitors / Railway.
 app.get('/healthz', (req, res) => res.json({ ok: true, ts: Date.now() }));
@@ -3891,6 +4540,7 @@ app.get('/healthz', (req, res) => res.json({ ok: true, ts: Date.now() }));
 app.listen(PORT, () => {
   console.log(`GroupPad listening on :${PORT}`);
   try { migrateLegacyTripIfNeeded(); } catch (e) { console.error('[migrate] failed:', e.message); }
+  try { migrateExperienceIds(); } catch (e) { console.error('[migrate] exp ids failed:', e.message); }
   try { ensureLaOwner(); } catch (e) { console.error('[repair] failed:', e.message); }
   // Reconcile likes/picks left behind by members removed before purge existed.
   try { for (const id of Object.keys(loadTrips())) purgeNonMemberActivity(id); } catch (e) { console.error('[purge] failed:', e.message); }

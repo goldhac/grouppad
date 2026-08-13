@@ -35,6 +35,13 @@ export interface Trip {
   voting_closed?: boolean;
 }
 
+/** A named coordinate the trip measures distances from (server tripRefPoints). */
+export interface RefPoint {
+  name: string;
+  lat: number;
+  lng: number;
+}
+
 /** A trip plus the calling user's membership flags (from GET /api/trips/:id). */
 export interface TripView extends Trip {
   id: string;
@@ -55,6 +62,8 @@ export interface TripView extends Trip {
   settled?: boolean;
   /** Cover photo from the trip's top-voted home; null for new trips (client falls back to an editorial image). */
   coverPhoto?: string | null;
+  /** Distance reference points for "X mi from …" math; null when the trip has none. */
+  ref_points?: { downtown?: RefPoint; airport?: RefPoint; attraction?: RefPoint } | null;
   // organizer-only fields
   join_code?: string;
   members?: string[];
@@ -118,6 +127,8 @@ export interface ListingReviews {
   neg: ReviewSnippet[];
   total: number;
   fetched_at: string;
+  /** Experiences only: the page's overall aggregate (avg + count). */
+  summary?: { ratingAverage: number | null; ratingCount: number | null } | null;
 }
 
 /** One AI-generated clip in a listing's walkthrough tour. */
@@ -197,6 +208,47 @@ export interface PipelineResponse {
 
 /** votes: { [listingId]: { [userId]: 'up' | 'down' } } */
 export type VotesMap = Record<string, Record<string, VoteDir>>;
+
+/** An Airbnb Experience ("thing to do") scraped for the trip's destination. */
+export interface Experience {
+  /** NAMESPACED: `airbnb:3951041`, `osm:node/123`. Keys five separate stores, so
+   *  a bare provider id would collide across sources. */
+  id: string;
+  /** Which provider this row came from. */
+  source?: 'airbnb' | 'osm' | 'viator' | string;
+  title: string;
+  category: string | null;
+  price: number | null;
+  currency: string | null;
+  /** Pre-discount rate when on sale (else null) — show as strikethrough + "Save $X". */
+  originalPrice?: number | null;
+  /** 'guest' or 'group' — group-priced experiences divide by the whole party. */
+  priceUnit?: 'guest' | 'group' | null;
+  rating: number | null;
+  reviews: number | null;
+  url: string;
+  photo: string | null;
+  lat: number | null;
+  lng: number | null;
+  /** Duration in minutes. */
+  duration: number | null;
+}
+/** experienceId → userId → vote. Separate store from home votes. */
+export type ExpVotesMap = Record<string, Record<string, VoteDir>>;
+
+/** experienceId → 'YYYY-MM-DD'. The group pinning an activity to a day (Phase 4).
+ *  A human pin always beats Scout's suggested day. */
+export type ExpDaysMap = Record<string, string>;
+
+/** Scout's day-by-day plan built from the group's up-voted experiences.
+ *  See docs/specs/scout.md §2 (the "Plan" job). */
+export interface ExpPlan {
+  hash: string;
+  days: { day: string | null; items: { id: string; why: string | null }[] }[];
+  planned_at: string;
+  /** True when built without Gemini (cap hit / key missing) — still useful. */
+  fallback?: boolean;
+}
 
 export interface Itinerary {
   text: string;

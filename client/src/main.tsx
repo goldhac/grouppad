@@ -22,6 +22,11 @@ import './ds2/mobile.css';
 import './ds2/mobile-app.css';
 import { App } from './App';
 import { AppProvider } from './store/AppContext';
+import { initAnalytics } from './lib/analytics';
+
+// Product analytics + client error monitoring (PostHog). No-op unless a key is
+// configured (POSTHOG_KEY at runtime), and never runs on the dev server.
+initAnalytics();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('Root element #root not found');

@@ -9,6 +9,7 @@ import { OnboardingModal } from '@/components/modals/OnboardingModal';
 import { DetailModal } from '@/components/modals/DetailModal';
 import { InviteWelcome } from '@/components/modals/InviteWelcome';
 import { DecisionCelebration } from '@/components/modals/DecisionCelebration';
+import { trackPageview, identify } from '@/lib/analytics';
 import { TripGate } from '@/routing/TripGate';
 import { LandingView } from '@/views/LandingView';
 import { TripsView } from '@/views/TripsView';
@@ -35,7 +36,14 @@ function RouteEffects() {
   useEffect(() => {
     closeDetail();
     window.scrollTo(0, 0);
+    // HashRouter pageview: capture each in-app route as its own page.
+    trackPageview(location.pathname);
   }, [location.pathname, closeDetail]);
+
+  // Tie analytics events to the signed-in account once known.
+  useEffect(() => {
+    if (user?.id) identify(user.id, { email: user.email, name: user.name });
+  }, [user?.id, user?.email, user?.name]);
 
   // Capture an invite's ?join=<code> from the URL and remember it — this survives
   // the magic-link sign-in round-trip (which lands back on "/"), so an invited

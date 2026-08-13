@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 export function TripGate({ children }: { children: ReactNode }) {
   const { tripId: param } = useParams();
   const [search] = useSearchParams();
-  const { enterTrip, joinTrip, trip, tripId, tripLoading, tripError, user } = useApp();
+  const { enterTrip, retryTrip, joinTrip, trip, tripId, tripLoading, tripError, user } = useApp();
 
   useEffect(() => {
     if (param) void enterTrip(param);
@@ -27,11 +27,14 @@ export function TripGate({ children }: { children: ReactNode }) {
       <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
         <p className="text-lg font-semibold">{tripError}</p>
         <p className="max-w-sm text-sm text-muted">
-          This trip may have been removed, or the link is incomplete.
+          It may have been removed, or the connection dropped. Try again, or head home.
         </p>
-        <Button asChild variant="primary">
-          <Link to="/">Go home</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="primary" onClick={retryTrip}>Try again</Button>
+          <Button asChild variant="ghost">
+            <Link to="/">Go home</Link>
+          </Button>
+        </div>
       </div>
     );
   }

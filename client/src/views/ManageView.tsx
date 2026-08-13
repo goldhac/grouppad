@@ -115,7 +115,7 @@ export function ManageView() {
         name: form.name.trim(), destination: form.destination.trim(), checkin: form.checkin,
         checkout_5n: form.checkout_5n, adults: Number(form.adults), budget: Number(form.budget), home_type: form.home_type,
       });
-      await enterTrip(trip!.id);
+      await enterTrip(trip!.id, true);
       setSaved(true); toast('Trip settings saved.', 'success');
       window.setTimeout(() => navigate(`/t/${trip!.id}/board`), 700);
     } catch (err) { toast(err instanceof Error ? err.message : 'Could not save settings.', 'error'); setSavingSet(false); }
@@ -127,8 +127,8 @@ export function ManageView() {
     setConfirm(null);
     try {
       if (c.kind === 'reset') { await setDecision(null); toast('Official pick reset. The group can keep deciding.', 'success'); api.tripPulse(trip!.id).then(setPulse).catch(() => {}); }
-      else if (c.kind === 'close') { const next = !trip!.voting_closed; await api.patchTrip(trip!.id, { voting_closed: next }); await enterTrip(trip!.id); toast(next ? 'Voting closed. Reopen it whenever you like.' : 'Voting reopened.', 'success'); }
-      else if (c.kind === 'transfer' && c.member) { await api.transferOrganizer(trip!.id, c.member.id); toast(`${c.member.name} is now the trip creator.`, 'success'); await enterTrip(trip!.id); navigate(`/t/${trip!.id}/board`); }
+      else if (c.kind === 'close') { const next = !trip!.voting_closed; await api.patchTrip(trip!.id, { voting_closed: next }); await enterTrip(trip!.id, true); toast(next ? 'Voting closed. Reopen it whenever you like.' : 'Voting reopened.', 'success'); }
+      else if (c.kind === 'transfer' && c.member) { await api.transferOrganizer(trip!.id, c.member.id); toast(`${c.member.name} is now the trip creator.`, 'success'); await enterTrip(trip!.id, true); navigate(`/t/${trip!.id}/board`); }
       else if (c.kind === 'promote' && c.member) { await api.makeOrganizer(trip!.id, c.member.id); setMembers((m) => m.map((x) => x.id === c.member!.id ? { ...x, role: 'organizer' } : x)); toast(`${c.member.name} is now an organizer.`, 'success'); }
       else if (c.kind === 'demote' && c.member) { await api.removeOrganizer(trip!.id, c.member.id); setMembers((m) => m.map((x) => x.id === c.member!.id ? { ...x, role: 'member' } : x)); toast(`${c.member.name} is a member again.`, 'success'); }
       else if (c.kind === 'remove' && c.member) { await api.removeMember(trip!.id, c.member.id); setMembers((m) => m.filter((x) => x.id !== c.member!.id)); toast('Member removed from the trip.', 'success'); }

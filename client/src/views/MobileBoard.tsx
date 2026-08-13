@@ -5,6 +5,7 @@ import {
   SlidersHorizontal, Check, Home,
   BadgeCheck, MessageSquare, Plus, Sparkles, Swords, Users,
   HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus, RotateCw, Pencil,
+  Compass, ThumbsUp, ThumbsDown, ExternalLink, MapPin, MoreHorizontal, Share2,
 } from 'lucide-react';
 import { useApp, isDeadListing } from '@/store/AppContext';
 import { api } from '@/lib/api';
@@ -20,11 +21,13 @@ import { MobilePhotoCarousel } from '@/components/MobilePhotoCarousel';
 import { type Filters, readFilters, writeFilters, DEFAULT_FILTERS } from '@/components/board/FilterBar';
 import { useMobileShellLock } from '@/lib/useIsMobile';
 import { Icon } from '@/components/ui/Icon';
-import { fmt, netVotes } from '@/lib/utils';
+import { fmt, fmtMins, netVotes, expAnchor, expDistanceMi } from '@/lib/utils';
 import { cn } from '@/lib/cn';
-import type { Listing } from '@/types';
+import { expTally, ExpPrice, ExperienceModal, expGroupList, EXP_VIBES, expMatchesVibe } from '@/components/board/ExperiencesSection';
+import { track } from '@/lib/analytics';
+import type { Listing, Experience, ExpPlan } from '@/types';
 
-type View = 'home' | 'shortlist' | 'decision' | 'chat' | 'saved';
+type View = 'home' | 'shortlist' | 'decision' | 'chat' | 'saved' | 'todo';
 
 const B_SHORT: Record<string, string> = { under: 'Under', marginal: 'Marginal', over: 'Over', unknown: 'TBD' };
 
@@ -48,6 +51,7 @@ export function MobileBoard() {
     toggleFavorite, toggleFinalPick, setDecision, openDetail, requireSignIn, postCaveat,
     approveCaveat, deleteCaveat, saveItinerary,
     submitListing, toast, selected, toggleSelect, clearSelection, startOnboarding,
+    experiences, expVotes, expPending, castExpVote, refreshExperiences,
   } = useApp();
   const compare = useCompare();
   const navigate = useNavigate();
@@ -66,7 +70,7 @@ export function MobileBoard() {
     if (filtersTripRef.current !== trip?.id) { filtersTripRef.current = trip?.id; setFilters(readFilters(trip?.id)); }
   }, [trip?.id]);
   useEffect(() => { writeFilters(trip?.id, filters); }, [filters, trip?.id]);
-  const [sheet, setSheet] = useState<'add' | 'filter' | null>(null);
+  const [sheet, setSheet] = useState<'add' | 'filter' | 'more' | null>(null);
   const [addUrl, setAddUrl] = useState('');
   const [addPrice, setAddPrice] = useState('');
   const [adding, setAdding] = useState(false);
@@ -74,6 +78,22 @@ export function MobileBoard() {
   const [itinEditOpen, setItinEditOpen] = useState(false);
   const [itinDraft, setItinDraft] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  // "Things to do": nearest-first sort once the decision anchor exists (2.2).
+  const [expNearest, setExpNearest] = useState(false);
+  const [expOpen, setExpOpen] = useState<Experience | null>(null);
+  const [expVibe, setExpVibe] = useState<string | null>(null); // Phase 4 vibe filter
+  const [expSaved, setExpSaved] = useState<Set<string>>(new Set());
+  const [expPicked, setExpPicked] = useState<Set<string>>(new Set());
+  const [myExpPlan, setMyExpPlan] = useState<ExpPlan | null>(null);
+  const [expPlanning, setExpPlanning] = useState(false);
+  const [expSavedOnly, setExpSavedOnly] = useState(false);
+  useEffect(() => {
+    if (!trip || !user) return;
+    let dead = false;
+    api.expSaves(trip.id).then((r) => { if (!dead) setExpSaved(new Set(r.ids)); }).catch(() => {});
+    api.myPlan(trip.id).then((p) => { if (!dead) setMyExpPlan(p); }).catch(() => {});
+    return () => { dead = true; };
+  }, [trip?.id, user?.id]);
   // Personal "ask Scout" lane (not cached, not shared with the group).
   const [askQ, setAskQ] = useState('');
   const [askBusy, setAskBusy] = useState(false);
@@ -380,6 +400,255 @@ export function MobileBoard() {
     </div>
   );
 
+  // "Things to do" — Airbnb Experiences near the destination, votable like homes.
+  // Spec: docs/specs/experiences.md (Phase 1). Sorted most-wanted → best-rated.
+  // Phase 2.2: once the decision is locked, distances anchor on the chosen home
+  // (its coords when scraped, else the trip's primary ref point) + Nearest sort.
+  const expAnch = final.decision ? expAnchor(findListing(final.decision.listing_id), trip) : null;
+  const expDist = (x: (typeof experiences)[number]) => expDistanceMi(expAnch, x);
+  let expPool = expVibe ? experiences.filter((x) => expMatchesVibe(x, expVibe)) : experiences;
+  if (expSavedOnly) expPool = expPool.filter((x) => expSaved.has(x.id));
+  const expVibesAvail = EXP_VIBES.map((v) => ({ ...v, n: experiences.filter((x) => expMatchesVibe(x, v.key)).length })).filter((v) => v.n >= 2);
+  const sortedExp = [...expPool].sort((a, b) =>
+    expNearest && expAnch
+      ? ((expDist(a) ?? Infinity) - (expDist(b) ?? Infinity)) || ((b.rating ?? 0) - (a.rating ?? 0))
+      : (expTally(expVotes, b.id, user?.id ?? null).net - expTally(expVotes, a.id, user?.id ?? null).net) ||
+        ((b.rating ?? 0) - (a.rating ?? 0)) ||
+        ((a.price ?? Infinity) - (b.price ?? Infinity)));
+  // ── Personal lane on mobile (parity with the desktop To-do tab): saves,
+  //    select-for-Scout, my own plan, share + PDF. Sharing a plan into the group
+  //    chat is a phone behaviour above all, so it must live here. ──────────────
+  const expLeaders = expGroupList(experiences, expVotes, user?.id ?? null);
+  const expTopNet = Math.max(1, ...expLeaders.map((x) => expTally(expVotes, x.id, user?.id ?? null).net));
+  const expById = new Map(experiences.map((x) => [x.id, x]));
+  const toggleExpSave = async (id: string) => {
+    if (!trip || !requireSignIn('save this')) return;
+    const prev = new Set(expSaved);
+    const next = new Set(expSaved);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setExpSaved(next);
+    try {
+      const r = await api.toggleExpSave(trip.id, id, next.has(id));
+      setExpSaved(new Set(r.ids));
+      track('experience_saved', { experience_id: id, on: next.has(id), surface: 'mobile' });
+    } catch (e) {
+      setExpSaved(prev);
+      toast(e instanceof Error ? e.message : 'Could not save that.', 'error');
+    }
+  };
+  const buildMyExpPlan = async () => {
+    if (!trip || expPlanning) return;
+    if (!requireSignIn('plan your days')) return;
+    const ids = expPicked.size ? [...expPicked] : [...expSaved];
+    if (!ids.length) { toast('Save or select a few things first.', 'error'); return; }
+    setExpPlanning(true);
+    try {
+      const p = await api.buildMyPlan(trip.id, ids);
+      setMyExpPlan(p);
+      track('my_plan_built', { count: ids.length, fallback: !!p.fallback, surface: 'mobile' });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Scout could not plan that.', 'error');
+    } finally { setExpPlanning(false); }
+  };
+  const shareMyExpPlan = async () => {
+    if (!trip || !user) return;
+    const url = `${window.location.origin}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(user.id)}`;
+    try {
+      if (navigator.share) await navigator.share({ title: 'My plan', url });
+      else { await navigator.clipboard.writeText(url); toast('Link copied — paste it in the group chat.', 'success'); }
+      track('my_plan_shared', { surface: 'mobile' });
+    } catch { /* dismissed */ }
+  };
+  const todoView = (
+    <div className="sec">
+      <div className="sec-h">
+        <span className="t">Things to do</span>{sortedExp.length > 0 && <span className="c tnum">{sortedExp.length}</span>}
+        {expAnch && (
+          <button
+            className={cn('btn btn-sm', expNearest ? 'btn-primary' : 'btn-ghost')}
+            style={{ marginLeft: 'auto' }}
+            onClick={() => setExpNearest((n) => !n)}
+            title={`Sort by distance from ${expAnch.label}`}
+          >
+            <Icon icon={MapPin} className="ico" /> Nearest
+          </button>
+        )}
+      </div>
+      <div className="sec-sub">near {trip?.destination} · vote for what you&rsquo;d actually do — booking happens on Airbnb</div>
+      {/* Vibe chips (Phase 4) — horizontally scrollable, same fchips row idiom. */}
+      {expVibesAvail.length > 1 && (
+        <div className="fchips" style={{ marginTop: 8 }}>
+          <button className={cn('fchip', !expVibe && !expSavedOnly && 'on')} onClick={() => { setExpVibe(null); setExpSavedOnly(false); }}>All {experiences.length}</button>
+          {user && expSaved.size > 0 && (
+            <button className={cn('fchip', expSavedOnly && 'on')} onClick={() => setExpSavedOnly((v) => !v)}>
+              <Icon icon={Bookmark} className="ico" /> Saved {expSaved.size}
+            </button>
+          )}
+          {expVibesAvail.map((v) => (
+            <button key={v.key} className={cn('fchip', expVibe === v.key && 'on')} onClick={() => { const n = expVibe === v.key ? null : v.key; setExpVibe(n); if (n) track('experiences_vibe_filtered', { vibe: n, surface: 'mobile' }); }}>
+              {v.label} {v.n}
+            </button>
+          ))}
+        </div>
+      )}
+      {/* Live leaderboard: liked experiences ranked by net likes, reordering as
+          votes land. Same beat as the desktop tab (and the homes top-choice board). */}
+      {expLeaders.length > 0 && (
+        <div className="xlb" style={{ marginTop: 10 }}>
+          <div className="xlb-head">
+            <span className="xlb-title">Top of the list</span>
+            <span className="xlb-sub">{expLeaders.length} in the running</span>
+          </div>
+          <ol className="xlb-rows">
+            {expLeaders.map((x, i) => {
+              const tl = expTally(expVotes, x.id, user?.id ?? null);
+              return (
+                <li key={x.id}>
+                  <button
+                    className={cn('xlb-row', i === 0 && 'lead')}
+                    style={{ ['--pct' as string]: `${Math.round((tl.net / expTopNet) * 100)}%` }}
+                    onClick={() => { setExpOpen(x); track('experience_detail_opened', { experience_id: x.id, surface: 'leaderboard_mobile' }); }}
+                  >
+                    <span className="xlb-rk">{i + 1}</span>
+                    {x.photo ? <img className="xlb-thumb" src={x.photo} alt="" loading="lazy" /> : <span className="xlb-thumb" />}
+                    <span className="xlb-main"><span className="xlb-name">{x.title}</span></span>
+                    <span className="xlb-likes">{tl.net}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      )}
+      {user && (expSaved.size > 0 || expPicked.size > 0 || myExpPlan) && (
+        <div className="ai-card" style={{ marginTop: 10 }}>
+          <div className="ah">
+            <div className="sp"><Icon icon={Bookmark} className="ico" /></div>
+            <div>
+              <div className="at">My plan</div>
+              <div className="as">
+                {expPicked.size > 0
+                  ? `${expPicked.size} selected — Scout plans exactly these`
+                  : myExpPlan
+                    ? `${myExpPlan.days.reduce((n, d) => n + d.items.length, 0)} activities · private to you`
+                    : `${expSaved.size} saved · private to you`}
+              </div>
+            </div>
+          </div>
+          {myExpPlan && myExpPlan.days.length > 0 && (
+            <div className="xplan">
+              {myExpPlan.days.map((d, di) => (
+                <div className="xplan-day" key={di} style={{ animationDelay: `${di * 70}ms` }}>
+                  <div className="xplan-dh">{d.day ? new Date(`${d.day}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'Any day'}</div>
+                  {d.items.map((it) => {
+                    const x = expById.get(it.id);
+                    if (!x) return null;
+                    return (
+                      <button key={it.id} className="xplan-it" onClick={() => setExpOpen(x)}>
+                        {x.photo ? <img src={x.photo} alt="" loading="lazy" /> : <span className="ph" />}
+                        <span className="tx"><b>{x.title}</b><small>{[x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : null, x.duration != null ? fmtMins(x.duration) : null].filter(Boolean).join(' · ')}</small></span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <button className="btn btn-sm" onClick={() => void buildMyExpPlan()} disabled={expPlanning} style={{ flex: 1 }}>
+              <Icon icon={Sparkles} className="ico" /> {expPlanning ? 'Planning…' : myExpPlan ? 'Re-plan mine' : 'Plan my days'}
+            </button>
+            {myExpPlan && trip && user && (
+              <a className="btn btn-ghost btn-sm" href={`/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(user.id)}.pdf`} onClick={() => track('my_plan_pdf', { surface: 'mobile' })}>
+                PDF
+              </a>
+            )}
+            {myExpPlan && (
+              <button className="btn btn-primary btn-sm" onClick={() => void shareMyExpPlan()} style={{ flex: 1 }}>
+                <Icon icon={Share2} className="ico" /> Share
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {sortedExp.length ? (
+        <div className="list" style={{ marginTop: 8 }}>
+          {sortedExp.map((x) => {
+            const tl = expTally(expVotes, x.id, user?.id ?? null);
+            const mi = expDist(x);
+            return (
+              <article
+                key={x.id}
+                className="mcard"
+                role="button"
+                tabIndex={0}
+                onClick={() => { setExpOpen(x); track('experience_detail_opened', { experience_id: x.id, surface: 'mobile' }); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setExpOpen(x); track('experience_detail_opened', { experience_id: x.id, surface: 'mobile' }); } }}
+              >
+                <div className="ph">
+                  <MobilePhotoCarousel photos={x.photo ? [x.photo] : []} alt={x.title}>
+                    <button className={cn('save', expPicked.has(x.id) && 'on')} style={{ right: 52 }}
+                      onClick={(e) => { e.stopPropagation(); setExpPicked((s0) => { const n = new Set(s0); n.has(x.id) ? n.delete(x.id) : n.add(x.id); return n; }); }}
+                      aria-label={expPicked.has(x.id) ? 'Selected for Scout' : 'Select for Scout to plan'}>
+                      <Icon icon={Check} className="ico" />
+                    </button>
+                    <button className={cn('save', expSaved.has(x.id) && 'on')}
+                      onClick={(e) => { e.stopPropagation(); void toggleExpSave(x.id); }}
+                      aria-label={expSaved.has(x.id) ? 'Saved to your list' : 'Save to your list'}>
+                      <Icon icon={Bookmark} className="ico" />
+                    </button>
+                  </MobilePhotoCarousel>
+                </div>
+                <div className="info">
+                  <div className="row1">
+                    <span className="nm">{x.title}</span>
+                    {x.rating != null && <span className="rt"><Icon icon={Star} className="ico" /> {x.rating}</span>}
+                  </div>
+                  <div className="sub">
+                    {[
+                      x.category,
+                      x.duration != null ? fmtMins(x.duration) : null,
+                      mi != null ? `${mi} mi from ${expAnch!.label}` : null,
+                    ].filter(Boolean).join(' · ') || 'Experience'}
+                  </div>
+                  <div className="pr">
+                    <ExpPrice x={x} split={split} />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
+                    <button className={cn('btn btn-sm', tl.mine === 'up' ? 'btn-primary' : 'btn-ghost')} onClick={() => { void castExpVote(x.id, 'up'); track('experience_voted', { experience_id: x.id, dir: 'up' }); }} aria-label="Want to do this">
+                      <Icon icon={ThumbsUp} className="ico" /> {tl.up}
+                    </button>
+                    <button className={cn('btn btn-sm', tl.mine === 'down' ? 'btn-primary' : 'btn-ghost')} onClick={() => { void castExpVote(x.id, 'down'); track('experience_voted', { experience_id: x.id, dir: 'down' }); }} aria-label="Not for me">
+                      <Icon icon={ThumbsDown} className="ico" /> {tl.down}
+                    </button>
+                    <span className={cn('tnum', tl.net > 0 && 'ok')} style={{ marginLeft: 'auto', fontWeight: 700 }}>{tl.net > 0 ? `+${tl.net}` : tl.net}</span>
+                    <a className="btn btn-ghost btn-sm" href={x.url} target="_blank" rel="noopener noreferrer" onClick={() => track('experience_outlink', { experience_id: x.id })} aria-label="Open on Airbnb">
+                      <Icon icon={ExternalLink} className="ico" />
+                    </a>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="empty">
+          <div className="ec"><Icon icon={Compass} className="ico" /></div>
+          {expPending ? (
+            <><h3>Finding things to do…</h3><p>We&rsquo;re pulling experiences near {trip?.destination || 'your destination'}. Check back in a minute.</p></>
+          ) : (
+            <><h3>Nothing here yet</h3><p>We couldn&rsquo;t find things to do for this trip yet.</p>
+              <button className="btn btn-primary" onClick={() => void refreshExperiences()}><Icon icon={RotateCw} className="ico" /> Look for things to do</button></>
+          )}
+        </div>
+      )}
+      {expOpen && (
+        <ExperienceModal x={expOpen} dist={expDist(expOpen)} anchorLabel={expAnch?.label} onClose={() => setExpOpen(null)} />
+      )}
+    </div>
+  );
+
   const decisionView = (
     <div className="sec">
       <div className="sec-h"><span className="t">Decision</span></div>
@@ -511,10 +780,10 @@ export function MobileBoard() {
           <span className="spacer" />
           <WhosComing compact />
           {isOwner && <span className="role-pill"><Icon icon={Crown} className="ico" /> Host</span>}
-          {isOwner && <button className="iconbtn" disabled={refreshing} onClick={() => void refreshHomes()} aria-label="Refresh listings" title="Refresh the live listings"><Icon icon={RotateCw} className="ico" style={refreshing ? { animation: 'spin 1s linear infinite' } : undefined} /></button>}
-          {isOwner && <button className="iconbtn" onClick={() => trip && navigate(`/t/${trip.id}/manage`)} aria-label="Manage"><Icon icon={Settings} className="ico" /></button>}
-          <button className={cn('iconbtn', view === 'saved' && 'on')} onClick={() => setView('saved')} aria-label="Saved"><Icon icon={Bookmark} className="ico" />{favoriteIds.size > 0 && <span className="hbadge tnum">{favoriteIds.size}</span>}</button>
-          <button className="iconbtn" onClick={toggleTheme} aria-label="Theme"><Icon icon={theme === 'dark' ? Sun : Moon} className="ico" /></button>
+          {/* One overflow button instead of a row of icons — the top bar was
+              squeezing the trip name down to "Los Angele…". Everything
+              secondary (saved, theme, owner tools) lives in the More sheet. */}
+          <button className="iconbtn" onClick={() => setSheet('more')} aria-label="More"><Icon icon={MoreHorizontal} className="ico" /></button>
           {!user && <button className="btn btn-primary btn-sm" style={{ marginLeft: 4, height: 34, padding: '0 12px' }} onClick={() => openAuth('sign in')}>Sign in</button>}
         </div>
 
@@ -544,6 +813,7 @@ export function MobileBoard() {
           {view === 'home' && homeView}
           {view === 'shortlist' && shortlistView}
           {view === 'saved' && savedView}
+          {view === 'todo' && todoView}
           {view === 'decision' && decisionView}
           {view === 'chat' && chatView}
         </div>
@@ -553,8 +823,11 @@ export function MobileBoard() {
           {navItem('home', Home, 'Homes')}
           {navItem('shortlist', Star, 'Shortlist', shortlist.length)}
           <div className="nav-add" onClick={openAdd}><div className="fab"><Icon icon={Plus} className="ico" /></div><div className="lab">Add</div></div>
+          {/* "To do" is a primary destination now — it lives here rather than as
+              a squeezed icon in the top bar. Decision keeps its slot; Chat + the
+              rest moved to the More sheet so this row stays at five. */}
+          {navItem('todo', Compass, 'To do')}
           {navItem('decision', BadgeCheck, 'Decision')}
-          {navItem('chat', MessageSquare, 'Chat', caveats.length)}
         </div>
       </div>
 
@@ -567,6 +840,43 @@ export function MobileBoard() {
             <div className="field-wrap" style={{ marginTop: 12 }}><label className="field-label">Nightly all-in (optional)</label><input className="field" value={addPrice} onChange={(e) => setAddPrice(e.target.value)} placeholder="$5,540" inputMode="decimal" /></div>
             <div className="so-hint"><Icon icon={Info} className="ico" /> Adds to <b>your group's submissions</b>. It rises into the shortlist once it reaches net +1 likes.</div>
             <div className="sh-foot"><button className="btn btn-ghost" onClick={() => setSheet(null)}>Cancel</button><button className="btn btn-primary" onClick={() => void addHome()} disabled={adding}><Icon icon={Plus} className="ico" /> {adding ? 'Adding…' : 'Add to board'}</button></div>
+          </div>
+        </>
+      )}
+
+      {/* More — everything secondary, one tap from anywhere. Keeps the top bar to
+          the trip name and the bottom nav to five real destinations. */}
+      {sheet === 'more' && (
+        <>
+          <div className="scrim show" onClick={() => setSheet(null)} />
+          <div className="sheet show"><div className="grab" />
+            <div className="sh-head"><h3>More</h3><button className="iconbtn x" onClick={() => setSheet(null)} aria-label="Close"><Icon icon={X} className="ico" /></button></div>
+            <div className="sh-sec">
+              <div className="chip-list" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+                <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => { setView('chat'); setSheet(null); }}>
+                  <Icon icon={MessageSquare} className="ico" /> Chat{caveats.length > 0 && <span className="pip tnum" style={{ marginLeft: 'auto' }}>{caveats.length}</span>}
+                </button>
+                <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => { setView('saved'); setSheet(null); }}>
+                  <Icon icon={Bookmark} className="ico" /> Saved{favoriteIds.size > 0 && <span className="pip tnum" style={{ marginLeft: 'auto' }}>{favoriteIds.size}</span>}
+                </button>
+                <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={toggleTheme}>
+                  <Icon icon={theme === 'dark' ? Sun : Moon} className="ico" /> {theme === 'dark' ? 'Light theme' : 'Dark theme'}
+                </button>
+                {isOwner && (
+                  <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} disabled={refreshing} onClick={() => { void refreshHomes(); setSheet(null); }}>
+                    <Icon icon={RotateCw} className="ico" /> {refreshing ? 'Refreshing…' : 'Refresh listings'}
+                  </button>
+                )}
+                {isOwner && (
+                  <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => { setSheet(null); trip && navigate(`/t/${trip.id}/manage`); }}>
+                    <Icon icon={Settings} className="ico" /> Manage trip
+                  </button>
+                )}
+                <button className="btn btn-ghost" style={{ justifyContent: 'flex-start' }} onClick={() => { setSheet(null); startOnboarding(true); }}>
+                  <Icon icon={HelpCircle} className="ico" /> Show me around
+                </button>
+              </div>
+            </div>
           </div>
         </>
       )}

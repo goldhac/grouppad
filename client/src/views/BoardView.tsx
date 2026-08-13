@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw, Bookmark, ChevronRight, ChevronDown, HelpCircle } from 'lucide-react';
+import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw, Bookmark, ChevronRight, ChevronDown, HelpCircle, Compass } from 'lucide-react';
 import { GuidedTour, type TourStep } from '@/components/ui/GuidedTour';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
@@ -21,6 +21,7 @@ import { DecisionSection } from '@/components/board/DecisionSection';
 import { ShortlistSection } from '@/components/board/ShortlistSection';
 import { SavedSection } from '@/components/board/SavedSection';
 import { SubmittedSection } from '@/components/board/SubmittedSection';
+import { ExperiencesSection } from '@/components/board/ExperiencesSection';
 import { CaveatsSection } from '@/components/board/CaveatsSection';
 import { PipelineSection } from '@/components/board/PipelineSection';
 import { BeyondBudgetSection } from '@/components/board/BeyondBudgetSection';
@@ -28,7 +29,7 @@ import { CompareDock } from '@/components/board/CompareDock';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { Button } from '@/components/ui/Button';
 
-type Tab = 'all' | 'shortlist' | 'saved' | 'decision' | 'discussion';
+type Tab = 'all' | 'shortlist' | 'saved' | 'todo' | 'decision' | 'discussion';
 
 const BOARD_TOUR: TourStep[] = [
   { target: '.b-controls .tabbar', title: 'Your group’s board', body: 'Everything for this trip lives in these tabs: browse, vote, compare, and decide.' },
@@ -128,7 +129,7 @@ export function BoardView() {
   const {
     listings, caveats, shortlistIds, favoriteIds, split, setSplit, selected, trip, user,
     requireSignIn, joinTrip, detailId, openDetail, closeDetail, findListing, isOwner,
-    aiRankIndex, aiRankLoading, recommendedPool, siteTourSignal,
+    aiRankIndex, aiRankLoading, recommendedPool, siteTourSignal, experiences,
   } = useApp();
   const compare = useCompare();
   const isMobile = useIsMobile();
@@ -210,6 +211,7 @@ export function BoardView() {
     { key: 'all', label: 'Recommended', icon: LayoutGrid, pip: recommendedPool.length },
     { key: 'shortlist', label: 'Shortlist', icon: Heart, pip: shortlistIds.size },
     { key: 'saved', label: 'Saved', icon: Bookmark, pip: favoriteIds.size },
+    { key: 'todo', label: 'To do', icon: Compass, pip: experiences.length },
     { key: 'decision', label: 'Decision', icon: Trophy },
     { key: 'discussion', label: 'Discussion', icon: MessagesSquare, pip: caveats.length },
   ];
@@ -258,11 +260,13 @@ export function BoardView() {
               </div>
             ))}
           </div>
-          <AddToolbar onOpenFilters={() => setSheet('filters')} filterCount={activeFilterCount} shown={mainGrid.length} total={recommendedPool.length} onTour={() => { setTab('all'); setTourOpen(true); }} />
+          {tab !== 'todo' && tab !== 'discussion' && (
+            <AddToolbar onOpenFilters={() => setSheet('filters')} filterCount={activeFilterCount} shown={mainGrid.length} total={recommendedPool.length} onTour={() => { setTab('all'); setTourOpen(true); }} />
+          )}
         </div>
 
         {/* Mobile-only quick filter scroller (container-query gated to ≤860px) */}
-        <div className="m-filterscroll">
+        <div className="m-filterscroll" style={tab === 'todo' || tab === 'discussion' ? { display: 'none' } : undefined}>
           {MFILTERS.map((c) => (
             <label key={c.key} className={`chip-filter${filters[c.key] ? ' on' : ''}`}>
               <input type="checkbox" checked={filters[c.key]} onChange={() => setFilters({ ...filters, [c.key]: !filters[c.key] })} style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }} />
@@ -325,6 +329,8 @@ export function BoardView() {
         {tab === 'shortlist' && <ShortlistSection compare={compare} />}
 
         {tab === 'saved' && <SavedSection />}
+
+        {tab === 'todo' && <ExperiencesSection />}
 
         {tab === 'decision' && <DecisionSection />}
 

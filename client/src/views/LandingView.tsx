@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 import { Plus, Sparkles, Users, Swords, Clapperboard, ArrowRight, LayoutGrid, ThumbsUp, Lock } from 'lucide-react';
-import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { MobileLanding } from '@/views/MobileLanding';
@@ -34,7 +33,10 @@ export function LandingView() {
 
   const primary = () => {
     if (user) navigate('/trips/new');
-    else window.location.href = api.googleSignInUrl;
+    // Open the in-app auth modal (Google + email options) rather than hard-
+    // redirecting a cold visitor straight into Google's consent screen — the
+    // same friendly path mobile already uses. Fewer drop-offs, one code path.
+    else openAuth('start a trip');
   };
   const seeHow = () => document.getElementById('how')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 

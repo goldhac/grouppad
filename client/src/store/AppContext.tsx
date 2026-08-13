@@ -12,10 +12,13 @@ import { useLocation } from 'react-router-dom';
 import { api, ApiError } from '@/lib/api';
 import { netVotes } from '@/lib/utils';
 import { applySkin, readPersonalSkin, writePersonalSkin, type SkinId } from '@/lib/skins';
+import { track, resetAnalytics } from '@/lib/analytics';
 import type {
   Caveat,
   CompareListingInput,
   CreateTripInput,
+  Experience,
+  ExpVotesMap,
   FinalState,
   Insights,
   Itinerary,
@@ -54,6 +57,8 @@ interface AppState {
   // global account
   user: User | null;
   myTrips: TripView[];
+  /** Set when the trips fetch failed — distinguishes 'error' from 'no trips yet'. */
+  tripsError: string | null;
   accountLoading: boolean;
 
   // active trip
@@ -103,7 +108,9 @@ interface AppState {
 interface AppActions {
   loadAccount: () => Promise<void>;
   refreshMyTrips: () => Promise<void>;
-  enterTrip: (tripId: string) => Promise<void>;
+  enterTrip: (tripId: string, force?: boolean) => Promise<void>;
+  /** Clear the trip error and re-attempt the load (used by the error screen). */
+  retryTrip: () => void;
   refreshListings: () => Promise<void>;
   createTrip: (input: CreateTripInput) => Promise<TripView>;
   joinTrip: (tripId: string, code?: string) => Promise<void>;
@@ -133,6 +140,12 @@ interface AppActions {
   // votes / picks
   castVote: (listingId: string, dir: VoteDir) => Promise<void>;
   toggleFinalPick: (listingId: string) => Promise<void>;
+  /** Experiences ("things to do") for the active trip + their votes. */
+  experiences: Experience[];
+  expPending: boolean;
+  expVotes: ExpVotesMap;
+  castExpVote: (experienceId: string, dir: VoteDir) => Promise<void>;
+  refreshExperiences: () => Promise<void>;
   favoriteIds: ReadonlySet<string>;
   toggleFavorite: (listingId: string) => Promise<void>;
   setDecision: (listingId: string | null) => Promise<void>;
@@ -186,6 +199,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // global account
   const [user, setUser] = useState<User | null>(null);
   const [myTrips, setMyTrips] = useState<TripView[]>([]);
+  const [tripsError, setTripsError] = useState<string | null>(null);
   const [accountLoading, setAccountLoading] = useState(true);
 
   // active trip
@@ -206,6 +220,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [final, setFinal] = useState<FinalState>(EMPTY_FINAL);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const favRef = useRef<Set<string>>(new Set());
+  const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [expPending, setExpPending] = useState(false);
+  const [expVotes, setExpVotes] = useState<ExpVotesMap>({});
+  const expVotesRef = useRef<ExpVotesMap>({});
   const [reviewsMap, setReviewsMap] = useState<Record<string, ListingReviews>>({});
   const [toursMap, setToursMap] = useState<Record<string, ListingTour>>({});
 
@@ -258,8 +276,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     try {
       setMyTrips((await api.myTrips()).trips);
-    } catch {
-      /* ignore */
+      setTripsError(null);
+    } catch (e) {
+      // Don't swallow: an empty list and a failed fetch look identical on the
+      // dashboard, so a network blip used to greet a returning user with the
+      // first-run "create your first trip" screen.
+      setTripsError(e instanceof Error ? e.message : 'Could not load your trips.');
     }
   }, []);
 
@@ -287,8 +309,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [loadAccount]);
 
   // ── Enter a trip: load its meta + all entity data ────────────────────────────
-  const enterTrip = useCallback(async (id: string) => {
-    if (tripIdRef.current === id) return; // already active
+  const enterTrip = useCallback(async (id: string, force = false) => {
+    // Skip the reload when the trip is already active — UNLESS the caller forces
+    // it. A mutation (save settings, close voting, transfer creator) reloads via
+    // enterTrip(id, true); without force the early-return no-ops and the UI keeps
+    // showing stale state (e.g. "Close voting" still reads as open).
+    if (!force && tripIdRef.current === id) return;
     const token = ++loadTokenRef.current;
     setTripId(id);
     tripIdRef.current = id;
@@ -298,6 +324,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setRoster([]);
     setAiOrder([]); setAiWhy({});
     setFavoriteIds(new Set()); favRef.current = new Set();
+    setExperiences([]); setExpPending(false);
+    setExpVotes({}); expVotesRef.current = {};
     try {
       const loadAll = () => Promise.all([
         api.getTrip(id),
@@ -313,6 +341,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         api.reviews(id).catch(() => ({})),
         api.tours(id).catch(() => ({})),
         api.members(id).catch(() => ({ members: [] as TripMember[] })), // 403 for guests → empty
+        api.experiences(id).catch(() => ({ experiences: [] as Experience[], pending: false })),
+        api.expVotes(id).catch(() => ({} as ExpVotesMap)),
       ]);
       // One-shot retry: 404/403 are definitive, but a transient blip (network /
       // 5xx) shouldn't dead-end on "Could not load this trip" — retry once.
@@ -325,7 +355,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (token !== loadTokenRef.current) return;
         bundle = await loadAll();
       }
-      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, favRes, revRes, tourRes, memRes] = bundle;
+      const [tripView, listRes, votesRes, subRes, pipeRes, itinRes, cavRes, insRes, finalRes, favRes, revRes, tourRes, memRes, expRes, expVotesRes] = bundle;
       if (token !== loadTokenRef.current) return; // a newer enterTrip superseded us
       setTrip(tripView);
       setRoster(memRes.members || []);
@@ -333,6 +363,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSplitState(readSplit(id) ?? tripView.adults ?? 14);
       setListings(listRes.listings);
       setVotes(votesRes);
+      setExperiences(expRes.experiences || []); setExpPending(!!expRes.pending);
+      setExpVotes(expVotesRes || {}); expVotesRef.current = expVotesRes || {};
       setSubmitted(subRes);
       setPipeline(pipeRes.listings);
       setItinerary(itinRes);
@@ -349,6 +381,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (token === loadTokenRef.current) setTripLoading(false);
     }
   }, []);
+
+  /** Retry a trip that failed to load. enterTrip early-returns on an unchanged
+   *  id, so the error screen could never recover without a full reload. */
+  const retryTrip = useCallback(() => {
+    const id = tripIdRef.current;
+    setTripError(null);
+    if (id) void enterTrip(id, true);
+  }, [enterTrip]);
 
   const refreshListings = useCallback(async () => {
     const id = tripIdRef.current;
@@ -446,6 +486,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setUser(null);
     userRef.current = null;
     setMyTrips([]);
+    resetAnalytics(); // clear PostHog identity so the next user isn't merged in
     toast('Signed out.', 'info');
   }, [toast]);
   const rename = useCallback(
@@ -469,6 +510,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const createTrip = useCallback(async (input: CreateTripInput) => {
     const created = await api.createTrip(input);
     setMyTrips((t) => [created, ...t.filter((x) => x.id !== created.id)]);
+    track('trip_created', { trip_id: created.id, destination: input.destination });
     return created;
   }, []);
   const joinTrip = useCallback(
@@ -612,11 +654,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (listingId: string, dir: VoteDir) => {
       const id = tripIdRef.current;
       if (!id || !requireSignIn('vote on homes')) return;
-      const current = userRef.current ? votesRef.current[listingId]?.[userRef.current.id] : null;
+      const uid = userRef.current?.id;
+      if (!uid) return;
+      const prev = votesRef.current;
+      const current = prev[listingId]?.[uid] ?? null;
       const next = current === dir ? null : dir;
+      // Optimistic: reflect the vote (and therefore the net-votes count) instantly
+      // so the thumb doesn't feel dead on a slow link, then reconcile with the server.
+      const optimistic: VotesMap = { ...prev, [listingId]: { ...(prev[listingId] || {}) } };
+      if (next == null) delete optimistic[listingId][uid];
+      else optimistic[listingId][uid] = next;
+      votesRef.current = optimistic; setVotes(optimistic);
       try {
-        setVotes(await api.vote(id, listingId, next));
+        const res = await api.vote(id, listingId, next);
+        votesRef.current = res; setVotes(res);
       } catch (e) {
+        votesRef.current = prev; setVotes(prev); // revert
         handleActionError(e, 'vote on homes', 'Could not save your vote.');
       }
     },
@@ -627,10 +680,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
     async (listingId: string) => {
       const id = tripIdRef.current;
       if (!id || !requireSignIn('cast your top choice')) return;
-      const next = finalRef.current.myPick === listingId ? null : listingId;
+      const uid = userRef.current?.id;
+      const prev = finalRef.current;
+      const was = prev.myPick;
+      const next = was === listingId ? null : listingId;
+      // Optimistic: move myPick AND shift the aggregate counts/total/pickers so the
+      // tally updates instantly; the server response reconciles the exact numbers.
+      const counts = { ...prev.counts };
+      if (was) counts[was] = Math.max(0, (counts[was] || 0) - 1);
+      if (next) counts[next] = (counts[next] || 0) + 1;
+      const total = prev.total + (was ? -1 : 0) + (next ? 1 : 0);
+      let pickers = prev.pickers;
+      if (pickers && uid) {
+        pickers = { ...pickers };
+        if (was) pickers[was] = (pickers[was] || []).filter((u) => u !== uid);
+        if (next) pickers[next] = [...(pickers[next] || []).filter((u) => u !== uid), uid];
+      }
+      const optimistic: FinalState = { ...prev, myPick: next, counts, total, pickers };
+      finalRef.current = optimistic; setFinal(optimistic);
       try {
-        setFinal(await api.finalVote(id, next));
+        const res = await api.finalVote(id, next);
+        finalRef.current = res; setFinal(res);
       } catch (e) {
+        finalRef.current = prev; setFinal(prev); // revert
         handleActionError(e, 'cast your top choice', 'Could not save your pick.');
       }
     },
@@ -656,6 +728,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     },
     [requireSignIn, handleActionError],
   );
+
+  // Experiences: optimistic vote with rollback, same beat as castVote above.
+  const castExpVote = useCallback(
+    async (experienceId: string, dir: VoteDir) => {
+      const id = tripIdRef.current;
+      if (!id || !requireSignIn('vote on things to do')) return;
+      const uid = userRef.current?.id;
+      if (!uid) return;
+      const prev = expVotesRef.current;
+      const current = prev[experienceId]?.[uid] ?? null;
+      const next = current === dir ? null : dir;
+      const optimistic: ExpVotesMap = { ...prev, [experienceId]: { ...(prev[experienceId] || {}) } };
+      if (next == null) delete optimistic[experienceId][uid];
+      else optimistic[experienceId][uid] = next;
+      expVotesRef.current = optimistic; setExpVotes(optimistic);
+      try {
+        const res = await api.expVote(id, experienceId, next);
+        expVotesRef.current = res; setExpVotes(res);
+      } catch (e) {
+        expVotesRef.current = prev; setExpVotes(prev); // revert
+        handleActionError(e, 'vote on things to do', 'Could not save your vote.');
+      }
+    },
+    [requireSignIn, handleActionError],
+  );
+
+  const refreshExperiences = useCallback(async () => {
+    const id = tripIdRef.current;
+    if (!id) return;
+    try {
+      await api.refreshExperiences(id);
+      setExpPending(true);
+      toast('Refreshing things to do — check back in a minute.', 'info');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Could not refresh right now.', 'error');
+    }
+  }, [toast]);
 
   const setDecision = useCallback(
     async (listingId: string | null) => {
@@ -905,7 +1014,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppContextValue = useMemo(
     () => ({
-      user, myTrips, accountLoading,
+      user, myTrips, tripsError, accountLoading,
       trip, tripId, isOwner: !!trip?.isOwner, tripLoading, tripError,
       // Expose the CANONICAL votes/final/favorites — alias ids merged onto the
       // displayed copy — so every consumer reads merged tallies automatically.
@@ -913,20 +1022,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
       favoriteIds: canonFavoriteIds, toggleFavorite,
-      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
+      loadAccount, refreshMyTrips, enterTrip, retryTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, siteTourSignal, startSiteTour, personalSkin, setSkin, setTripSkin, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
+      experiences, expPending, expVotes, castExpVote, refreshExperiences,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, setSplit, toast, dismissToast,
     }),
     [
-      user, myTrips, accountLoading, trip, tripId, tripLoading, tripError,
+      user, myTrips, tripsError, accountLoading, trip, tripId, tripLoading, tripError,
       listings, canonVotes, submitted, pipeline, itinerary, caveats, insights, canonFinal, reviewsMap, toursMap, roster,
+      experiences, expPending, expVotes, castExpVote, refreshExperiences,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
       canonFavoriteIds, toggleFavorite,
-      loadAccount, refreshMyTrips, enterTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
+      loadAccount, refreshMyTrips, enterTrip, retryTrip, refreshListings, createTrip, joinTrip, deleteTrip, leaveTrip,
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, siteTourSignal, startSiteTour, personalSkin, setSkin, setTripSkin, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,

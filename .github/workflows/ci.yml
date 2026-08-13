@@ -1,0 +1,65 @@
+name: CI
+
+# Gate on pull requests to main (and on direct pushes to main) so a broken
+# commit is caught before it can be deployed. The client is TypeScript, so we
+# typecheck + build it; both dependency trees are audited (fail only on HIGH+),
+# and node --check is a cheap syntax gate for the plain-JS server + pipeline.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  client:
+    name: Client — typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+      - name: Install
+        working-directory: client
+        run: npm ci
+      - name: Typecheck
+        working-directory: client
+        run: npm run typecheck
+      - name: Build
+        working-directory: client
+        run: npm run build
+
+  server:
+    name: Server — syntax + deps
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install (prod deps)
+        run: npm ci --omit=dev
+      - name: Syntax check
+        run: node --check server.js && node --check pipeline.js && node --check emails.js
+
+  audit:
+    name: Dependency audit (high+)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Audit root
+        run: npm audit --audit-level=high
+      - name: Audit client
+        working-directory: client
+        run: npm audit --audit-level=high

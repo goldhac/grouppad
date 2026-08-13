@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react';
 import {
   ChevronLeft, Bookmark, Share2, ThumbsUp, ThumbsDown, Star, BadgeCheck, Award,
-  Waves, SquareParking, Bath, HelpCircle, X, Sparkles, ExternalLink, MapPin, Scale, Check, Clapperboard, LockOpen, Trash2,
+  Waves, SquareParking, Bath, HelpCircle, X, Sparkles, ExternalLink, MapPin, Scale, Check, Clapperboard, LockOpen, Trash2, Compass,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
 import { MapWidget } from '@/components/MapWidget';
 import { MobilePhotoCarousel } from '@/components/MobilePhotoCarousel';
 import { PhotoLightbox } from '@/components/PhotoLightbox';
-import { fmt, tallyVotes } from '@/lib/utils';
+import { fmt, tallyVotes, expAnchor, expDistanceMi } from '@/lib/utils';
+import { track } from '@/lib/analytics';
 import { cn } from '@/lib/cn';
 
 const B_LABEL: Record<string, string> = { under: 'Under budget', marginal: 'Marginal', over: 'Over budget', unknown: 'Price TBD' };
 
 export function MobileDetail() {
-  const { detailId, tripId, findListing, closeDetail, user, votes, split, isOwner, final, favoriteIds, reviewsMap, loadReviewsFor, selected, toggleSelect, castVote, toggleFavorite, toggleFinalPick, setDecision, requireSignIn, toast, aiWhy, toursMap, generateTour, deleteListing } = useApp();
+  const { detailId, tripId, trip, experiences, findListing, closeDetail, user, votes, split, isOwner, final, favoriteIds, reviewsMap, loadReviewsFor, selected, toggleSelect, castVote, toggleFavorite, toggleFinalPick, setDecision, requireSignIn, toast, aiWhy, toursMap, generateTour, deleteListing } = useApp();
   const [lightbox, setLightbox] = useState<number | null>(null);
   const l = detailId ? findListing(detailId) : null;
   useEffect(() => { if (l && user && !reviewsMap[`${l.source}:${l.id}`]) void loadReviewsFor(l); /* eslint-disable-next-line */ }, [detailId, user]);
@@ -31,6 +32,16 @@ export function MobileDetail() {
   const tour = toursMap[l.id];
   const tourClip = tour?.status === 'ready' ? tour.clips.find((c) => c.videoUrl) : undefined;
   const dists = l.distances ?? [];
+
+  // "Things to do nearby" (spec: experiences.md §4 Phase 2.3) — desktop parity,
+  // reusing the dx-nearby strip classes. Anchor = home coords else primary ref
+  // point; hidden entirely when neither exists or no experience has coords.
+  const nearAnchor = expAnchor(l, trip);
+  const nearby = experiences
+    .map((x) => ({ x, mi: expDistanceMi(nearAnchor, x) }))
+    .filter((e): e is { x: typeof e.x; mi: number } => e.mi != null)
+    .sort((a, b) => a.mi - b.mi)
+    .slice(0, 4);
 
   const amen: { yes?: boolean; no?: boolean; unk?: boolean; icon: typeof Waves; label: string }[] = [
     { yes: l.pool === 'yes', no: l.pool === 'no', unk: !l.pool || l.pool === 'unknown', icon: Waves, label: l.pool === 'no' ? 'No pool' : l.pool === 'yes' ? 'Pool' : 'Pool?' },
@@ -89,6 +100,28 @@ export function MobileDetail() {
               <div style={{ marginTop: 8 }}>
                 <div className="d-seclabel"><Icon icon={MapPin} className="ico" /> Location</div>
                 <MapWidget l={l} />
+              </div>
+            )}
+            {/* Things to do nearby — surroundings inform the home vote (Phase 2.3) */}
+            {nearby.length > 0 && (
+              <div style={{ marginTop: 8 }}>
+                <div className="d-seclabel"><Icon icon={Compass} className="ico" /> Things to do nearby</div>
+                <div className="dx-nearby">
+                  {nearby.map(({ x, mi }) => (
+                    <a
+                      key={x.id}
+                      className="dx-nearcard"
+                      href={x.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => track('experience_nearby_clicked', { experience_id: x.id, listing_id: l.id, mi, surface: 'mobile' })}
+                    >
+                      <img src={x.photo ?? ''} alt="" loading="lazy" onError={(e) => (e.currentTarget.style.opacity = '0')} />
+                      <span className="t">{x.title}</span>
+                      <span className="m tnum">{mi} mi from {nearAnchor!.label}{x.price != null ? ` · from $${x.price}` : ''}</span>
+                    </a>
+                  ))}
+                </div>
               </div>
             )}
             <div className="d-break">

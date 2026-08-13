@@ -1195,6 +1195,15 @@ async function runTripSearch(tripId) {
       ...l,
     }));
 
+    // Don't let a blocked/empty scrape blow away a good board. A transient Airbnb
+    // block or markup change yields 0 results; overwriting would leave members
+    // staring at a blank board on a trip that had homes a minute ago. Keep the
+    // previous listings and bail — a later refresh will repopulate.
+    if (final.length === 0 && hadPrev) {
+      console.warn(`[trip-search] 0 results but previous board exists — keeping existing listings, skipping write → ${listingsFile}`);
+      return;
+    }
+
     const tmp = `${listingsFile}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(final, null, 2));
     fs.renameSync(tmp, listingsFile);
