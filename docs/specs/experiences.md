@@ -617,3 +617,51 @@ in the wrap instead of leaving someone to spot it in the totals.
 **Still open:** Scout orders stops with no geographic knowledge, so a selection
 spread over 100 miles gets a bad ordering no matter how good the arithmetic is.
 Nearest-neighbour ordering within a day is the obvious next step.
+
+---
+
+## 4i. Ordering, expiring links, and drawn illustrations (SHIPPED 2026-08-13)
+
+### Stops are ordered by geography, not just by Scout
+Scout picks WHICH things go together — it has votes, ratings, durations and
+prices, and no idea where anything is. A day that happened to alternate coast /
+downtown racked up hours of backtracking that no amount of accurate drive-time
+arithmetic could fix. `orderByProximity()` does greedy nearest-neighbour from
+wherever the group starts. Not the optimal tour (that's TSP), but for the 1–3
+stops a sane day holds it is almost always the same answer, and it can only
+reduce travel versus ignoring geography. Measured on the real board: a
+4-stop day went from ~47 mi of zig-zag to 28.7 mi.
+
+Guards: fewer than 3 located stops is left alone (nothing to gain), no anchor is
+left alone, and stops without coordinates keep their order and go last.
+
+**`route.order` is the single source of truth.** `withRoutes()` re-sorts the
+day's `items` to match, so the routed view, the exported itinerary and the share
+page can never disagree about what happens first — an inconsistency this change
+would otherwise have introduced.
+
+### Shared plan links expire after 7 days
+The URL is the secret, so it shouldn't be a permanent key to a trip. A shared
+plan is also a conversation piece: it lands in the group chat, gets compared,
+and is done with. Seven days from the last (re)generation covers that, and
+**re-planning restarts the clock** — the natural fix if someone still needs it.
+
+Enforced on all three entry points (share page, `.pdf`, public API), all
+returning **410**. The share page returns a real page rather than a redirect:
+someone followed a link a friend sent them and deserves to be told what
+happened, not dumped on a board with no explanation. The owner sees the
+countdown where it matters — beside the copy button in the studio, and in the
+My-plan subtitle — turning amber in the last two days.
+
+Back-compatible: plans written before `expires_at` existed fall back to
+`planned_at + 7 days`.
+
+### Illustrations are drawn from tokens, not generated as images
+The obvious way to make this feel premium is generated artwork. It is the wrong
+call here: the app ships **6 skins × 2 themes**, and a baked raster can only
+ever be correct in one of the twelve — in the rest it fights the accent colour.
+The `RouteArt` component is SVG built from `var(--accent)` / `var(--border-strong)`,
+so it follows every skin automatically, weighs nothing, stays sharp at any
+density, and matches the editorial house style. It self-draws once on entry
+(1.1s) and then the far pins breathe at 3.2s — slow enough to read as calm.
+Everything collapses under `prefers-reduced-motion`.

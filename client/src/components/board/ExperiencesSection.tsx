@@ -521,6 +521,29 @@ export function expPlanPerPerson(plan: ExpPlan, byId: Map<string, Experience>, s
 /** "Things to do" board tab — scraped Airbnb Experiences the group can vote on.
  *  Spec: docs/specs/experiences.md. Votes surface a "group's list" at the top
  *  (the homes-shortlist analog) which the organizer can send to the itinerary. */
+/** A route drawing itself — the tab's one piece of art, built from tokens so it
+ *  follows the accent through all six skins and both themes. */
+function RouteArt({ size = 132 }: { size?: number }) {
+  return (
+    <svg className="xart" width={size} height={size * 0.79} viewBox="0 0 132 104" fill="none" aria-hidden="true">
+      <path className="trail draw" d="M18 78 C40 58, 52 74, 72 52 S104 26, 116 30"
+        strokeWidth="2.5" strokeLinecap="round" strokeDasharray="1 7" />
+      <circle className="pin" cx="18" cy="78" r="6.5" />
+      <circle className="halo" cx="18" cy="78" r="13" strokeWidth="1.5" fill="none" />
+      <circle className="pin b1" cx="72" cy="52" r="5" />
+      <circle className="pin b2" cx="116" cy="30" r="5" />
+      <circle className="pin b3" cx="94" cy="38" r="3.5" />
+    </svg>
+  );
+}
+
+/** Whole days until a shared plan link stops working. */
+const planDaysLeft = (p: ExpPlan | null) => {
+  if (!p?.expires_at) return null;
+  const ms = new Date(p.expires_at).getTime() - Date.now();
+  return ms <= 0 ? 0 : Math.ceil(ms / 86400000);
+};
+
 /**
  * The plan studio — "test out a plan".
  *
@@ -572,6 +595,7 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
   };
 
   const days = plan?.days.filter((d) => d.items.length > 0) ?? [];
+  const daysLeft = planDaysLeft(plan);
 
   return (
     <DialogPrimitive.Root open onOpenChange={(o) => !o && onClose()}>
@@ -602,6 +626,7 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
               <div className="xstudio-b">
                 {generating ? (
                   <div className="xgen">
+                    <RouteArt size={116} />
                     <div className="orb">
                       <span className="ring" />
                       <Icon icon={Sparkles} className="ico" />
@@ -630,9 +655,12 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
                       )
                   ))
                 ) : (
-                  <p className="text-text-muted" style={{ textAlign: 'center', padding: '32px 0' }}>
-                    Nothing to show yet — pick a few things and generate again.
-                  </p>
+                  <div style={{ textAlign: 'center', padding: '28px 0 32px' }}>
+                    <RouteArt size={116} />
+                    <p className="text-text-muted" style={{ margin: 0 }}>
+                      Nothing to show yet — pick a few things and generate again.
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -641,6 +669,12 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
                   <Icon icon={RefreshCw} className="ico" /> Try again
                 </button>
                 <span className="sp" />
+                {!generating && days.length > 0 && daysLeft != null && (
+                  <span className={cn('xlife', daysLeft <= 2 && 'soon')} title="Shared plan links expire so they don't stay a permanent key to your trip">
+                    <Icon icon={Clock} className="ico" />
+                    {daysLeft === 0 ? 'Link has expired' : `Link works for ${daysLeft} more day${daysLeft === 1 ? '' : 's'}`}
+                  </span>
+                )}
                 {copied ? (
                   <span className="xcopied"><Icon icon={Check} className="ico" /> Link copied</span>
                 ) : (
@@ -856,6 +890,7 @@ export function ExperiencesSection() {
   // Only offer the routed view when the server could actually build one (it
   // needs coordinates); otherwise the switch would toggle to an empty panel.
   const hasRoute = !!plan?.days.some((d) => d.route && d.route.rows.length > 0);
+  const myPlanDaysLeft = planDaysLeft(myPlan);
 
   // Four situations that used to render as one. The important one is the error:
   // every read was caught and swallowed into an empty list, so a server outage
@@ -1131,6 +1166,11 @@ export function ExperiencesSection() {
                   : myPlan
                     ? `${myPlan.days.reduce((n, d) => n + d.items.length, 0)} activities over ${myPlan.days.length} day${myPlan.days.length === 1 ? '' : 's'}`
                     : `${saved.size} saved`}
+                {myPlan && myPlanDaysLeft != null && (
+                  myPlanDaysLeft === 0
+                    ? <> &middot; <span style={{ color: 'var(--marginal)' }}>share link expired — re-plan to revive it</span></>
+                    : <> &middot; share link works for {myPlanDaysLeft} more day{myPlanDaysLeft === 1 ? '' : 's'}</>
+                )}
               </div>
             </div>
             <div className="xp-acts">

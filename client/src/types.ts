@@ -283,6 +283,10 @@ export interface ExpPlan {
     route?: DayRoute | null;
   }[];
   planned_at: string;
+  /** Shared plan links stop working a week after the plan was last generated —
+   *  the URL is the secret, so it shouldn't be a permanent key. Re-planning
+   *  restarts the clock. Absent on the group's plan, which isn't shared by URL. */
+  expires_at?: string;
   /** True when built without Gemini (cap hit / key missing) — still useful. */
   fallback?: boolean;
 }

@@ -247,12 +247,25 @@ app.get('/s/b/:tripId', (req, res) => {
 // ship for scraping — no new dependency. MUST be registered before the HTML route
 // below: Express's `:userId` would otherwise swallow the ".pdf" suffix.
 // Falls back to a clear message (not a broken download) if Chromium is missing.
+// ── Shared plans expire ──────────────────────────────────────────────────────
+// The URL is the secret, so it should not be a permanent one. A shared plan is
+// also a conversation piece — "here's what I'd do" lands in the group chat, gets
+// compared, and is done with. Seven days from the last (re)generation covers
+// that conversation and then the link stops being a standing key to the trip.
+// Re-planning revives it, which is the natural fix if someone still needs it.
+const PLAN_LINK_TTL_MS = 7 * 24 * 3600 * 1000;
+const planExpiryAt = (p) => new Date(p?.expires_at || (new Date(p?.planned_at || 0).getTime() + PLAN_LINK_TTL_MS)).getTime();
+const planExpired = (p) => !!p && Date.now() > planExpiryAt(p);
+/** Whole days left, floor 0 — what the UI counts down. */
+const planDaysLeft = (p) => Math.max(0, Math.ceil((planExpiryAt(p) - Date.now()) / (24 * 3600 * 1000)));
+
 app.get('/s/plan/:tripId/:userId.pdf', rateLimit({ windowMs: 300000, max: 10 }), async (req, res) => {
   const { tripId } = req.params;
   const userId = String(req.params.userId || '');
   const trip = getTrip(tripId);
   const plan = trip && loadMyPlans(tripId)[userId];
   if (!plan) return res.status(404).send('No plan to export yet.');
+  if (planExpired(plan)) return res.status(410).send('This plan link has expired.');
 
   const url = `${reqBase(req)}/s/plan/${encodeURIComponent(tripId)}/${encodeURIComponent(userId)}?print=1`;
   let browser;
@@ -289,6 +302,45 @@ app.get('/s/plan/:tripId/:userId', (req, res) => {
   if (!trip) return res.redirect(302, `${base}/`);
   const plan = loadMyPlans(req.params.tripId)[req.params.userId];
   if (!plan) return res.redirect(302, boardHash(trip.id, '', base));
+  // Expired: a real page, not a redirect. Someone followed a link a friend sent
+  // them and deserves to be told what happened rather than dumped on a board
+  // with no explanation. 410 is the honest status; the page is still friendly.
+  if (planExpired(plan)) {
+    const who = plan.owner_name || 'A member';
+    return res.status(410).set('Cache-Control', 'no-store').type('html').send(`<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>This plan link has expired</title><meta name="robots" content="noindex">
+<style>
+:root{color-scheme:dark;--bg:#121a18;--card:#182421;--line:#24322e;--tx:#eaf2ef;--mut:#9db3ac;--ac:#3fa88a}
+*{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;background:var(--bg);color:var(--tx);
+  font:16px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:28px}
+.c{max-width:420px;text-align:center}
+.c h1{font-size:23px;margin:22px 0 8px;letter-spacing:-.02em}
+.c p{color:var(--mut);font-size:14.5px;margin:0 0 22px}
+.c a{display:inline-block;background:var(--ac);color:#08120f;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:12px}
+.ft{margin-top:18px;color:var(--mut);font-size:12px}
+/* The illustration is drawn, not shipped: it inherits the palette, weighs
+   nothing, and stays sharp at any density. */
+svg .fade{animation:d 3.2s ease-in-out infinite}
+svg .fade2{animation:d 3.2s ease-in-out .5s infinite}
+svg .fade3{animation:d 3.2s ease-in-out 1s infinite}
+@keyframes d{0%,100%{opacity:.28}50%{opacity:.07}}
+@media (prefers-reduced-motion:reduce){svg .fade,svg .fade2,svg .fade3{animation:none}}
+</style></head><body><div class="c">
+<svg width="132" height="104" viewBox="0 0 132 104" fill="none" aria-hidden="true">
+  <path d="M18 78 C40 58, 52 74, 72 52 S104 26, 116 30" stroke="var(--line)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 7"/>
+  <circle cx="18" cy="78" r="6.5" fill="var(--ac)" opacity=".9"/>
+  <circle cx="72" cy="52" r="5" fill="var(--ac)" class="fade"/>
+  <circle cx="116" cy="30" r="5" fill="var(--ac)" class="fade2"/>
+  <circle cx="94" cy="38" r="3.5" fill="var(--ac)" class="fade3"/>
+  <circle cx="18" cy="78" r="13" stroke="var(--ac)" stroke-width="1.5" opacity=".28"/>
+</svg>
+<h1>This plan link has expired</h1>
+<p>${ogEsc(who)} shared a plan for ${ogEsc(trip.name)}, but shared plans only stay live for a week. The trip board is still there.</p>
+<a href="${boardHash(trip.id, '', base)}">Open the trip board</a>
+<p class="ft">Made with GroupPad</p>
+</div></body></html>`);
+  }
   const byId = new Map(loadExperiences(trip.id).map((x) => [String(x.id), x]));
   const who = plan.owner_name || 'A member';
   const dayName = (d) => {
@@ -3691,10 +3743,47 @@ function tripAnchor(tripId, trip) {
 }
 
 /** One day of the plan → the alternating stop/leg rows the UI draws. */
+/**
+ * Order a day's stops so the driving makes sense.
+ *
+ * Scout chooses WHICH things go together — it has ratings, votes, durations and
+ * prices, but no idea where anything is. Left in its order, a day that happens
+ * to alternate between the coast and downtown racks up hours of backtracking
+ * that no amount of accurate drive-time arithmetic can fix.
+ *
+ * Greedy nearest-neighbour from wherever the group starts. It is not the
+ * optimal tour (that's TSP) but for the 1–3 stops a sane day holds it is
+ * almost always the same answer, and it can only ever reduce total travel
+ * versus an ordering that ignored geography entirely.
+ *
+ * Stops without coordinates keep their relative order and go last — we can't
+ * place them, so we don't pretend to.
+ */
+function orderByProximity(stops, anchor) {
+  const located = stops.filter((s) => typeof s.x.lat === 'number' && typeof s.x.lng === 'number');
+  const rest = stops.filter((s) => !(typeof s.x.lat === 'number' && typeof s.x.lng === 'number'));
+  if (located.length < 3 || !anchor) return stops; // nothing to gain re-ordering 2 stops
+  const out = [];
+  const pool = [...located];
+  let from = anchor;
+  while (pool.length) {
+    let best = 0, bestMi = Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      const mi = straightLineMi(from, pool[i].x);
+      if (mi < bestMi) { bestMi = mi; best = i; }
+    }
+    const [next] = pool.splice(best, 1);
+    out.push(next);
+    from = { lat: next.x.lat, lng: next.x.lng };
+  }
+  return [...out, ...rest];
+}
+
 function routeDay(day, ctx) {
   const { byId, anchor, pins, votes, party, dayStartMin } = ctx;
-  const stops = day.items.map((it) => ({ it, x: byId.get(it.id) })).filter((s) => s.x);
-  if (!stops.length) return null;
+  const raw = day.items.map((it) => ({ it, x: byId.get(it.id) })).filter((s) => s.x);
+  if (!raw.length) return null;
+  const stops = orderByProximity(raw, anchor);
 
   const rows = [];
   let clock = dayStartMin;
@@ -3754,6 +3843,10 @@ function routeDay(day, ctx) {
   }
 
   return {
+    // The order this route actually walks. withRoutes rewrites the day's items
+    // to match, so the routed view, the exported itinerary and the share page
+    // can never disagree about what happens first.
+    order: stops.map(({ x }) => String(x.id)),
     win: `${clockOf(dayStartMin)} – ${clockOf(clock)}`,
     out: spanOf(clock - dayStartMin),
     drive: driveMins ? spanOf(driveMins) : null,
@@ -3779,7 +3872,20 @@ function withRoutes(tripId, trip, plan) {
       party: Math.max(1, Number(trip?.adults) || 2),
       dayStartMin: 9 * 60 + 30,
     };
-    return { ...plan, days: plan.days.map((d) => ({ ...d, route: routeDay(d, ctx) })) };
+    return {
+      ...plan,
+      days: plan.days.map((d) => {
+        const route = routeDay(d, ctx);
+        if (!route?.order) return { ...d, route };
+        // Re-home items into the routed order. Anything the route couldn't
+        // place (no coordinates) keeps its position at the end.
+        const rank = new Map(route.order.map((id, i) => [id, i]));
+        const items = [...d.items].sort(
+          (a, b) => (rank.get(String(a.id)) ?? 1e6) - (rank.get(String(b.id)) ?? 1e6),
+        );
+        return { ...d, items, route };
+      }),
+    };
   } catch (e) {
     console.error('[route]', e.message);
     return plan;
@@ -4110,6 +4216,8 @@ Return ONLY JSON: {"days":[{"day":"<a trip day or null>","items":[{"k":"<key>","
     ...built,
     owner_name: (req.user.name || 'A member').split(' ')[0],
     planned_at: new Date().toISOString(),
+    // Re-planning restarts the clock — the link is only as old as the plan.
+    expires_at: new Date(Date.now() + PLAN_LINK_TTL_MS).toISOString(),
   };
   saveMyPlans(all, tripId);
   // Your own plan gets the same routed-day treatment as the group's — it is the
@@ -4126,6 +4234,7 @@ app.get('/api/trips/:tripId/my-plan', requireAuth, loadTripOr404, (req, res) => 
 app.get('/api/trips/:tripId/plans/:userId', loadTripOr404, (req, res) => {
   const p = loadMyPlans(req.params.tripId)[req.params.userId];
   if (!p) return res.status(404).json({ error: 'No plan yet' });
+  if (planExpired(p)) return res.status(410).json({ error: 'This plan link has expired.' });
   const byId = new Map(loadExperiences(req.params.tripId).map((x) => [String(x.id), x]));
   res.json({
     owner_name: p.owner_name || 'A member', planned_at: p.planned_at, fallback: !!p.fallback,
