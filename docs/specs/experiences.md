@@ -484,3 +484,46 @@ as opposed to `refreshExperiences()` which asks the server to re-scrape).
 Mobile To-do parity, the detail-dialog order, the public share page, the tab bar.
 **Mobile still renders the old card**, so the desktop and mobile To-do tabs now
 differ — that is the top follow-up.
+
+---
+
+## 4g. Splitting the To-do tab: Browse | Plan (SHIPPED 2026-08-13)
+
+The redesign fixed the card but not the *page*: the tab was doing three jobs
+stacked vertically — browse & vote (everyone, constantly), read the ranking (a
+summary), and plan (one or two people, occasionally) — so you scrolled past two
+tall panels before reaching a single item.
+
+**The rule:** browsing is divergent (scan widely, react) and planning is
+convergent (commit to a sequence). Different modes get different screens. That
+is what Wanderlog (Explore vs Itinerary), Google Travel (Explore / Saved /
+Trips) and Airbnb (browse vs Wishlists) all ship — discovery and itinerary are
+*always* separate destinations in this category.
+
+**Segmented control, not a 7th tab.** The board's top nav was de-congested once
+already (§ mobile chrome, 2026-08-11); adding "Plan" up there would undo it. A
+segment inside To-do gets the same separation, and it is the control iOS and
+Android already train people on, so it ports to mobile unchanged.
+
+**Not a modal.** A routed day is long, scrollable, referential and shareable —
+you read it *against* the items. Modals are for short focused dismissible
+tasks; a two-day itinerary in a dialog means no deep link, no share target and
+a scroll inside a scroll. Modals stay where they already work: the
+single-experience detail.
+
+### What's on each
+* **Browse** — the vibe chips and the grid, plus ONE row above them: the
+  **leader bar** (`.xlead`, ~44px). Rank 1, the honest denominator, and the way
+  into Plan. This is deliberate: voting has to visibly do something or people
+  stop doing it, and moving the whole leaderboard away would leave the browse
+  view silent. Sorting and Refresh live here too — they act on the grid.
+* **Plan** — the full leaderboard, Scout's proposal, then My plan, in that
+  narrative order (the group's answer → a machine's proposal → your own
+  version). Capped at `980px`: a reading surface, not a grid.
+
+A quiet accent **dot** on the Plan segment when a plan exists — it says
+"something is here" without shouting at someone mid-browse.
+
+**My plan now renders as a routed day too** (`withRoutes` applied to both
+`my-plan` responses) — it is the same kind of object, and a personal plan is
+the one you actually walk.

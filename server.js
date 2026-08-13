@@ -4077,11 +4077,13 @@ Return ONLY JSON: {"days":[{"day":"<a trip day or null>","items":[{"k":"<key>","
     planned_at: new Date().toISOString(),
   };
   saveMyPlans(all, tripId);
-  res.json(all[req.user.id]);
+  // Your own plan gets the same routed-day treatment as the group's — it is the
+  // same kind of object, and a personal plan is the one you actually walk.
+  res.json(withRoutes(tripId, trip, all[req.user.id]));
 });
 
 app.get('/api/trips/:tripId/my-plan', requireAuth, loadTripOr404, (req, res) => {
-  res.json(loadMyPlans(req.params.tripId)[req.user.id] || null);
+  res.json(withRoutes(req.params.tripId, req.trip, loadMyPlans(req.params.tripId)[req.user.id] || null));
 });
 
 // Public read for the share page (no auth: the URL is the secret, same model as

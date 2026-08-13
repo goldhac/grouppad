@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Trophy, Users, Lock, Flag, CornerDownRight, Car, Footprints, CircleDashed, CloudOff, FilterX } from 'lucide-react';
+import { ArrowRight, ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Trophy, Users, Lock, Flag, CornerDownRight, Car, Footprints, CircleDashed, CloudOff, FilterX } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
@@ -532,6 +532,10 @@ export function ExperiencesSection() {
   // expanded read. Routed is the default because it is the one that answers
   // "does this day actually work?".
   const [itinView, setItinView] = useState<'list' | 'route'>('route');
+  // Browse (divergent — scan and vote) vs Plan (convergent — commit to a
+  // sequence) are different modes, so they get their own screen instead of
+  // stacking three tall panels above the grid.
+  const [view, setView] = useState<'browse' | 'plan'>('browse');
   useEffect(() => {
     if (!tripId || !user) return;
     let dead = false;
@@ -749,7 +753,8 @@ export function ExperiencesSection() {
         <span className="cnt tnum">{sorted.length}</span>
         <span className="sub">near {trip?.destination} · vote for what you&rsquo;d actually do — booking happens on Airbnb</span>
         <div className="rh-right">
-          {anchor && (
+          {/* Sorting and refreshing act on the grid, so they belong to Browse. */}
+          {view === 'browse' && anchor && (
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => setNearest((n) => !n)}
@@ -759,15 +764,30 @@ export function ExperiencesSection() {
               <Icon icon={MapPin} className="ico" /> Nearest
             </button>
           )}
-          <button className="btn btn-ghost btn-sm" onClick={() => void refreshExperiences()} title="Refresh the list">
-            <Icon icon={RefreshCw} className="ico" /> Refresh
-          </button>
+          {view === 'browse' && (
+            <button className="btn btn-ghost btn-sm" onClick={() => void refreshExperiences()} title="Refresh the list">
+              <Icon icon={RefreshCw} className="ico" /> Refresh
+            </button>
+          )}
         </div>
       </div>
-      {/* Where the votes go: a live leaderboard. Rows are ordered by net likes and
-          reorder themselves as votes land (optimistic locally, ~8s for everyone
-          else's), so the group watches the ranking move. Same .leaderboard/.lb-bar
-          pattern as the homes top-choice board — one familiar surface, no new tab. */}
+
+      <div className="xseg" role="tablist" aria-label="Things to do view" style={{ margin: '0 0 14px' }}>
+        <button role="tab" aria-selected={view === 'browse'} className={cn(view === 'browse' && 'on')} onClick={() => setView('browse')}>
+          <Icon icon={Compass} className="ico" /> Browse <span className="n tnum">{sorted.length}</span>
+        </button>
+        <button role="tab" aria-selected={view === 'plan'} className={cn(view === 'plan' && 'on')}
+          onClick={() => { setView('plan'); track('experiences_view', { view: 'plan' }); }}>
+          <Icon icon={CalendarDays} className="ico" /> Plan
+          {/* A quiet dot, not a badge: it says "there's something here" without
+              shouting at people who are mid-browse. */}
+          {view !== 'plan' && (plan?.days.length || myPlan?.days.length) ? <span className="dot" /> : null}
+        </button>
+      </div>
+      {/* ══ PLAN ══ the group's answer -> a machine's proposal -> your own
+          version, in that narrative order. A reading surface, not a grid. */}
+      {view === 'plan' && (
+      <div className="xplan-view">
       {/* KIND 1 — the group's answer. Solid and authoritative: this is what the
           group decided, as opposed to what a machine proposed. */}
       <div className="xp k-group">
@@ -975,27 +995,52 @@ export function ExperiencesSection() {
           </div>
           {myPlan && myPlan.days.length > 0 && (
             <div className="xplan">
+              {/* Your plan is the one you actually walk, so it gets the routed
+                  day too — same rendering as the group's, from the same server
+                  computation. Falls back to the flat list without coordinates. */}
               {myPlan.days.map((d, di) => (
-                <div className="xplan-day" key={di} style={{ animationDelay: `${di * 70}ms` }}>
-                  <div className="xplan-dh">{dayLabel(d.day)}</div>
-                  {d.items.map((it) => {
-                    const x = byId.get(it.id);
-                    if (!x) return null;
-                    return (
-                      <button key={it.id} className="xplan-it" onClick={() => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id, surface: 'my_plan' }); }}>
-                        {x.photo ? <img src={x.photo} alt="" loading="lazy" /> : <span className="ph" />}
-                        <span className="tx">
-                          <b>{x.title}</b>
-                          <small>{[x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : null, x.duration != null ? fmtMins(x.duration) : null].filter(Boolean).join(' · ')}{it.why ? ` — ${it.why}` : ''}</small>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                d.route && d.route.rows.length > 0 ? (
+                  <RoutedDay key={di} day={d.day} route={d.route} byId={byId}
+                    onOpen={(x) => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id, surface: 'my_plan_route' }); }} />
+                ) : (
+                  <div className="xplan-day" key={di} style={{ animationDelay: `${di * 70}ms` }}>
+                    <div className="xplan-dh">{dayLabel(d.day)}</div>
+                    {d.items.map((it) => {
+                      const x = byId.get(it.id);
+                      if (!x) return null;
+                      return (
+                        <button key={it.id} className="xplan-it" onClick={() => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id, surface: 'my_plan' }); }}>
+                          {x.photo ? <img src={x.photo} alt="" loading="lazy" /> : <span className="ph" />}
+                          <span className="tx">
+                            <b>{x.title}</b>
+                            <small>{[x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : null, x.duration != null ? fmtMins(x.duration) : null].filter(Boolean).join(' · ')}{it.why ? ` — ${it.why}` : ''}</small>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
               ))}
             </div>
           )}
         </div>
+      )}
+
+      </div>
+      )}
+
+      {/* ══ BROWSE ══ chips + items. The only thing above the grid is one row
+          of voting feedback, because a vote that visibly does nothing stops
+          being cast. Everything else moved to Plan. */}
+      {view === 'browse' && (
+      <>
+      {groupList.length > 0 && (
+        <button className="xlead" onClick={() => { setView('plan'); track('experiences_view', { view: 'plan', from: 'leadbar' }); }}>
+          <span className="lb">Leading</span>
+          <span className="nm">{groupList[0].title}</span>
+          <span className="q"><b className="tnum">{voterCount}</b> of {split} have voted</span>
+          <span className="go">See the plan <Icon icon={ArrowRight} className="ico" /></span>
+        </button>
       )}
 
       {/* Vibe chips (Phase 4) — one row, only vibes present in this trip's list. */}
@@ -1052,6 +1097,9 @@ export function ExperiencesSection() {
           />
         ))}
       </div>
+      </>
+      )}
+
       {openX && (
         <ExperienceModal x={openX} dist={distOf.get(openX.id) ?? null} anchorLabel={anchor?.label} onClose={() => setOpenX(null)} />
       )}

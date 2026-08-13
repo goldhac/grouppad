@@ -738,3 +738,35 @@ body { background: var(--surface); }
 .xabout { font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
 .xabout-by { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--accent-text); white-space: nowrap; }
 .xabout-by .ico { width: 11px; height: 11px; }
+
+/* ── To-do view switch: Browse | Plan ────────────────────────────────────────
+   The tab was doing three jobs stacked vertically — browse & vote (everyone,
+   constantly), read the ranking, and plan (one or two people, occasionally) —
+   so you scrolled past two tall panels before reaching a single item. Browsing
+   is divergent and planning is convergent; they are different modes and get
+   their own screen. Same split Wanderlog, Google Travel and Airbnb all ship,
+   done as a segmented control so the top-level nav stays at six. */
+.xseg { display: inline-flex; gap: 4px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 4px; }
+.xseg button { position: relative; display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--text-2); font-family: var(--font-sans); font-weight: 700; font-size: var(--text-sm); padding: 8px 15px; border-radius: var(--r-pill); cursor: pointer; white-space: nowrap; transition: color var(--dur-fast) var(--ease-standard); }
+.xseg button .ico { width: 15px; height: 15px; }
+.xseg button:hover { color: var(--text); }
+.xseg button.on { background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-sm); }
+.xseg .n { font-weight: 600; opacity: 0.6; }
+/* A plan exists but you're on Browse — advertise it without a loud badge. */
+.xseg button .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: none; }
+
+/* The leader bar: voting has to visibly do something, or people stop. This is
+   the whole feedback loop in ~44px — rank 1, the honest denominator, and the
+   way into the full ranking. The panel-sized version lives in Plan. */
+.xlead { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: var(--surface-inset); border: 1px solid var(--border); border-radius: var(--r-md); padding: 8px 12px; margin: 0 0 12px; cursor: pointer; color: inherit; transition: border-color var(--dur-fast) var(--ease-standard); }
+.xlead:hover { border-color: var(--border-strong); }
+.xlead .lb { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); flex: none; }
+.xlead .nm { font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.xlead .q { font-size: 12px; color: var(--text-muted); white-space: nowrap; flex: none; }
+.xlead .q b { color: var(--text-2); font-weight: 700; }
+.xlead .go { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--link); white-space: nowrap; flex: none; }
+.xlead .go .ico { width: 13px; height: 13px; }
+@media (max-width: 640px) { .xlead .lb, .xlead .q { display: none; } }
+
+/* Plan view is a reading surface, not a grid — keep it to a comfortable measure. */
+.xplan-view { max-width: 980px; }
