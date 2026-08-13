@@ -489,10 +489,17 @@ function RoutedDay({ day, route, byId, onOpen }: { day: string | null; route: Da
         <Icon icon={Flag} className="ico" />
         {/* Full weekday, not the abbreviation — this line is the one bit of
             plain speech in the panel and "a wrap for Tue" reads like a log. */}
-        <span className="txt">That&rsquo;s a wrap for {weekdayLong(day)}</span>
+        <span className="txt">
+          That&rsquo;s a wrap for {weekdayLong(day)}
+          {route.heavy && <> &middot; <span style={{ color: 'var(--marginal)' }}>that&rsquo;s a lot of driving for one day</span></>}
+        </span>
         <span className="tot">
           <span><b>{route.out}</b> out</span>
-          {route.drive && <span><b>{route.drive}</b> driving</span>}
+          {route.drive && (
+            <span style={route.heavy ? { color: 'var(--marginal)' } : undefined}>
+              <b style={route.heavy ? { color: 'var(--marginal)' } : undefined}>{route.drive}</b> driving
+            </span>
+          )}
           {route.pp != null && <span className="tnum"><b>${route.pp}</b> pp{route.unpriced > 0 && ` (+${route.unpriced} unpriced)`}</span>}
         </span>
       </div>

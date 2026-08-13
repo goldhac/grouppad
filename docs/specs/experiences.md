@@ -591,3 +591,29 @@ along for free.
 
 `print-color-adjust: exact` forces the watermark into the PDF, where the
 distinction matters most, in a darker ink that survives on white.
+
+### 4h-bis. The drive-time model was wrong over distance
+
+Testing the studio on the real board produced `~235 min drive · 85.7 mi` and
+`~310 min · 114.1 mi` inside what is nominally an LA trip. Two findings:
+
+1. **The coordinates were right.** Airbnb's search radius is wide, so the list
+   genuinely contains things 60+ miles out — "Meet the Bees" really is at
+   34.45,-119.25, up near Carpinteria. Don't "fix" that by clamping.
+2. **The arithmetic was wrong.** A flat 22 mph city average is fine for a
+   five-mile hop and absurd over distance — it turned a ~1h50 freeway run into
+   nearly four hours.
+
+`driveMph(mi) = 15 + 30 · (1 − e^(−mi/20))` — a 15 mph floor rising toward
+~45 mph, so short trips stay slow (lights, turns, parking) and long ones go
+freeway-ish. Checks out against reality: 1.5mi→5min, 10mi→22min, 20mi→35min,
+85mi→1h54. Still an estimate, still rendered with a `~`.
+
+Two honesty follow-ons: the `tight` threshold moved to **45 min** (the point
+where a stop starts costing the day rather than fitting into it), and a day
+with **3+ hours of driving** now says *"that's a lot of driving for one day"*
+in the wrap instead of leaving someone to spot it in the totals.
+
+**Still open:** Scout orders stops with no geographic knowledge, so a selection
+spread over 100 miles gets a bad ordering no matter how good the arithmetic is.
+Nearest-neighbour ordering within a day is the obvious next step.

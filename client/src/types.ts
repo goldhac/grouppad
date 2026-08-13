@@ -263,6 +263,8 @@ export interface DayRoute {
   out: string;
   /** Time driving, or null when nothing could be measured. */
   drive: string | null;
+  /** 3h+ behind the wheel — that's a road trip, not a day out. */
+  heavy?: boolean;
   /** Per-person cost of the day's priced items. */
   pp: number | null;
   /** How many stops had no price at all. */

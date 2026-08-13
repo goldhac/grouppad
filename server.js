@@ -3632,9 +3632,23 @@ app.get('/api/trips/:tripId/exp-votes', loadTripOr404, (req, res) => {
 // in the UI. We have no routing provider, and a fabricated-precise "14 min" is
 // worse than an honest approximation.
 const ROAD_FACTOR = 1.35;   // straight-line → plausible road distance
-const CITY_MPH = 22;        // urban average including lights and traffic
 const WALK_MI = 0.6;        // under this, a group walks
 const DEFAULT_STAY_MIN = 90;
+
+/**
+ * Effective driving speed RISES with distance, and that matters more than it
+ * sounds. A flat city average is fine for a five-mile hop and absurd over
+ * distance: at a flat 22 mph the board rendered "~235 min drive · 85.7 mi" for
+ * a run up the coast that is really about 1h50 on the freeway. Short trips are
+ * lights, turns and parking; long ones are mostly freeway.
+ *
+ * 15 mph floor rising toward ~45 mph:  1.5mi→5min · 10mi→22min · 20mi→35min ·
+ * 85mi→1h54. Still an estimate — the UI always says "~".
+ *
+ * (Airbnb's search radius is wide, so a trip's list genuinely contains things
+ * 60+ miles out. The coordinates were right; the arithmetic was not.)
+ */
+const driveMph = (mi) => 15 + 30 * (1 - Math.exp(-mi / 20));
 
 // NOTE the name: there is already a haversineMi(lat1,lng1,lat2,lng2) above that
 // rounds and bakes in its own 1.25 road factor. Redeclaring it would silently
@@ -3696,14 +3710,16 @@ function routeDay(day, ctx) {
     if (here && typeof x.lat === 'number' && typeof x.lng === 'number') {
       const mi = straightLineMi(here, x) * ROAD_FACTOR;
       const walk = mi <= WALK_MI;
-      const mins = Math.max(5, Math.round((walk ? (mi / 3) * 60 : (mi / CITY_MPH) * 60) / 5) * 5);
+      const mins = Math.max(5, Math.round((walk ? (mi / 3) * 60 : (mi / driveMph(mi)) * 60) / 5) * 5);
       rows.push({
         leg: walk ? 'walk' : 'drive',
-        dur: `~${mins} min`,
+        dur: mins >= 60 ? `~${spanOf(mins)}` : `~${mins} min`,
         mi: `${mi.toFixed(1)} mi`,
-        tight: mins >= 30,
+        // 45+ minutes each way is the point where a stop starts costing the
+        // day rather than fitting into it.
+        tight: mins >= 45,
         // Don't claim it's "the longest" — several legs can trip this.
-        why: mins >= 30 ? 'a long haul across town — leave a buffer' : null,
+        why: mins >= 45 ? 'a long haul — this one costs you most of a morning' : null,
       });
       clock += mins;
       if (!walk) driveMins += mins;
@@ -3741,6 +3757,9 @@ function routeDay(day, ctx) {
     win: `${clockOf(dayStartMin)} – ${clockOf(clock)}`,
     out: spanOf(clock - dayStartMin),
     drive: driveMins ? spanOf(driveMins) : null,
+    // Three hours behind the wheel is not a day out, it's a road trip. Say so
+    // instead of leaving someone to notice it in the totals.
+    heavy: driveMins >= 180,
     pp: perPerson || null,
     unpriced,
     rows,
