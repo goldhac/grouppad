@@ -84,3 +84,38 @@ caches, separate failure modes.
 5. Which single UI surface owns it (§4)?
 6. Guard chain: `requireTripMember` + `rateLimit` + `geminiGuard` + `bumpUsage`.
 7. Add a row to §2's table in this file.
+
+---
+
+## §2e · Job 5 — "Describe" (experiences · ambient · cached + shared)
+
+**Added 2026-08-13.** Most rows arrive as a bare name: OSM gives one by
+definition, and the Airbnb search node carries no blurb (as of this date it
+doesn't even carry `primaryThemeFormatted`, so `category` is null on every
+scraped row too). A card that reads only "Koreatown" tells a group deciding
+what to do precisely nothing. Scout writes the one line the provider didn't.
+
+| | |
+|---|---|
+| **Trigger** | Ambient — filled in the background when `GET /experiences` sees a row whose description hash is stale. Never blocks the response. |
+| **Scope** | Experiences only. Never mixed with homes. |
+| **Cache** | `exp-about.json`, keyed by a hash of the FACTS a description is built from (title, category, source, duration, price, unit, rating) — so it regenerates when those change and not when a photo or url churns on a refresh. |
+| **Fallback** | `templateAbout()` — a deterministic restatement of the same fields. **Written and committed FIRST**, before any network call, so a capped/keyless deploy still leaves every row with a real description. Gemini only ever upgrades it. |
+| **Attribution** | `descriptionBy: 'scout'` renders a "✨ Scout" chip in the dialog. The template line needs no chip — it asserts nothing a human didn't already have. |
+| **Concurrency** | One fill per trip (`_describing` set): every member on the board hits this endpoint, and without it each of them starts their own batch. |
+
+### The rule that matters here: factual restraint
+This text sits next to **real businesses and real places**, which makes it the
+highest-risk Scout surface we have — a hallucinated opening time or price is a
+claim about someone's actual business. So:
+
+* the prompt is fed **only fields we already hold** (compact + keyed, no raw
+  ids, no urls, no PII — same discipline as the other jobs);
+* it is told, in the strongest terms available, never to invent an address,
+  opening hours, history, a menu, a price or a rating, and to describe the
+  category honestly when all it has is a name;
+* marketing voice is banned by name ("hidden gem", "must-see", "iconic"…);
+* output is capped at 220 chars and anything under 12 chars is dropped.
+
+If a description ever needs to assert something new about a place, it stops
+being this job and needs a source.

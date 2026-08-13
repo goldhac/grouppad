@@ -400,3 +400,87 @@ verified against fixture payloads, client `expSourceLabel`/`ExpPrice` are
 source-aware ("Open on Viator", "See price on Viator"). **`VIATOR_API_KEY` is NOT
 set in Railway** — deliberately, because the only key we hold is a sandbox one.
 The integration is inert until a production key exists.
+
+---
+
+## 4f. The Claude Design redesign — Phase 1 (SHIPPED 2026-08-13)
+
+Handoff: `Groupad_Experince_design.zip` → `design_handoff_experiences/`. It
+scoped four surfaces and named the trade-offs; below is what was implemented and
+where a decision differed from the doc.
+
+### 01 · The card → variant **A (Quiet) + C's denominator**
+The doc offered three variants and recommended A, with C's denominator borrowed
+in. Done exactly that:
+* **One badge on the photo, and only an urgency one** — `Save $X`, else
+  `Group rate`, else nothing. Category / rating / duration / distance became
+  **type** (`.xmeta`), which is what killed the mid-word clipping: the old
+  `.badge-row` was `space-between` with no wrap, so at four columns five badges
+  truncated to "Save 3", "Group r", "On the wa". The experience card no longer
+  renders `.badge-row` at all (homes still do — that rule was NOT deleted
+  globally, only stopped being used here).
+* **One overlay, not two.** Save keeps the photo; select-for-Scout became a
+  **mode** the My-plan panel turns on (`pickMode`), so selection can be
+  unmistakable (accent ring + tinted photo + filled box) instead of a second
+  34px circle that looked identical to Save.
+* **`N of 14 would go`** on every card with support — the same honesty fix the
+  leaderboard needed, stated per card.
+* Pinned days get their own accent chip: a human commitment outranks metadata.
+
+### 02 · Panels → one shell, three kinds
+`.xp` + `.k-group` (solid, authoritative) / `.k-scout` (tinted, labelled
+**Scout · proposal**) / `.k-mine` (inset, **Private to you**). The button that
+writes to the shared itinerary stays owner-only.
+
+### 03 · Scout's plan as a **routed day** ⭐
+Reference: Wanderlog / Google Maps / Citymapper — the one thing they all ship
+and a grouped list never does is the travel *between* stops. Rendered as a spine
+of `stop → leg → stop` with clock times in `--font-mono`, per-stop facts, the
+`why`, and a day wrap stating the three numbers that decide whether a day is
+sane (time out, time driving, cost pp). Both renderings ship; `List` is kept as
+the compact read.
+
+**Two decisions that differ from the mock, deliberately:**
+
+1. **The server computes every number; Scout only orders and explains.**
+   `routeDay()` derives clock times, leg distances (haversine × 1.35 road
+   factor), drive minutes (22 mph city average) and the day totals. Asking a
+   model for clock times produces days whose arrival times, reasoning and totals
+   contradict each other — and internal consistency is the one thing a plan has
+   to have. Travel times are labelled `~` because they are estimates: we have no
+   routing provider, and a fabricated-precise "14 min" is worse than an honest
+   approximation. Wire a real routing call here later and only `dur`/`mi` change.
+   *Consequence found in testing:* Scout's `why` could still contradict the
+   computed clock ("clear-sky night" on a 9:50a stop), so the Plan prompt now
+   **forbids time-of-day claims in `why`** and says why.
+2. **No invented filler stops.** The mock adds "Coffee at République" tagged
+   *Scout added*. We have no venue database, so that would be fabricating a
+   recommendation for a named real business. Gaps are named instead — which the
+   handoff already mandates ("Gaps are named, not filled").
+
+`route` is computed at **read** time, never stored: votes, pins and the decided
+home all move underneath a plan that is otherwise still valid.
+
+### 04 · Leaderboard → absolute support + quorum
+Fill is now `net ÷ party size`, not `net ÷ current leader` — one vote of
+fourteen reads as 7%, not 100%. A quorum line names the denominator out loud
+("1 of 14 have voted"), and N=0 is a **teaching state**, not an empty box.
+
+### 05 · Four states, not one
+`AppContext` used to swallow the experiences read into an empty list, so a
+server outage rendered as "no things to do found" — the product blaming the
+group's trip for its own failure, with no way back. Now `expFailed` splits
+pending / honest-empty / filtered-empty / **error**, and the error says it is
+ours, that votes are safe, and offers `retryExperiences()` (re-reads the slice,
+as opposed to `refreshExperiences()` which asks the server to re-scrape).
+
+### Also fixed while in here
+* Photo-less rows (most OSM ones) were reserving half the dialog for an empty
+  400px black column — the landscape grid now collapses via `.dx.xd-nophoto`.
+* "That's a wrap for **Tuesday**", not "Tue" — the one line of plain speech in
+  the panel read like a log entry.
+
+### Not in this pass (Phase 2/3 per the handoff)
+Mobile To-do parity, the detail-dialog order, the public share page, the tab bar.
+**Mobile still renders the old card**, so the desktop and mobile To-do tabs now
+differ — that is the top follow-up.

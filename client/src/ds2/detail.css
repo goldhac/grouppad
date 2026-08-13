@@ -251,3 +251,7 @@
 .dx.xd2 .dx-lead { aspect-ratio: 4 / 3; }
 .dx.xd2 .dx-info { gap: 12px; }
 @container dx (max-width: 820px) { .dx.xd2 { grid-template-columns: 1fr; } }
+
+/* Photo-less experiences (most OSM rows) — collapse the landscape grid rather
+   than reserving half the dialog for an empty black column. */
+.dx.xd-nophoto { grid-template-columns: minmax(0, 1fr); }

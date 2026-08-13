@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Trophy, Users, Lock, Flag, CornerDownRight, Car, Footprints, CircleDashed, CloudOff, FilterX } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
@@ -9,7 +9,7 @@ import { SafeImg } from '@/components/ui/SafeImg';
 import { cn } from '@/lib/cn';
 import { fmtMins, expAnchor, expDistanceMi } from '@/lib/utils';
 import { track } from '@/lib/analytics';
-import type { Experience, ExpVotesMap, ListingReviews, ExpPlan, ExpDaysMap } from '@/types';
+import type { Experience, ExpVotesMap, ListingReviews, ExpPlan, ExpDaysMap, DayRoute } from '@/types';
 
 /** Per-experience tally from the exp-votes store (mirrors the homes tally shape).
  *  Exported for MobileBoard's "Things to do" view. */
@@ -43,16 +43,53 @@ export function ExpPrice({ x, split }: { x: Experience; split: number }) {
   );
 }
 
-function ExperienceCard({ x, dist, anchorLabel, onOpen, pinnedDay, saved, onToggleSave, picked, onTogglePick }: { x: Experience; dist?: number | null; anchorLabel?: string; onOpen?: () => void; pinnedDay?: string | null; saved?: boolean; onToggleSave?: () => void; picked?: boolean; onTogglePick?: () => void }) {
+/**
+ * The experience card — redesign variant A ("Quiet"), plus variant C's
+ * denominator. It is on screen ~40 times per board, so every gram counts.
+ *
+ * What changed and why (Claude Design handoff, §01):
+ *  · The photo used to carry FIVE badges in a `space-between` row that could
+ *    not wrap, so at four columns they clipped mid-word. Now exactly ONE
+ *    urgency badge earns the photo; category, rating, duration and distance
+ *    became type instead of chips.
+ *  · Two near-identical 34px circles (save + select) sat on the photo and the
+ *    selected state was nearly invisible. Save is now the only overlay, and
+ *    selecting for Scout is a MODE the My-plan panel turns on — so selection
+ *    can be unmistakable (ring + tint + filled box).
+ *  · A human pinning a day outranks metadata, so it gets its own marker rather
+ *    than becoming a fifth chip competing with the rating.
+ */
+function ExperienceCard({ x, dist, anchorLabel, onOpen, pinnedDay, saved, onToggleSave, picked, onTogglePick, pickMode }: { x: Experience; dist?: number | null; anchorLabel?: string; onOpen?: () => void; pinnedDay?: string | null; saved?: boolean; onToggleSave?: () => void; picked?: boolean; onTogglePick?: () => void; pickMode?: boolean }) {
   const { user, expVotes, castExpVote, split } = useApp();
   const t = expTally(expVotes, x.id, user?.id ?? null);
   const vote = (dir: 'up' | 'down') => {
     void castExpVote(x.id, dir);
     track('experience_voted', { experience_id: x.id, dir });
   };
+  const discount = x.originalPrice != null && x.price != null && x.originalPrice > x.price
+    ? x.originalPrice - x.price : null;
+  // Metadata as one muted line, in the order a group actually reads it.
+  const meta = [
+    x.category,
+    x.duration != null ? fmtMins(x.duration) : null,
+    dist != null ? `${dist} mi from ${anchorLabel}` : null,
+  ].filter(Boolean) as string[];
+
   return (
-    <article className={cn('card', picked && 'is-selected')} role="button" tabIndex={0} onClick={onOpen} onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onOpen?.()}>
+    <article
+      className={cn('card', 'xc', pickMode && 'pickmode', picked && 'picked')}
+      role="button"
+      tabIndex={0}
+      onClick={() => (pickMode ? onTogglePick?.() : onOpen?.())}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (pickMode ? onTogglePick?.() : onOpen?.())}
+    >
       <Carousel photos={x.photo ? [x.photo] : []} alt={x.title}>
+        {/* The one badge allowed on the photo: urgency only, never metadata. */}
+        {discount != null ? (
+          <span className="xrib save"><Icon icon={Tag} className="ico" /> Save ${discount}</span>
+        ) : x.priceUnit === 'group' ? (
+          <span className="xrib group"><Icon icon={UsersRound} className="ico" /> Group rate</span>
+        ) : null}
         <button
           type="button"
           className={cn('save-btn', saved && 'on')}
@@ -62,46 +99,46 @@ function ExperienceCard({ x, dist, anchorLabel, onOpen, pinnedDay, saved, onTogg
         >
           <Icon icon={Bookmark} className="ico" />
         </button>
-        <button
-          type="button"
-          className={cn('star-btn', picked && 'on')}
-          aria-label={picked ? 'Selected for Scout' : 'Select for Scout to plan'}
-          aria-pressed={!!picked}
-          onClick={(e) => { e.stopPropagation(); onTogglePick?.(); }}
-        >
-          <Icon icon={Check} className="ico" />
-        </button>
+        {pickMode && (
+          <span className="pickbox" aria-hidden="true"><Icon icon={Check} className="ico" /></span>
+        )}
       </Carousel>
       <div className="body">
-        <div className="badge-row">
-          {x.originalPrice != null && x.price != null && x.originalPrice > x.price && (
-            <span className="badge badge-under">Save ${x.originalPrice - x.price}</span>
-          )}
-          {pinnedDay && <span className="badge badge-under"><Icon icon={CalendarDays} className="ico" /> {dayLabel(pinnedDay).replace(/,.*$/, '')}</span>}
-          {x.priceUnit === 'group' && <span className="badge"><Icon icon={UsersRound} className="ico" /> Group rate</span>}
-          {x.category && <span className="badge">{x.category}</span>}
+        {/* Title and rating share a baseline, so the eye lands on the name. */}
+        <div className="xrow1">
+          <h3 className="title">{x.title}</h3>
           {x.rating != null && (
-            <span className="badge"><Icon icon={Star} className="ico" /> {x.rating.toFixed(2)}{x.reviews != null && ` (${x.reviews})`}</span>
+            <span className="xrate" title={x.reviews != null ? `${x.reviews} reviews` : undefined}>
+              <Icon icon={Star} className="ico" /> {x.rating.toFixed(2)}
+            </span>
           )}
         </div>
-        <h3 className="title">{x.title}</h3>
-        <div className="specs xspecs">
-          <ExpPrice x={x} split={split} />
-          {x.duration != null && <span><Icon icon={Clock} className="ico" /> {fmtMins(x.duration)}</span>}
-          {dist != null && <span><Icon icon={MapPin} className="ico" /> <span className="tnum">{dist}</span> mi from {anchorLabel}</span>}
-        </div>
-        <div className="votebar-row" onClick={(e) => e.stopPropagation()}>
+        {meta.length > 0 && (
+          <div className="xmeta">
+            {meta.map((m, i) => <span key={i}>{i > 0 && <span className="sep">·</span>}{m}</span>)}
+          </div>
+        )}
+        {pinnedDay && (
+          <span className="xpin"><Icon icon={CalendarDays} className="ico" /> Pinned to {dayLabel(pinnedDay).replace(/,.*$/, '')}</span>
+        )}
+        <div className="xprice"><ExpPrice x={x} split={split} /></div>
+        {/* Borrowed from variant C: name the denominator so support can never be
+            mistaken for consensus. */}
+        {t.net > 0 && (
+          <div className="xsupport tnum">{t.net} <span>of {split} would go</span></div>
+        )}
+        <div className="xfoot" onClick={(e) => e.stopPropagation()}>
           <div className="votebar">
-            <button className={cn('vote up', t.mine === 'up' && 'on')} aria-label="Want to do this" onClick={() => vote('up')}>
+            <button className={cn('vote up', t.mine === 'up' && 'on')} aria-label="Want to do this" aria-pressed={t.mine === 'up'} onClick={() => vote('up')}>
               <Icon icon={ThumbsUp} className="ico" /> {t.up}
             </button>
             <span className={cn('net', t.net > 0 && 'pos', t.net < 0 && 'neg', 'tnum')}>{t.net > 0 ? `+${t.net}` : t.net}</span>
-            <button className={cn('vote down', t.mine === 'down' && 'on')} aria-label="Not for me" onClick={() => vote('down')}>
+            <button className={cn('vote down', t.mine === 'down' && 'on')} aria-label="Not for me" aria-pressed={t.mine === 'down'} onClick={() => vote('down')}>
               <Icon icon={ThumbsDown} className="ico" /> {t.down}
             </button>
           </div>
           <a
-            className="btn btn-ghost btn-sm"
+            className="btn btn-ghost btn-sm xopen"
             href={x.url}
             target="_blank"
             rel="noopener noreferrer"
@@ -188,19 +225,24 @@ export function ExperienceModal({ x, dist, anchorLabel, onClose }: { x: Experien
           <DialogPrimitive.Title className="sr-only">{x.title}</DialogPrimitive.Title>
           <div className="dx-modal">
             <div className="dx-shell">
-              <div className="dx xd2">
+              {/* Most OSM rows have no photo, and the landscape grid was still
+                  reserving half the dialog for it — a 400px black column beside
+                  the text. No photo, no gallery column. */}
+              <div className={cn('dx', 'xd2', !x.photo && 'xd-nophoto')}>
                 {/* Gallery (left on laptops, on top on phones) */}
-                <div className="dx-gallery">
-                  <div className="dx-lead">
-                    {x.photo ? <SafeImg src={x.photo} alt={x.title} /> : <span />}
-                    <div className="gbadges">
-                      {x.originalPrice != null && x.price != null && x.originalPrice > x.price && (
-                        <span className="badge badge-under">Save ${x.originalPrice - x.price}</span>
-                      )}
-                      {x.category && <span className="badge">{x.category}</span>}
+                {x.photo && (
+                  <div className="dx-gallery">
+                    <div className="dx-lead">
+                      <SafeImg src={x.photo} alt={x.title} />
+                      <div className="gbadges">
+                        {x.originalPrice != null && x.price != null && x.originalPrice > x.price && (
+                          <span className="badge badge-under">Save ${x.originalPrice - x.price}</span>
+                        )}
+                        {x.category && <span className="badge">{x.category}</span>}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Info (right, scrolls) */}
                 <div className="dx-info">
@@ -224,6 +266,20 @@ export function ExperienceModal({ x, dist, anchorLabel, onClose }: { x: Experien
                     {x.duration != null && <span><Icon icon={Clock} className="ico" /> {fmtMins(x.duration)}</span>}
                     {dist != null && <span><Icon icon={MapPin} className="ico" /> {dist} mi from {anchorLabel}</span>}
                   </div>
+
+                  {/* Providers rarely ship a blurb and OSM never does, so a place
+                      could open as nothing but a name. Scout writes the missing
+                      line — and is attributed when it did, because this sits
+                      next to real businesses (scout.md: always "Scout", never
+                      passed off as the provider's own copy). */}
+                  {x.description && (
+                    <p className="xabout">
+                      {x.description}
+                      {x.descriptionBy === 'scout' && (
+                        <span className="xabout-by"><Icon icon={Sparkles} className="ico" /> Scout</span>
+                      )}
+                    </p>
+                  )}
 
                   {days.length > 0 && (
                     <div className="xd-days">
@@ -320,6 +376,12 @@ const dayLabel = (d: string | null) => {
   try { return new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
   catch { return d; }
 };
+/** "Tuesday" — for prose, where the abbreviation reads like a log entry. */
+const weekdayLong = (d: string | null) => {
+  if (!d) return 'the day';
+  try { return new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long' }); }
+  catch { return d; }
+};
 
 /** Scout's day-by-day plan → an itinerary block a human chooses to save. */
 export function expPlanToItinerary(plan: ExpPlan, byId: Map<string, Experience>, pins: ExpDaysMap = {}): string {
@@ -347,6 +409,97 @@ export function expPlanToItinerary(plan: ExpPlan, byId: Map<string, Experience>,
 
 /** Per-person cost of everything in the plan (Phase 3.3). Group-priced items
  *  divide by the split; per-guest items are already per person. */
+/**
+ * A day as a journey, not a list: stop → leg → stop down a vertical spine.
+ *
+ * The reference is Wanderlog / Google Maps / Citymapper — the one thing they all
+ * ship and a grouped list never does is the travel between consecutive stops,
+ * because that is what actually breaks a group's day. The leg is a real element
+ * carrying mode + duration + distance, not prose.
+ *
+ * Every number here was computed server-side (see routeDay in server.js) so the
+ * clock times, the reasoning and the day's totals cannot disagree with each
+ * other. Travel times are estimates from straight-line distance and are shown
+ * with a "~" — we have no routing provider, and a fabricated-precise "14 min"
+ * would be worse than an honest approximation.
+ */
+function RoutedDay({ day, route, byId, onOpen }: { day: string | null; route: DayRoute; byId: Map<string, Experience>; onOpen: (x: Experience) => void }) {
+  return (
+    <div className="itin-day">
+      <div className="itin-dh">
+        <span className="d">{dayLabel(day)}</span>
+        <span className="win">out <b className="tnum">{route.win}</b></span>
+      </div>
+      <div className="itin-body">
+        <div className="itin-line">
+          {route.rows.map((row, i) => {
+            if ('leg' in row) {
+              return (
+                <div className={cn('leg', row.tight && 'tight')} key={i}>
+                  <Icon icon={row.leg === 'walk' ? Footprints : Car} className="ico ic" />
+                  <span className="dur">{row.dur} {row.leg}</span>
+                  <span>· {row.mi}</span>
+                  {row.why && <span className="why">— {row.why}</span>}
+                </div>
+              );
+            }
+            if ('gap' in row) {
+              // Scout admits the hole instead of inventing a stop to look
+              // complete. Do not "improve" this by auto-filling it.
+              return (
+                <div className="itin-gap" key={i}>
+                  <Icon icon={CircleDashed} className="ico" />
+                  <span>{row.gap}</span>
+                </div>
+              );
+            }
+            const x = row.id ? byId.get(row.id) : undefined;
+            return (
+              <div className={cn('stop', row.k === 'anchor' && 'anchor')} key={i}>
+                <div className="stop-top">
+                  <span className="stop-time">{row.t}</span>
+                  {x ? (
+                    <button className="stop-name" onClick={() => onOpen(x)}>{row.n}</button>
+                  ) : (
+                    <span className="stop-name">{row.n}</span>
+                  )}
+                  {row.tag === 'voted' && <span className="stop-tag voted"><Icon icon={ThumbsUp} className="ico" /> voted in</span>}
+                  {row.tag === 'pinned' && <span className="stop-tag pinned"><Icon icon={CalendarDays} className="ico" /> pinned</span>}
+                </div>
+                {row.facts && row.facts.length > 0 && (
+                  <div className="stop-facts">
+                    {row.facts.map((f, j) => (
+                      <span key={j}>
+                        {j > 0 && <span className="sep">·</span>}
+                        <span className={/\$|free/i.test(f) ? 'cost' : undefined}>{f}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {row.why && (
+                  <div className="stop-why"><Icon icon={CornerDownRight} className="ico" /><span>{row.why}</span></div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {/* The three numbers that decide whether a day is sane. */}
+      <div className="itin-wrap">
+        <Icon icon={Flag} className="ico" />
+        {/* Full weekday, not the abbreviation — this line is the one bit of
+            plain speech in the panel and "a wrap for Tue" reads like a log. */}
+        <span className="txt">That&rsquo;s a wrap for {weekdayLong(day)}</span>
+        <span className="tot">
+          <span><b>{route.out}</b> out</span>
+          {route.drive && <span><b>{route.drive}</b> driving</span>}
+          {route.pp != null && <span className="tnum"><b>${route.pp}</b> pp{route.unpriced > 0 && ` (+${route.unpriced} unpriced)`}</span>}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function expPlanPerPerson(plan: ExpPlan, byId: Map<string, Experience>, split: number) {
   let pp = 0; let counted = 0; let missing = 0;
   for (const d of plan.days) for (const it of d.items) {
@@ -362,7 +515,7 @@ export function expPlanPerPerson(plan: ExpPlan, byId: Map<string, Experience>, s
  *  Spec: docs/specs/experiences.md. Votes surface a "group's list" at the top
  *  (the homes-shortlist analog) which the organizer can send to the itinerary. */
 export function ExperiencesSection() {
-  const { trip, tripId, experiences, expPending, expVotes, user, refreshExperiences, final, findListing, isOwner, itinerary, saveItinerary, toast, split, requireSignIn } = useApp();
+  const { trip, tripId, experiences, expPending, expFailed, expVotes, user, refreshExperiences, retryExperiences, final, findListing, isOwner, itinerary, saveItinerary, toast, split, requireSignIn } = useApp();
   const [nearest, setNearest] = useState(false);
   const [openX, setOpenX] = useState<Experience | null>(null);
   const [vibe, setVibe] = useState<string | null>(null); // Phase 4 vibe filter
@@ -373,6 +526,12 @@ export function ExperiencesSection() {
   const [myPlan, setMyPlan] = useState<ExpPlan | null>(null);
   const [myPlanning, setMyPlanning] = useState(false);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
+  // Selecting for Scout is a MODE, not a permanent second button on every photo.
+  const [pickMode, setPickMode] = useState(false);
+  // Both plan renderings ship: the list is the glance, the routed day is the
+  // expanded read. Routed is the default because it is the one that answers
+  // "does this day actually work?".
+  const [itinView, setItinView] = useState<'list' | 'route'>('route');
   useEffect(() => {
     if (!tripId || !user) return;
     let dead = false;
@@ -479,8 +638,14 @@ export function ExperiencesSection() {
     () => expGroupList(experiences, expVotes, user?.id ?? null),
     [experiences, expVotes, user?.id],
   );
-  // Bars are relative to the current leader, so the whole board rescales live.
-  const topNet = Math.max(1, ...groupList.map((x) => expTally(expVotes, x.id, user?.id ?? null).net));
+  // How many DISTINCT people have voted on anything — the honest denominator
+  // behind the quorum line. Support bars are drawn against the party size, not
+  // against the current leader (see the --pct comment on .xlb-row).
+  const voterCount = useMemo(() => {
+    const who = new Set<string>();
+    for (const byUser of Object.values(expVotes)) for (const uid of Object.keys(byUser)) who.add(uid);
+    return who.size;
+  }, [expVotes]);
   const [sending, setSending] = useState(false);
   const sendToItinerary = async () => {
     if (!groupList.length || sending) return;
@@ -528,21 +693,51 @@ export function ExperiencesSection() {
     } finally { setSending(false); }
   };
   const planCost = plan ? expPlanPerPerson(plan, byId, split) : null;
+  // Only offer the routed view when the server could actually build one (it
+  // needs coordinates); otherwise the switch would toggle to an empty panel.
+  const hasRoute = !!plan?.days.some((d) => d.route && d.route.rows.length > 0);
 
+  // Four situations that used to render as one. The important one is the error:
+  // every read was caught and swallowed into an empty list, so a server outage
+  // appeared as "no things to do found" — the product blaming the group's trip
+  // for its own failure, with no way back.
   if (experiences.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-8 text-center">
-        <Icon icon={Compass} className="ico" />
-        {expPending ? (
-          <p className="text-text-muted">Finding things to do near {trip?.destination || 'your destination'}&hellip; check back in a minute.</p>
-        ) : (
-          <>
-            <p className="text-text-muted">No things to do found for this trip yet.</p>
-            <button className="btn btn-primary btn-sm" onClick={() => void refreshExperiences()}>
-              <Icon icon={RefreshCw} className="ico" /> Look for things to do
+    if (expFailed) {
+      return (
+        <div className="xstate error">
+          <span className="ic"><Icon icon={CloudOff} className="ico" /></span>
+          <div className="kicker">Couldn&rsquo;t load</div>
+          <h3>We couldn&rsquo;t reach the list</h3>
+          <p>This is on us, not on your trip — <b>your votes are safe</b>. Try again in a moment.</p>
+          <span className="row">
+            <button className="btn btn-primary btn-sm" onClick={() => void retryExperiences()}>
+              <Icon icon={RefreshCw} className="ico" /> Try again
             </button>
-          </>
-        )}
+          </span>
+        </div>
+      );
+    }
+    if (expPending) {
+      return (
+        <div className="xstate pending">
+          <span className="ic"><span className="xspin" /></span>
+          <div className="kicker">Working</div>
+          <h3>Finding things to do near {trip?.destination || 'your destination'}</h3>
+          <p>This usually takes about a minute — you can keep browsing homes and come back.</p>
+        </div>
+      );
+    }
+    return (
+      <div className="xstate empty">
+        <span className="ic"><Icon icon={Compass} className="ico" /></span>
+        <div className="kicker">Nothing found</div>
+        <h3>No things to do for these dates</h3>
+        <p>We looked and came back empty — it happens with smaller destinations or tight date windows.</p>
+        <span className="row">
+          <button className="btn btn-primary btn-sm" onClick={() => void refreshExperiences()}>
+            <Icon icon={RefreshCw} className="ico" /> Look again
+          </button>
+        </span>
       </div>
     );
   }
@@ -573,41 +768,69 @@ export function ExperiencesSection() {
           reorder themselves as votes land (optimistic locally, ~8s for everyone
           else's), so the group watches the ranking move. Same .leaderboard/.lb-bar
           pattern as the homes top-choice board — one familiar surface, no new tab. */}
-      {groupList.length === 0 ? (
-        // Nobody's voted yet: teach the mechanic rather than hiding it, so the
-        // first visitor knows their 👍 does something.
-        <div className="xlb" style={{ marginBottom: 14 }}>
-          <div className="xlb-head">
-            <span className="xlb-title">Top of the list</span>
-            <span className="xlb-sub">nothing ranked yet</span>
+      {/* KIND 1 — the group's answer. Solid and authoritative: this is what the
+          group decided, as opposed to what a machine proposed. */}
+      <div className="xp k-group">
+        <div className="xp-h">
+          <div className="mk"><Icon icon={Trophy} className="ico" /></div>
+          <div className="hh">
+            <span className="xp-kind"><Icon icon={Users} className="ico" /> The group&rsquo;s answer</span>
+            <div className="xp-t">Top of the list</div>
+            <div className="xp-s">
+              {groupList.length
+                ? `${groupList.length} in the running · ranked by how many of you would go`
+                : 'nothing ranked yet'}
+            </div>
           </div>
-          <p className="text-sm text-text-muted" style={{ margin: '8px 0 0' }}>
-            Hit <Icon icon={ThumbsUp} className="ico inline align-text-bottom" /> on anything below and it climbs this
-            list — the group&rsquo;s favourites rise to the top as everyone votes.
-          </p>
+          {groupList.length > 0 && (
+            <span className="xp-acts">
+              <button className="btn btn-sm" onClick={() => void runPlan(!!plan)} disabled={planning}>
+                <Icon icon={Sparkles} className="ico" /> {planning ? 'Scout is planning…' : plan ? 'Re-plan' : 'Scout: plan our days'}
+              </button>
+              {isOwner && (
+                <button className="btn btn-ghost btn-sm" onClick={() => void sendToItinerary()} disabled={sending}>
+                  <Icon icon={ListPlus} className="ico" /> Add list to trip plan
+                </button>
+              )}
+            </span>
+          )}
         </div>
-      ) : (
-        <div className="xlb" style={{ marginBottom: 14 }}>
-          <div className="xlb-head">
-            <span className="xlb-title">Top of the list</span>
-            <span className="xlb-sub">{groupList.length} in the running · ranked by group likes</span>
+
+        {groupList.length === 0 ? (
+          // N = 0 is a teaching state, not an empty box: the first vote is the
+          // moment that decides whether voting feels alive or embarrassing, so
+          // name what one vote actually does.
+          <div className="xlb-teach">
+            <span className="ic"><Icon icon={ThumbsUp} className="ico" /></span>
+            <div>
+              <div className="tt">Nothing&rsquo;s in the running yet</div>
+              <div className="ss">
+                Hit <Icon icon={ThumbsUp} className="ico inline align-text-bottom" /> on anything below and it climbs
+                this list. It takes one vote to start it and the whole group to settle it.
+              </div>
+            </div>
           </div>
+        ) : (
           <ol className="xlb-rows">
             {groupList.map((x, i) => {
               const tl = expTally(expVotes, x.id, user?.id ?? null);
               const meta = [
                 x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : null,
                 x.duration != null ? fmtMins(x.duration) : null,
-                dayPins[x.id] ? dayLabel(dayPins[x.id]).replace(/,.*$/, '') : null,
+                dayPins[x.id] ? `pinned ${dayLabel(dayPins[x.id]).replace(/,.*$/, '')}` : null,
               ].filter(Boolean).join(' · ');
               return (
                 <li key={x.id}>
                   <button
                     className={cn('xlb-row', i === 0 && 'lead')}
-                    style={{ ['--pct' as string]: `${Math.round((tl.net / topNet) * 100)}%` }}
+                    // ABSOLUTE, never relative. Measuring support against the
+                    // current leader meant the very first vote filled its row
+                    // 100% — which teaches people the number is fake, and once
+                    // they distrust it they stop voting. One of fourteen is 7%.
+                    style={{ ['--pct' as string]: `${Math.max(0, Math.min(100, (tl.net / Math.max(1, split)) * 100)).toFixed(1)}%` }}
                     onClick={() => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id, surface: 'leaderboard' }); }}
                   >
-                    <span className="xlb-rk">{i + 1}</span>
+                    <span className="xlb-rk tnum">{i + 1}</span>
                     {x.photo
                       ? <img className="xlb-thumb" src={x.photo} alt="" loading="lazy" />
                       : <span className="xlb-thumb" />}
@@ -615,89 +838,121 @@ export function ExperiencesSection() {
                       <span className="xlb-name">{x.title}{tl.mine === 'up' && <span style={{ color: 'var(--accent-text)', fontWeight: 600 }}> · you liked</span>}</span>
                       {meta && <span className="xlb-meta">{meta}</span>}
                     </span>
-                    <span className="xlb-likes">{tl.net} <small>like{tl.net === 1 ? '' : 's'}</small></span>
+                    <span className="xlb-likes tnum">{tl.net} <small>of {split}</small></span>
                   </button>
                 </li>
               );
             })}
           </ol>
-          <div className="xlb-actions">
-            <button className="btn btn-sm" onClick={() => void runPlan(!!plan)} disabled={planning}>
-              <Icon icon={Sparkles} className="ico" /> {planning ? 'Scout is planning…' : plan ? 'Re-plan' : 'Scout: plan our days'}
-            </button>
-            {isOwner && (
-              <button className="btn btn-ghost btn-sm" onClick={() => void sendToItinerary()} disabled={sending}>
-                <Icon icon={ListPlus} className="ico" /> Add list to trip plan
-              </button>
-            )}
-          </div>
+        )}
+
+        {/* The denominator, out loud. A bar nobody can size against a total is
+            just a decoration. */}
+        <div className="xlb-quorum">
+          <Icon icon={Users} className="ico" />
+          <span><b className="tnum">{voterCount}</b> of {split} have voted</span>
+          <span className="track"><span className="fill" style={{ width: `${Math.min(100, (voterCount / Math.max(1, split)) * 100)}%` }} /></span>
         </div>
-      )}
+      </div>
 
       {/* Scout's day-by-day plan — attributed, and only saved to the trip plan
           when a human presses the button (scout.md: Scout never mutates state). */}
+      {/* KIND 2 — a machine's proposal. Tinted and labelled "Scout · proposal"
+          so a member can always tell a machine opinion from a group decision,
+          and the button that writes to the shared itinerary stays owner-only. */}
       {plan && plan.days.length > 0 && (
-        <div className="ai-card" style={{ marginBottom: 14 }}>
-          <div className="ah">
-            <div className="sp"><Icon icon={Sparkles} className="ico" /></div>
-            <div>
-              <div className="at">Scout&rsquo;s plan{plan.fallback ? ' · by votes' : ''}</div>
-              <div className="as">
-                {plan.days.length} day{plan.days.length === 1 ? '' : 's'} from the group&rsquo;s votes
-                {planCost && planCost.counted > 0 && <> · ~<b className="tnum">${planCost.perPerson}</b>/person for everything{planCost.missing > 0 && ` (+${planCost.missing} unpriced)`}</>}
+        <div className="xp k-scout">
+          <div className="xp-h">
+            <div className="mk"><Icon icon={Sparkles} className="ico" /></div>
+            <div className="hh">
+              <span className="xp-kind"><Icon icon={Sparkles} className="ico" /> Scout · proposal</span>
+              <div className="xp-t">Scout&rsquo;s plan{plan.fallback ? ' · by votes' : ''}</div>
+              <div className="xp-s">
+                {plan.days.length} day{plan.days.length === 1 ? '' : 's'} routed from the group&rsquo;s votes
+                {planCost && planCost.counted > 0 && <> · ~<b className="tnum">${planCost.perPerson}</b>/person all in{planCost.missing > 0 && ` (+${planCost.missing} unpriced)`}</>}
               </div>
             </div>
-            {isOwner && (
-              <button className="btn btn-primary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => void savePlan()} disabled={sending}>
-                <Icon icon={ListPlus} className="ico" /> {sending ? 'Adding…' : 'Add to trip plan'}
-              </button>
-            )}
+            <span className="xp-acts">
+              {hasRoute && (
+                <span className="itin-switch">
+                  <button className={cn(itinView === 'list' && 'on')} onClick={() => setItinView('list')}>List</button>
+                  <button className={cn(itinView === 'route' && 'on')} onClick={() => { setItinView('route'); track('experiences_plan_routed'); }}>Routed day</button>
+                </span>
+              )}
+              {isOwner && (
+                <button className="btn btn-primary btn-sm" onClick={() => void savePlan()} disabled={sending}>
+                  <Icon icon={ListPlus} className="ico" /> {sending ? 'Adding…' : 'Add to trip plan'}
+                </button>
+              )}
+            </span>
           </div>
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {plan.days.map((d, i) => (
-              <div key={i}>
-                <div className="lb-sub" style={{ fontWeight: 700 }}>{dayLabel(d.day)}</div>
-                {d.items.map((it) => {
-                  const x = byId.get(it.id);
-                  if (!x) return null;
-                  return (
-                    <div key={it.id} className="specs" style={{ marginTop: 2 }}>
-                      <button
-                        style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left', color: 'inherit' }}
-                        onClick={() => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id, surface: 'scout_plan' }); }}
-                      >
-                        <b>{x.title}</b>
-                        {x.duration != null && <> · {fmtMins(x.duration)}</>}
-                        {x.price != null && <> · ${x.price}/{x.priceUnit === 'group' ? 'group' : 'guest'}</>}
-                        {it.why && <span style={{ opacity: 0.7 }}> — {it.why}</span>}
+
+          {hasRoute && itinView === 'route' ? (
+            <div className="xplan">
+              {plan.days.map((d, i) => (
+                d.route
+                  ? <RoutedDay key={i} day={d.day} route={d.route} byId={byId}
+                      onOpen={(x) => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id, surface: 'scout_route' }); }} />
+                  : null
+              ))}
+            </div>
+          ) : (
+            // The compact surface read. Both renderings ship: the list is the
+            // glance, the routed day is the expanded one.
+            <div className="xplan">
+              {plan.days.map((d, i) => (
+                <div className="xplan-day" key={i} style={{ animationDelay: `${i * 70}ms` }}>
+                  <div className="xplan-dh">{dayLabel(d.day)}</div>
+                  {d.items.map((it) => {
+                    const x = byId.get(it.id);
+                    if (!x) return null;
+                    return (
+                      <button key={it.id} className="xplan-it" onClick={() => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id, surface: 'scout_plan' }); }}>
+                        {x.photo ? <img src={x.photo} alt="" loading="lazy" /> : <span className="ph" />}
+                        <span className="tx">
+                          <b>{x.title}</b>
+                          <small>{[x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : null, x.duration != null ? fmtMins(x.duration) : null].filter(Boolean).join(' · ')}{it.why ? ` — ${it.why}` : ''}</small>
+                        </span>
                       </button>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {/* ── My plan (personal lane) ─────────────────────────────────────────
           Your own saved picks, planned by Scout just for you, shareable as a
           link so you can drop "this is my plan" into the group chat. */}
+      {/* KIND 3 — yours. Inset, quiet, explicitly private: it must never look
+          like it speaks for the group. This panel is also what turns pick mode
+          on, which is why selecting for Scout could leave the photo. */}
       {user && (saved.size > 0 || picked.size > 0 || myPlan) && (
-        <div className="ai-card" style={{ marginBottom: 14 }}>
-          <div className="ah">
-            <div className="sp"><Icon icon={Bookmark} className="ico" /></div>
-            <div>
-              <div className="at">My plan{myPlan?.fallback ? ' · by picks' : ''}</div>
-              <div className="as">
-                {picked.size > 0
-                  ? `${picked.size} selected — Scout will plan exactly these`
+        <div className="xp k-mine">
+          <div className="xp-h">
+            <div className="mk"><Icon icon={Bookmark} className="ico" /></div>
+            <div className="hh">
+              <span className="xp-kind"><Icon icon={Lock} className="ico" /> Private to you</span>
+              <div className="xp-t">My plan{myPlan?.fallback ? ' · by picks' : ''}</div>
+              <div className="xp-s">
+                {pickMode
+                  ? picked.size > 0
+                    ? `${picked.size} selected — Scout will plan exactly these`
+                    : 'Tap the cards you want Scout to plan'
                   : myPlan
-                    ? `${myPlan.days.reduce((n, d) => n + d.items.length, 0)} activities over ${myPlan.days.length} day${myPlan.days.length === 1 ? '' : 's'} · private to you`
-                    : `${saved.size} saved · private to you`}
+                    ? `${myPlan.days.reduce((n, d) => n + d.items.length, 0)} activities over ${myPlan.days.length} day${myPlan.days.length === 1 ? '' : 's'}`
+                    : `${saved.size} saved`}
               </div>
             </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <div className="xp-acts">
+              <button
+                className={cn('btn', 'btn-sm', pickMode ? 'btn-primary' : 'btn-ghost')}
+                onClick={() => { setPickMode((v) => !v); if (!pickMode) track('experiences_pickmode_on'); }}
+              >
+                <Icon icon={Check} className="ico" /> {pickMode ? `Done${picked.size ? ` · ${picked.size}` : ''}` : 'Pick for Scout'}
+              </button>
               <button className="btn btn-sm" onClick={() => void buildMyPlan()} disabled={myPlanning}>
                 <Icon icon={Sparkles} className="ico" /> {myPlanning ? 'Planning…' : myPlan ? 'Re-plan mine' : 'Plan my days'}
               </button>
@@ -764,10 +1019,20 @@ export function ExperiencesSection() {
         </div>
       )}
 
-      {sorted.length === 0 && vibe && (
-        <p className="text-text-muted" style={{ margin: '0 0 12px' }}>
-          Nothing in that vibe yet. <button className="btn btn-ghost btn-sm" onClick={() => setVibe(null)}>Show all</button>
-        </p>
+      {/* Filtered-empty is NOT the same as empty: the rest of the list is still
+          there, and saying so is the difference between a dead end and a nudge. */}
+      {sorted.length === 0 && (vibe || showSavedOnly) && (
+        <div className="xstate filtered">
+          <span className="ic"><Icon icon={FilterX} className="ico" /></span>
+          <div className="kicker">Filtered</div>
+          <h3>Nothing in {showSavedOnly && !vibe ? 'your saved list' : `“${EXP_VIBES.find((v) => v.key === vibe)?.label ?? 'that vibe'}”`}</h3>
+          <p>Your other {experiences.length} {experiences.length === 1 ? 'thing' : 'things'} to do are still here — this filter just has no matches yet.</p>
+          <span className="row">
+            <button className="btn btn-ghost btn-sm" onClick={() => { setVibe(null); setShowSavedOnly(false); }}>
+              Show all {experiences.length}
+            </button>
+          </span>
+        </div>
       )}
 
       <div className="b-grid">
@@ -781,6 +1046,7 @@ export function ExperiencesSection() {
             saved={saved.has(x.id)}
             onToggleSave={() => void toggleSave(x.id)}
             picked={picked.has(x.id)}
+            pickMode={pickMode}
             onTogglePick={() => setPicked((s0) => { const n = new Set(s0); n.has(x.id) ? n.delete(x.id) : n.add(x.id); return n; })}
             onOpen={() => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id }); }}
           />

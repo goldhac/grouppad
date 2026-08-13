@@ -232,6 +232,12 @@ export interface Experience {
   lng: number | null;
   /** Duration in minutes. */
   duration: number | null;
+  /** The one line a group reads before deciding. Providers rarely ship one (OSM
+   *  never does), so Scout writes it — see docs/specs/scout.md §2 "Describe". */
+  description?: string | null;
+  /** 'scout' = model-written, so the UI must attribute it; 'template' = a
+   *  deterministic restatement of fields we already hold, which needs no label. */
+  descriptionBy?: 'scout' | 'template';
 }
 /** experienceId → userId → vote. Separate store from home votes. */
 export type ExpVotesMap = Record<string, Record<string, VoteDir>>;
@@ -240,11 +246,40 @@ export type ExpVotesMap = Record<string, Record<string, VoteDir>>;
  *  A human pin always beats Scout's suggested day. */
 export type ExpDaysMap = Record<string, string>;
 
+/** One row of a routed day: a stop, the travel leg between two stops, or a
+ *  named gap. Stops and legs alternate down the spine. */
+export type RouteRow =
+  | { k: 'anchor' | 'stop'; t: string; id?: string; n: string; tag?: 'voted' | 'pinned' | null; facts?: string[]; why?: string | null }
+  | { leg: 'drive' | 'walk'; dur: string; mi: string; tight?: boolean; why?: string | null }
+  | { gap: string };
+
+/** A day rendered as a journey rather than a list. Computed by the server at
+ *  READ time (votes, pins and the decided home all move under a saved plan).
+ *  Every number here is calculated; only `why` comes from Scout. */
+export interface DayRoute {
+  /** "9:30a – 6:15p" */
+  win: string;
+  /** Time out of the house, e.g. "8 hr 45 min". */
+  out: string;
+  /** Time driving, or null when nothing could be measured. */
+  drive: string | null;
+  /** Per-person cost of the day's priced items. */
+  pp: number | null;
+  /** How many stops had no price at all. */
+  unpriced: number;
+  rows: RouteRow[];
+}
+
 /** Scout's day-by-day plan built from the group's up-voted experiences.
  *  See docs/specs/scout.md §2 (the "Plan" job). */
 export interface ExpPlan {
   hash: string;
-  days: { day: string | null; items: { id: string; why: string | null }[] }[];
+  days: {
+    day: string | null;
+    items: { id: string; why: string | null }[];
+    /** Absent when the day has no usable stops — the flat list still renders. */
+    route?: DayRoute | null;
+  }[];
   planned_at: string;
   /** True when built without Gemini (cap hit / key missing) — still useful. */
   fallback?: boolean;

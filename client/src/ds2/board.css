@@ -562,3 +562,179 @@ body { background: var(--surface); }
 .card .specs.xspecs { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .card .specs.xspecs > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .card .specs.xspecs .ico { flex: none; }
+
+/* ============================================================================
+   EXPERIENCES REDESIGN (Claude Design handoff, Phase 1) — desktop To-do tab.
+   Tokens only. Mobile parity is explicitly Phase 2 of that handoff.
+   ============================================================================ */
+
+/* ── The card ────────────────────────────────────────────────────────────────
+   The shipped card carried five badges in a non-wrapping space-between row and
+   two near-identical 34px photo overlays. Now: ONE urgency badge on the photo,
+   everything else is type, and select-for-Scout has left the photo entirely. */
+
+/* Save is the only overlay left, so it takes the corner the pair used to share.
+   (The base rule offsets it to 52px to make room for .star-btn — which this
+   card no longer renders.) */
+.card.xc .save-btn { right: 10px; }
+.card.xc .body { gap: 7px; }
+
+/* Title and rating share a baseline so the eye lands on the name first. */
+.xrow1 { display: flex; align-items: flex-start; gap: 8px; }
+.xrow1 .title { flex: 1; min-width: 0; }
+.xrate { display: inline-flex; align-items: center; gap: 3px; flex: none; font-size: 13px; font-weight: 600; color: var(--text); }
+.xrate .ico { width: 13px; height: 13px; color: var(--star); fill: var(--star); }
+
+/* Category · duration · distance — metadata as type, not chips. */
+.xmeta { font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
+.xmeta .sep { opacity: 0.55; margin: 0 5px; }
+
+.xprice { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); }
+.xprice .amt { font-size: 14.5px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+
+/* Borrowed from variant C: state the denominator, so support can't be mistaken
+   for consensus. Only shown once someone is actually in favour. */
+.xsupport { font-size: 12px; font-weight: 600; color: var(--up); }
+.xsupport span { color: var(--text-muted); font-weight: 500; }
+
+/* A human pinning a day outranks any metadata, so it gets its own marker rather
+   than becoming a fifth chip competing with the rating. */
+.xpin { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; font-size: 11.5px; font-weight: 700; color: var(--accent-text); background: var(--accent-tint); border: 1px solid var(--accent-tint-border); padding: 4px 9px; border-radius: var(--r-pill); }
+.xpin .ico { width: 12px; height: 12px; }
+
+/* The ONE badge allowed on the photo: urgency only. */
+.xrib { position: absolute; left: 10px; top: 10px; z-index: 2; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: var(--r-pill); backdrop-filter: blur(6px); box-shadow: var(--shadow-sm); white-space: nowrap; }
+.xrib .ico { width: 12px; height: 12px; }
+.xrib.save { background: var(--under-bg); color: var(--under); border: 1px solid var(--under-border); }
+.xrib.group { background: var(--surface-overlay); color: var(--text-2); border: 1px solid var(--photo-border); }
+
+/* Pick-for-Scout is a MODE now (the My-plan panel turns it on), so selection can
+   be unmistakable instead of a second circle that looked like Save. */
+.xc .pickbox { position: absolute; left: 10px; bottom: 10px; z-index: 3; width: 26px; height: 26px; border-radius: var(--r-xs); border: 2px solid var(--surface-raised); background: var(--surface-overlay); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; color: transparent; box-shadow: var(--shadow-sm); }
+.xc .pickbox .ico { width: 15px; height: 15px; stroke-width: 3; }
+.xc.picked .pickbox { background: var(--accent); border-color: var(--surface-raised); color: var(--accent-fg); }
+.xc.pickmode.picked { border-color: var(--accent); box-shadow: 0 0 0 2px var(--ring), var(--shadow-md); }
+.xc.pickmode.picked .carousel::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.xc.pickmode .save-btn { opacity: 0.4; }
+
+.xfoot { display: flex; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; }
+.xfoot .xopen { margin-left: auto; }
+
+/* ── Panel system: one shell, three kinds ────────────────────────────────────
+   The tab's narrative is the group's answer → a machine's proposal → your own
+   version. Same shell; the kind class carries the meaning. */
+.xp { border-radius: var(--r-lg); padding: 16px; margin-bottom: 14px; }
+.xp-h { display: flex; align-items: flex-start; gap: 12px; }
+.xp-h .mk { width: 38px; height: 38px; border-radius: var(--r-md); display: flex; align-items: center; justify-content: center; flex: none; }
+.xp-h .mk .ico { width: 19px; height: 19px; }
+.xp-h .hh { flex: 1; min-width: 0; }
+.xp-kind { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: var(--r-pill); }
+.xp-kind .ico { width: 11px; height: 11px; }
+.xp-t { font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--text); margin-top: 6px; }
+.xp-s { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.xp-acts { display: inline-flex; gap: 8px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Authoritative: this is what the group decided. */
+.xp.k-group { background: var(--surface-raised); border: 1px solid var(--border-strong); box-shadow: var(--shadow-sm); }
+.xp.k-group .mk, .xp.k-group .xp-kind { background: var(--rank-soft-bg); color: var(--rank-soft-fg); }
+
+/* Attributed: a member must never mistake a machine opinion for a decision. */
+.xp.k-scout { background: var(--accent-tint); border: 1px solid var(--accent-tint-border); }
+.xp.k-scout .mk { background: var(--surface-raised); color: var(--accent-text); box-shadow: var(--shadow-sm); }
+.xp.k-scout .xp-kind { background: var(--surface-raised); color: var(--accent-text); border: 1px solid var(--accent-tint-border); }
+
+/* Quiet: yours, and it must never look like it speaks for the group. */
+.xp.k-mine { background: var(--surface-inset); border: 1px solid var(--border); border-left: 3px solid var(--border-strong); }
+.xp.k-mine .mk { background: var(--surface-sunken); color: var(--text-2); }
+.xp.k-mine .xp-kind { background: var(--surface-sunken); color: var(--text-muted); border: 1px solid var(--border); }
+.xp.k-mine .xplan-dh { color: var(--text-2); }
+
+/* ── Leaderboard: absolute support + the honest denominator ─────────────────
+   Support used to be measured against the leader, so the very first vote filled
+   its row completely. It is now net ÷ people on the trip. */
+.xlb-quorum { display: flex; align-items: center; gap: 9px; margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
+.xlb-quorum .ico { width: 14px; height: 14px; flex: none; }
+.xlb-quorum .track { flex: 1; height: 5px; border-radius: var(--r-pill); background: var(--surface-sunken); border: 1px solid var(--border); overflow: hidden; }
+.xlb-quorum .fill { display: block; height: 100%; background: var(--accent); border-radius: var(--r-pill); transition: width var(--dur-base) var(--ease-out); }
+.xlb-quorum b { color: var(--text-2); font-weight: 700; }
+
+/* N = 0 is a teaching state, not an empty box: it names what one vote does. */
+.xlb-teach { margin-top: 14px; display: flex; gap: 11px; align-items: flex-start; background: var(--surface-inset); border: 1px dashed var(--border-strong); border-radius: var(--r-md); padding: 14px; }
+.xlb-teach .ic { width: 34px; height: 34px; border-radius: 50%; background: var(--surface-sunken); color: var(--text-2); display: flex; align-items: center; justify-content: center; flex: none; }
+.xlb-teach .ic .ico { width: 17px; height: 17px; }
+.xlb-teach .tt { font-size: 13.5px; font-weight: 600; color: var(--text); }
+.xlb-teach .ss { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; line-height: 1.5; }
+
+/* ── Scout's plan as a routed day: stop → leg → stop ────────────────────────
+   A grouped list hides the thing that actually breaks a group's day: getting
+   between places. The leg is a real element, and it carries the reasoning. */
+.itin-day { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; margin-bottom: 11px; }
+.itin-dh { display: flex; align-items: baseline; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--border); background: var(--surface-inset); flex-wrap: wrap; }
+.itin-dh .d { font-family: var(--font-display); font-size: 15px; font-weight: 700; letter-spacing: -0.015em; color: var(--text); }
+.itin-dh .win { margin-left: auto; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.itin-dh .win b { color: var(--text-2); font-weight: 700; }
+.itin-body { padding: 4px 14px 12px; }
+.itin-line { position: relative; padding-left: 26px; }
+.itin-line::before { content: ''; position: absolute; left: 6px; top: 14px; bottom: 16px; width: 2px; background: var(--border); border-radius: var(--r-pill); }
+
+.stop { position: relative; padding: 11px 0; }
+.stop::before { content: ''; position: absolute; left: -24px; top: 17px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); border: 2px solid var(--surface-raised); box-shadow: 0 0 0 2px var(--accent-tint); }
+.stop.anchor::before { background: var(--text-muted); box-shadow: 0 0 0 2px var(--surface-sunken); }
+.stop-top { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+/* Clock time is the spine, so it is set in mono to align down the column. */
+.stop-time { font-family: var(--font-mono); font-size: 11.5px; font-weight: 700; color: var(--accent-text); flex: none; letter-spacing: -0.02em; }
+.stop.anchor .stop-time { color: var(--text-muted); }
+.stop-name { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.25; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; }
+.stop.anchor .stop-name { font-weight: 500; color: var(--text-2); cursor: default; }
+.stop-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 7px; border-radius: var(--r-pill); flex: none; }
+.stop-tag.voted { background: var(--up-bg); color: var(--up); }
+.stop-tag.pinned { background: var(--accent-tint); color: var(--accent-text); border: 1px solid var(--accent-tint-border); }
+.stop-tag .ico { width: 10px; height: 10px; }
+.stop-facts { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.stop-facts .sep { opacity: 0.5; }
+.stop-facts .cost { color: var(--text-2); font-weight: 600; }
+.stop-why { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; color: var(--text-2); line-height: 1.45; margin-top: 6px; }
+.stop-why .ico { width: 12px; height: 12px; color: var(--accent-text); flex: none; margin-top: 2px; }
+
+.leg { position: relative; display: flex; align-items: center; gap: 7px; padding: 5px 0; font-size: 11.5px; color: var(--text-muted); flex-wrap: wrap; }
+.leg .ic { position: absolute; left: -25px; top: 50%; transform: translateY(-50%); width: 12px; height: 12px; color: var(--text-muted); background: var(--surface-raised); }
+.leg .dur { font-weight: 700; color: var(--text-2); }
+.leg .why { color: var(--text-muted); font-style: italic; }
+/* A connection that is tight enough to be worth naming. */
+.leg.tight .dur { color: var(--marginal); }
+
+.itin-wrap { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-top: 1px solid var(--border); background: var(--surface-inset); flex-wrap: wrap; }
+.itin-wrap .ico { width: 14px; height: 14px; color: var(--accent-text); flex: none; }
+.itin-wrap .txt { font-size: 12.5px; color: var(--text-2); font-weight: 600; }
+.itin-wrap .tot { margin-left: auto; display: flex; gap: 12px; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; flex-wrap: wrap; }
+.itin-wrap .tot b { color: var(--text-2); font-weight: 700; }
+
+/* Scout names the hole rather than inventing a stop to look complete. */
+.itin-gap { display: flex; align-items: center; gap: 8px; margin: 9px 0 2px; padding: 9px 11px; border: 1px dashed var(--border-strong); border-radius: var(--r-sm); background: var(--surface-inset); font-size: 12px; color: var(--text-muted); }
+.itin-gap .ico { width: 13px; height: 13px; flex: none; }
+
+.itin-switch { display: inline-flex; gap: 3px; background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: var(--r-pill); padding: 3px; }
+.itin-switch button { border: 0; background: transparent; color: var(--text-2); font-family: var(--font-sans); font-weight: 700; font-size: 11.5px; padding: 6px 12px; border-radius: var(--r-pill); cursor: pointer; }
+.itin-switch button.on { background: var(--accent); color: var(--accent-fg); }
+
+/* ── Four states that used to render as one ────────────────────────────────
+   Every read was caught and swallowed, so a failed fetch appeared as "nothing
+   found" — the product blaming the trip for its own outage. */
+.xstate { background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 32px 22px; text-align: center; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; align-items: center; }
+.xstate .ic { width: 50px; height: 50px; border-radius: var(--r-lg); display: flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+.xstate .ic .ico { width: 24px; height: 24px; }
+.xstate.pending .ic { background: var(--accent-tint); color: var(--accent-text); border: 1px solid var(--accent-tint-border); }
+.xstate.empty .ic, .xstate.filtered .ic { background: var(--surface-sunken); color: var(--text-2); border: 1px solid var(--border); }
+.xstate.error .ic { background: var(--over-bg); color: var(--over); border: 1px solid var(--over-border); }
+.xstate .kicker { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 9px; }
+.xstate h3 { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+.xstate p { font-size: 13.5px; color: var(--text-2); line-height: 1.55; margin: 8px 0 16px; max-width: 42ch; }
+.xstate .row { display: inline-flex; gap: 9px; flex-wrap: wrap; justify-content: center; }
+.xspin { width: 20px; height: 20px; border-radius: 50%; border: 2.5px solid var(--accent-tint-border); border-top-color: var(--accent); animation: xspin 0.8s linear infinite; }
+@keyframes xspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .xspin { animation-duration: 2.4s; } }
+
+/* Scout's description, attributed wherever it appears. */
+.xabout { font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
+.xabout-by { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--accent-text); white-space: nowrap; }
+.xabout-by .ico { width: 11px; height: 11px; }

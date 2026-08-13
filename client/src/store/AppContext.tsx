@@ -143,9 +143,13 @@ interface AppActions {
   /** Experiences ("things to do") for the active trip + their votes. */
   experiences: Experience[];
   expPending: boolean;
+  /** The experiences read failed. Distinct from "came back empty" — the To-do
+   *  tab must say the outage is ours, not tell the group their trip has nothing. */
+  expFailed: boolean;
   expVotes: ExpVotesMap;
   castExpVote: (experienceId: string, dir: VoteDir) => Promise<void>;
   refreshExperiences: () => Promise<void>;
+  retryExperiences: () => Promise<void>;
   favoriteIds: ReadonlySet<string>;
   toggleFavorite: (listingId: string) => Promise<void>;
   setDecision: (listingId: string | null) => Promise<void>;
@@ -222,6 +226,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const favRef = useRef<Set<string>>(new Set());
   const [experiences, setExperiences] = useState<Experience[]>([]);
   const [expPending, setExpPending] = useState(false);
+  const [expFailed, setExpFailed] = useState(false);
   const [expVotes, setExpVotes] = useState<ExpVotesMap>({});
   const expVotesRef = useRef<ExpVotesMap>({});
   const [reviewsMap, setReviewsMap] = useState<Record<string, ListingReviews>>({});
@@ -341,7 +346,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         api.reviews(id).catch(() => ({})),
         api.tours(id).catch(() => ({})),
         api.members(id).catch(() => ({ members: [] as TripMember[] })), // 403 for guests → empty
-        api.experiences(id).catch(() => ({ experiences: [] as Experience[], pending: false })),
+        // `failed` is the point: swallowing this into an empty list made a server
+        // outage render as "no things to do found" — the product blaming the trip
+        // for its own failure. The To-do tab branches on it.
+        api.experiences(id).catch(() => ({ experiences: [] as Experience[], pending: false, failed: true })),
         api.expVotes(id).catch(() => ({} as ExpVotesMap)),
       ]);
       // One-shot retry: 404/403 are definitive, but a transient blip (network /
@@ -364,6 +372,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setListings(listRes.listings);
       setVotes(votesRes);
       setExperiences(expRes.experiences || []); setExpPending(!!expRes.pending);
+      setExpFailed(!!(expRes as { failed?: boolean }).failed);
       setExpVotes(expVotesRes || {}); expVotesRef.current = expVotesRes || {};
       setSubmitted(subRes);
       setPipeline(pipeRes.listings);
@@ -754,6 +763,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [requireSignIn, handleActionError],
   );
 
+  /** Re-read just the experiences slice — the exit from the error state. Unlike
+   *  refreshExperiences (which asks the server to re-SCRAPE), this only retries
+   *  the read that failed. */
+  const retryExperiences = useCallback(async () => {
+    const id = tripIdRef.current;
+    if (!id) return;
+    try {
+      const r = await api.experiences(id);
+      setExperiences(r.experiences || []);
+      setExpPending(!!r.pending);
+      setExpFailed(false);
+    } catch {
+      setExpFailed(true);
+    }
+  }, []);
+
   const refreshExperiences = useCallback(async () => {
     const id = tripIdRef.current;
     if (!id) return;
@@ -1026,14 +1051,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       signOut, rename, setAvatar, requireSignIn, openAuth, closeAuth,
       startOnboarding, endOnboarding, siteTourSignal, startSiteTour, personalSkin, setSkin, setTripSkin, openDetail, closeDetail, findListing,
       castVote, toggleFinalPick, setDecision, submitListing, postCaveat, deleteCaveat, approveCaveat, deleteListing,
-      experiences, expPending, expVotes, castExpVote, refreshExperiences,
+      experiences, expPending, expFailed, expVotes, castExpVote, refreshExperiences, retryExperiences,
       runCompare, saveItinerary, loadReviewsFor, refreshAllReviews, generateTour, setAdminKey, clearAdminKey, runPipeline,
       toggleSelect, clearSelection, setSplit, toast, dismissToast,
     }),
     [
       user, myTrips, tripsError, accountLoading, trip, tripId, tripLoading, tripError,
       listings, canonVotes, submitted, pipeline, itinerary, caveats, insights, canonFinal, reviewsMap, toursMap, roster,
-      experiences, expPending, expVotes, castExpVote, refreshExperiences,
+      experiences, expPending, expFailed, expVotes, castExpVote, refreshExperiences, retryExperiences,
       adminKey, split, selected, toasts, authModal, onboardingOpen, detailId, shortlistIds,
       aiOrder, aiWhy, aiRankIndex, aiRankLoading, recommendedPool, suppressedIds, pooledListings,
       canonFavoriteIds, toggleFavorite,

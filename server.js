@@ -3384,6 +3384,136 @@ function spawnExperiencesSearch(tripId) {
   return true;
 }
 
+// ── Scout job 5 · "Describe" ─────────────────────────────────────────────────
+// Most rows arrive as a bare name. OSM gives one by definition, and the Airbnb
+// search node carries no blurb — so a card can read just "Koreatown", which
+// tells a group deciding what to do precisely nothing. Scout writes the one
+// line the provider didn't.
+//
+// Demarcation (docs/specs/scout.md §2): experiences · ambient · cached+shared.
+// The rule that matters here is FACTUAL RESTRAINT — this text sits next to real
+// businesses and places, so the prompt is fed only fields we actually hold and
+// is told in the strongest terms not to invent hours, addresses, history or
+// prices. The non-AI fallback below is pure restatement of those same fields,
+// and is written FIRST so no row is ever left blank waiting on a model.
+function loadExpAbout(tripId) { return readJson(tripFile(tripId, 'exp-about.json'), {}); }
+function saveExpAbout(tripId, v) { writeJsonAtomic(tripFile(tripId, 'exp-about.json'), v); }
+
+// Keyed on the facts a description is built from, so it regenerates when those
+// change and NOT when some unrelated field (photo, url) churns on a refresh.
+function expAboutHash(x) {
+  return crypto.createHash('sha1').update([
+    x.title || '', x.category || '', x.source || 'airbnb',
+    x.duration ?? '', x.price ?? '', x.priceUnit || '', x.rating ?? '',
+  ].join('|')).digest('hex').slice(0, 12);
+}
+
+function durWords(mins) {
+  if (!mins || mins <= 0) return null;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (!h) return `${m} min`;
+  if (!m) return `${h} hr`;
+  return `${h} hr ${m} min`;
+}
+
+/** Deterministic fallback: restates what we know and asserts nothing we don't. */
+function templateAbout(x, trip) {
+  const where = trip?.destination ? ` in ${String(trip.destination).split(',')[0]}` : '';
+  const d = durWords(x.duration);
+
+  if (x.source === 'osm') {
+    const head = x.category ? `${x.category}${where}` : `A place to visit${where}`;
+    return x.price === 0
+      ? `${head} — mapped in OpenStreetMap, free to visit.`
+      : `${head} — mapped in OpenStreetMap. Check the site for hours and any ticket price.`;
+  }
+
+  // NOTE: as of 2026-08-13 every scraped Airbnb row comes back with
+  // category: null (primaryThemeFormatted stopped populating), so this
+  // no-category branch is the common path, not the edge case.
+  const head = x.category ? `${x.category}${where}`
+    : d ? `A ${d} activity${where}`
+    : `Something to do${where}`;
+  const facts = [];
+  if (x.category && d) facts.push(d);
+  if (x.rating != null) facts.push(`rated ${Number(x.rating).toFixed(2)}${x.reviews ? ` by ${x.reviews} guests` : ''}`);
+  if (x.price === 0) facts.push('free');
+  else if (x.price != null) facts.push(`from $${x.price} per ${x.priceUnit === 'group' ? 'group' : 'guest'}`);
+  return facts.length ? `${head} — ${facts.join(', ')}.` : `${head}.`;
+}
+
+// One fill per trip at a time: GET /experiences is hit by every member on the
+// board, and without this each of them would kick off their own batch.
+const _describing = new Set();
+
+async function fillExpDescriptions(tripId, trip) {
+  if (_describing.has(tripId)) return;
+  _describing.add(tripId);
+  try {
+    const rows = loadExperiences(tripId);
+    const about = loadExpAbout(tripId);
+    const missing = rows.filter((x) => about[x.id]?.hash !== expAboutHash(x));
+    if (!missing.length) return;
+
+    // Deterministic line first — committed before any network call, so a capped
+    // or keyless deploy still ends up with a real description on every row.
+    for (const x of missing) about[x.id] = { text: templateAbout(x, trip), by: 'template', hash: expAboutHash(x) };
+    saveExpAbout(tripId, about);
+    if (!GEMINI_API_KEY || !geminiGuard()) return;
+
+    // Compact keyed candidates — same discipline as the other Scout jobs: the
+    // model never sees a raw id, a url or anything resembling PII.
+    const batch = missing.slice(0, 40);
+    const keyToId = {};
+    const compact = batch.map((x, i) => {
+      const k = 'e' + i; keyToId[k] = String(x.id);
+      return { k, title: (x.title || '').slice(0, 80), category: x.category || null,
+               mins: x.duration ?? null, price: x.price ?? null, unit: x.priceUnit || null,
+               rating: x.rating ?? null, kind: x.source === 'osm' ? 'place' : 'bookable activity' };
+    });
+    const prompt = `You are Scout. For each item below, write the ONE line a group reads while deciding what to do on a trip to ${trip?.destination || 'their destination'}.
+
+Items (JSON): ${JSON.stringify(compact)}
+
+Write 12-24 words per item, plain and concrete. Say what the group would actually be doing there, or who it suits.
+
+HARD RULES — these describe real places and businesses:
+- Use ONLY the facts given above. NEVER invent an address, opening hours, history, a menu, a price, a rating, or any claim about what is inside.
+- If all you have is a name and a category, describe the category honestly and say nothing specific.
+- No marketing voice. Banned: unforgettable, hidden gem, must-see, iconic, breathtaking, nestled.
+- Do not repeat the title verbatim. No emoji.
+
+Return ONLY JSON: {"d":[{"k":"<key>","t":"<the sentence>"}]}`;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+    const r = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, responseMimeType: 'application/json', maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } } }),
+    });
+    const data = await r.json();
+    if (!r.ok) { console.error('[describe] gemini', r.status); return; }
+    const um = data.usageMetadata || {};
+    bumpUsage('gemini', { calls: 1, promptTokens: um.promptTokenCount || 0, candidatesTokens: um.candidatesTokenCount || 0, totalTokens: um.totalTokenCount || 0 });
+    const raw = JSON.parse(data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
+    const fresh = loadExpAbout(tripId); // re-read: a refresh may have landed meanwhile
+    let n = 0;
+    for (const d of Array.isArray(raw.d) ? raw.d : []) {
+      const id = keyToId[d?.k];
+      const text = typeof d?.t === 'string' ? d.t.trim().replace(/\s+/g, ' ').slice(0, 220) : '';
+      if (!id || text.length < 12) continue;
+      const row = batch.find((x) => String(x.id) === id);
+      fresh[id] = { text, by: 'scout', hash: expAboutHash(row) };
+      n++;
+    }
+    saveExpAbout(tripId, fresh);
+    console.log(`[describe] ${n}/${batch.length} descriptions for ${tripId}`);
+  } catch (e) {
+    console.error('[describe]', e.message); // descriptions are a bonus — never fatal
+  } finally {
+    _describing.delete(tripId);
+  }
+}
+
 // Open view-by-link, like listings: guests browsing a shared board can see the
 // list; only voting requires membership. Lazily kicks off the first scrape.
 app.get('/api/trips/:tripId/experiences', loadTripOr404, (req, res) => {
@@ -3402,7 +3532,15 @@ app.get('/api/trips/:tripId/experiences', loadTripOr404, (req, res) => {
       if (ageMs > 24 * 3600 * 1000 || !('originalPrice' in rows[0])) spawnExperiencesSearch(tripId);
     } catch {}
   }
-  res.json({ experiences: rows, pending });
+  // Descriptions are cached per row and filled in the background — serve what
+  // we have now rather than making the board wait on a model.
+  const about = loadExpAbout(tripId);
+  const out = rows.map((x) => {
+    const a = about[x.id];
+    return a ? { ...x, description: a.text, descriptionBy: a.by } : x;
+  });
+  if (rows.some((x) => about[x.id]?.hash !== expAboutHash(x))) fillExpDescriptions(tripId, req.trip);
+  res.json({ experiences: out, pending });
 });
 
 app.post('/api/trips/:tripId/experiences/refresh', requireAuth, loadTripOr404, requireTripMember, rateLimit({ windowMs: 3600000, max: 6 }), (req, res) => {
@@ -3414,6 +3552,155 @@ app.post('/api/trips/:tripId/experiences/refresh', requireAuth, loadTripOr404, r
 app.get('/api/trips/:tripId/exp-votes', loadTripOr404, (req, res) => {
   res.json(loadExpVotes(req.params.tripId));
 });
+
+// ── Scout's plan as a ROUTED DAY ─────────────────────────────────────────────
+// A grouped list hides the thing that actually breaks a group's day: getting
+// between places. So a plan renders as a spine of stop → leg → stop.
+//
+// The split of labour matters. Scout picks the ORDER and writes the WHY; the
+// server computes every NUMBER — clock times, leg distances, drive minutes, the
+// day's totals. That is deliberate: a model asked to invent clock times will
+// happily produce a day whose arrival times, reasoning and totals disagree with
+// each other, and the one thing a plan has to be is internally consistent.
+//
+// Travel time is an ESTIMATE from straight-line distance, and is labelled "~"
+// in the UI. We have no routing provider, and a fabricated-precise "14 min" is
+// worse than an honest approximation.
+const ROAD_FACTOR = 1.35;   // straight-line → plausible road distance
+const CITY_MPH = 22;        // urban average including lights and traffic
+const WALK_MI = 0.6;        // under this, a group walks
+const DEFAULT_STAY_MIN = 90;
+
+// NOTE the name: there is already a haversineMi(lat1,lng1,lat2,lng2) above that
+// rounds and bakes in its own 1.25 road factor. Redeclaring it would silently
+// replace that one for its existing callers, so this is deliberately separate —
+// it returns the RAW straight-line distance and lets the caller scale it.
+function straightLineMi(a, b) {
+  const R = 3958.8, toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+const clockOf = (mins) => {
+  const h24 = Math.floor(mins / 60) % 24, m = Math.round(mins % 60);
+  const ap = h24 < 12 ? 'a' : 'p';
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h}:${String(m).padStart(2, '0')}${ap}`;
+};
+const spanOf = (mins) => {
+  const h = Math.floor(mins / 60), m = Math.round(mins % 60);
+  return h ? (m ? `${h} hr ${m} min` : `${h} hr`) : `${m} min`;
+};
+
+/** Where the group's day starts: the decided home, else the trip's ref point. */
+function tripAnchor(tripId, trip) {
+  try {
+    const dec = loadDecision(tripId);
+    if (dec) {
+      // Curated + submitted only: the scraped pipeline lives in SQLite behind a
+      // query, and a missing home just falls through to the trip's ref point.
+      const home = [...loadListings(tripId), ...loadSubmitted(tripId)]
+        .find((l) => String(l.id) === String(dec.listing_id));
+      if (home && typeof home.lat === 'number' && typeof home.lng === 'number') {
+        return { name: 'The house', lat: home.lat, lng: home.lng };
+      }
+    }
+  } catch {}
+  const rp = (trip && trip.ref_points) || tripRefPoints(tripId) || {};
+  const p = rp.downtown || rp.attraction || rp.airport;
+  return p && typeof p.lat === 'number' ? { name: p.name || 'Base', lat: p.lat, lng: p.lng } : null;
+}
+
+/** One day of the plan → the alternating stop/leg rows the UI draws. */
+function routeDay(day, ctx) {
+  const { byId, anchor, pins, votes, party, dayStartMin } = ctx;
+  const stops = day.items.map((it) => ({ it, x: byId.get(it.id) })).filter((s) => s.x);
+  if (!stops.length) return null;
+
+  const rows = [];
+  let clock = dayStartMin;
+  let driveMins = 0, perPerson = 0, unpriced = 0;
+  let here = anchor;
+
+  if (anchor) {
+    rows.push({ k: 'anchor', t: clockOf(clock), n: `${anchor.name} · everyone out the door` });
+  }
+
+  for (const { it, x } of stops) {
+    // Leg in — only when we can actually measure it. No coordinates, no invented leg.
+    if (here && typeof x.lat === 'number' && typeof x.lng === 'number') {
+      const mi = straightLineMi(here, x) * ROAD_FACTOR;
+      const walk = mi <= WALK_MI;
+      const mins = Math.max(5, Math.round((walk ? (mi / 3) * 60 : (mi / CITY_MPH) * 60) / 5) * 5);
+      rows.push({
+        leg: walk ? 'walk' : 'drive',
+        dur: `~${mins} min`,
+        mi: `${mi.toFixed(1)} mi`,
+        tight: mins >= 30,
+        // Don't claim it's "the longest" — several legs can trip this.
+        why: mins >= 30 ? 'a long haul across town — leave a buffer' : null,
+      });
+      clock += mins;
+      if (!walk) driveMins += mins;
+      here = { lat: x.lat, lng: x.lng };
+    } else if (typeof x.lat === 'number' && typeof x.lng === 'number') {
+      here = { lat: x.lat, lng: x.lng };
+    }
+
+    const net = Object.values(votes[x.id] || {}).reduce((n, d) => n + (d === 'up' ? 1 : -1), 0);
+    const pp = x.price == null ? null : (x.priceUnit === 'group' ? Math.ceil(x.price / Math.max(1, party)) : x.price);
+    if (pp == null) unpriced++; else perPerson += pp;
+
+    const facts = [];
+    if (x.duration) facts.push(spanOf(x.duration));
+    if (pp === 0) facts.push('free');
+    else if (pp != null) facts.push(`$${pp} pp`);
+    if (net > 0) facts.push(`${net} of ${party} would go`);
+
+    rows.push({
+      k: 'stop', t: clockOf(clock), id: x.id, n: x.title,
+      tag: pins[x.id] === day.day ? 'pinned' : net > 0 ? 'voted' : null,
+      facts, why: it.why || null,
+    });
+    clock += x.duration || DEFAULT_STAY_MIN;
+  }
+
+  // Name the hole rather than inventing a stop to fill it. An evening that ends
+  // before 6pm is a real gap in a group's day, and Scout should say so.
+  const EVENING = 18 * 60;
+  if (clock < EVENING) {
+    rows.push({ gap: `Nothing after ${clockOf(clock)} — the group hasn’t voted on anything for this evening` });
+  }
+
+  return {
+    win: `${clockOf(dayStartMin)} – ${clockOf(clock)}`,
+    out: spanOf(clock - dayStartMin),
+    drive: driveMins ? spanOf(driveMins) : null,
+    pp: perPerson || null,
+    unpriced,
+    rows,
+  };
+}
+
+/** Attach a `route` to each day of a plan. Never throws — the flat list is the
+ *  fallback rendering, and a plan without coordinates is still a useful plan. */
+function withRoutes(tripId, trip, plan) {
+  if (!plan || !Array.isArray(plan.days)) return plan;
+  try {
+    const ctx = {
+      byId: new Map(loadExperiences(tripId).map((x) => [String(x.id), x])),
+      anchor: tripAnchor(tripId, trip),
+      pins: readJson(tripFile(tripId, 'exp-days.json'), {}),
+      votes: loadExpVotes(tripId),
+      party: Math.max(1, Number(trip?.adults) || 2),
+      dayStartMin: 9 * 60 + 30,
+    };
+    return { ...plan, days: plan.days.map((d) => ({ ...d, route: routeDay(d, ctx) })) };
+  } catch (e) {
+    console.error('[route]', e.message);
+    return plan;
+  }
+}
 
 // Experience reviews — free detail-page fetch (fetchExperienceReviews mirrors the
 // homes ListingReviews shape + an aggregate summary). Cached per trip for 7 days:
@@ -3568,12 +3855,12 @@ app.post('/api/trips/:tripId/plan-experiences', requireAuth, loadTripOr404, requ
     .update(JSON.stringify(picks.map((p) => [p.id, netOf(p.id)])) + days.join(','))
     .digest('hex');
   const cached = loadExpPlan(tripId);
-  if (cached && cached.hash === hash && !req.body?.force) return res.json(cached);
+  if (cached && cached.hash === hash && !req.body?.force) return res.json(withRoutes(tripId, trip, cached));
 
   const fallback = () => {
     const out = { hash, days: heuristicPlan(days, picks), planned_at: new Date().toISOString(), fallback: true };
     saveExpPlan(tripId, out);
-    return out;
+    return withRoutes(tripId, trip, out);
   };
   if (!GEMINI_API_KEY || !geminiGuard()) return res.json(fallback());
 
@@ -3593,7 +3880,9 @@ Activities (JSON): ${JSON.stringify(compact)}
 Trip days: ${days.length ? days.join(', ') : 'unknown dates — just group them sensibly'}
 
 Build a realistic day-by-day plan. Rules: at most 2 activities per day; keep total time per day under ~6 hours (use "mins"); put the most-liked activities on earlier days; don't repeat an activity; it's fine to leave a day empty for rest. Only use the activities given.
-Return ONLY JSON: {"days":[{"day":"<one of the trip days, or null>","items":[{"k":"<key>","why":"<≤12 words on why it fits that day>"}]}]}`;
+
+IMPORTANT about "why": we compute the actual clock times ourselves from your ordering, the durations and the travel between places — you do not control them. So NEVER claim a time of day ("sunset", "after dark", "a morning session", "lands as lunch", "7pm"). A "why" that names a time will contradict the schedule we render next to it. Say why it suits THE GROUP or why it sits well beside the other activity that day instead.
+Return ONLY JSON: {"days":[{"day":"<one of the trip days, or null>","items":[{"k":"<key>","why":"<≤12 words, no time-of-day claims>"}]}]}`;
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
@@ -3618,14 +3907,17 @@ Return ONLY JSON: {"days":[{"day":"<one of the trip days, or null>","items":[{"k
     if (!planDays.length) return res.json(fallback());
     const out = { hash, days: planDays, planned_at: new Date().toISOString() };
     saveExpPlan(tripId, out);
-    res.json(out);
+    // Routes are computed at READ time, never stored: votes, pins and the
+    // decided home all move underneath a plan that is otherwise still valid.
+    res.json(withRoutes(tripId, trip, out));
   } catch (e) {
     console.error('[plan-experiences]', e.message);
     res.json(fallback());
   }
 });
 
-app.get('/api/trips/:tripId/exp-plan', loadTripOr404, (req, res) => res.json(loadExpPlan(req.params.tripId)));
+app.get('/api/trips/:tripId/exp-plan', loadTripOr404, (req, res) =>
+  res.json(withRoutes(req.params.tripId, req.trip, loadExpPlan(req.params.tripId))));
 
 // ── Phase 4 · assign-to-day ───────────────────────────────────────────────────
 // The group PINNING an activity to a specific day ("we're doing the hike Thursday").
