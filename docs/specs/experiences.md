@@ -527,3 +527,24 @@ A quiet accent **dot** on the Plan segment when a plan exists — it says
 **My plan now renders as a routed day too** (`withRoutes` applied to both
 `my-plan` responses) — it is the same kind of object, and a personal plan is
 the one you actually walk.
+
+### 4g-bis. The personal lane is the point — fixing what the split broke
+
+Splitting Browse/Plan introduced a workflow break I'd created myself: **mixing
+and matching happens against the ITEMS**, but the "Pick for Scout" switch was
+sitting in the My-plan panel, which now lives in Plan — a view with no items in
+it. You'd have had to leave the grid to turn on selection, then come back.
+
+My plan is the flagship personal feature (mix and match what *you* think is
+good, then share it to the group and compare), so:
+
+* **The switch moved to the chips row in Browse** — "Build my plan" sits with
+  the filters, because choosing what to include *is* a filter on intent.
+* **A sticky bulk-action bar** (`.xpickbar`) tracks the selection while you
+  scroll the grid: `N selected · Clear · Plan my days`. Same pattern as Gmail /
+  Figma / Photos multi-select. "Plan my days" builds and jumps to Plan — but
+  **only on success**; `buildMyPlan()` now returns a boolean, because sending
+  someone to an empty Plan view after a failure is worse than leaving them put.
+* The My-plan panel's button became **"Pick things" / "Change picks · N"**,
+  which switches to Browse with pick mode on, rather than pretending you can
+  pick from a panel with no cards.

@@ -558,18 +558,23 @@ export function ExperiencesSection() {
       toast(e instanceof Error ? e.message : 'Could not save that.', 'error');
     }
   };
-  const buildMyPlan = async () => {
-    if (!tripId || myPlanning) return;
-    if (!requireSignIn('plan your days')) return;
+  /** Returns true only if a plan actually came back — callers navigate on it,
+   *  and sending someone to an empty Plan view after a failure is worse than
+   *  leaving them where they were. */
+  const buildMyPlan = async (): Promise<boolean> => {
+    if (!tripId || myPlanning) return false;
+    if (!requireSignIn('plan your days')) return false;
     const ids = picked.size ? [...picked] : [...saved];
-    if (!ids.length) { toast('Save or select a few things first.', 'error'); return; }
+    if (!ids.length) { toast('Save or select a few things first.', 'error'); return false; }
     setMyPlanning(true);
     try {
       const p = await api.buildMyPlan(tripId, ids);
       setMyPlan(p);
       track('my_plan_built', { count: ids.length, fallback: !!p.fallback });
+      return true;
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Scout could not plan that.', 'error');
+      return false;
     } finally { setMyPlanning(false); }
   };
   const shareMyPlan = async () => {
@@ -967,11 +972,12 @@ export function ExperiencesSection() {
               </div>
             </div>
             <div className="xp-acts">
+              {/* Picking happens against the items, so this jumps to them. */}
               <button
-                className={cn('btn', 'btn-sm', pickMode ? 'btn-primary' : 'btn-ghost')}
-                onClick={() => { setPickMode((v) => !v); if (!pickMode) track('experiences_pickmode_on'); }}
+                className="btn btn-ghost btn-sm"
+                onClick={() => { setPickMode(true); setView('browse'); track('experiences_pickmode_on', { from: 'myplan' }); }}
               >
-                <Icon icon={Check} className="ico" /> {pickMode ? `Done${picked.size ? ` · ${picked.size}` : ''}` : 'Pick for Scout'}
+                <Icon icon={Check} className="ico" /> {picked.size ? `Change picks · ${picked.size}` : 'Pick things'}
               </button>
               <button className="btn btn-sm" onClick={() => void buildMyPlan()} disabled={myPlanning}>
                 <Icon icon={Sparkles} className="ico" /> {myPlanning ? 'Planning…' : myPlan ? 'Re-plan mine' : 'Plan my days'}
@@ -1061,6 +1067,17 @@ export function ExperiencesSection() {
               {v.label} <span className="tnum" style={{ opacity: 0.6 }}>{v.n}</span>
             </button>
           ))}
+          {/* Building your own plan is a mix-and-match against the items, so
+              the switch belongs HERE, not in the panel that shows the result. */}
+          {user && (
+            <button
+              className={cn('chip-filter', 'xpick', pickMode && 'on')}
+              onClick={() => { setPickMode((v) => !v); if (!pickMode) track('experiences_pickmode_on', { from: 'browse' }); }}
+              title="Pick the things you'd do, then let Scout plan just those"
+            >
+              <Icon icon={Check} className="ico" /> {pickMode ? 'Done picking' : 'Build my plan'}
+            </button>
+          )}
         </div>
       )}
 
@@ -1097,6 +1114,23 @@ export function ExperiencesSection() {
           />
         ))}
       </div>
+      {/* The lab's action bar: what you've mixed together, and the one button
+          that turns it into a plan. Sticky so it survives a long grid. */}
+      {pickMode && (
+        <div className="xpickbar">
+          <span className="cnt tnum">{picked.size} <span>selected</span></span>
+          {picked.size > 0 && (
+            <button className="lnk" onClick={() => setPicked(new Set())}>Clear</button>
+          )}
+          <button
+            className="btn btn-primary btn-sm"
+            disabled={myPlanning || picked.size === 0}
+            onClick={async () => { if (await buildMyPlan()) { setPickMode(false); setView('plan'); } }}
+          >
+            <Icon icon={Sparkles} className="ico" /> {myPlanning ? 'Planning…' : 'Plan my days'}
+          </button>
+        </div>
+      )}
       </>
       )}
 

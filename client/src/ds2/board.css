@@ -770,3 +770,18 @@ body { background: var(--surface); }
 
 /* Plan view is a reading surface, not a grid — keep it to a comfortable measure. */
 .xplan-view { max-width: 980px; }
+
+/* ── The personal lab: select while browsing ────────────────────────────────
+   Mixing and matching happens AGAINST the items, so the selection control has
+   to live where the items are. When it's on, a bulk-action bar tracks the
+   selection — the same pattern Gmail/Figma/Photos use for "act on N things". */
+.xpickbar { position: sticky; bottom: 14px; z-index: 20; display: flex; align-items: center; gap: 12px; margin: 14px auto 0; width: fit-content; max-width: 100%; background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: var(--r-pill); padding: 9px 10px 9px 18px; box-shadow: var(--shadow-lg, var(--shadow-md)); animation: xpickin var(--dur-base) var(--ease-out) both; }
+@keyframes xpickin { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .xpickbar { animation: none; } }
+.xpickbar .cnt { font-size: 13.5px; font-weight: 700; color: var(--text); white-space: nowrap; }
+.xpickbar .cnt span { color: var(--text-muted); font-weight: 500; }
+.xpickbar .lnk { background: none; border: 0; padding: 0; font-size: 12.5px; font-weight: 600; color: var(--text-muted); cursor: pointer; white-space: nowrap; }
+.xpickbar .lnk:hover { color: var(--text); }
+
+/* The entry point, sitting with the filters because it filters intent. */
+.chip-filter.xpick.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
