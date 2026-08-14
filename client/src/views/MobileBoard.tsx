@@ -20,6 +20,7 @@ import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
 import { MobilePhotoCarousel } from '@/components/MobilePhotoCarousel';
 import { ExperienceStates, expListState } from '@/components/board/ExperienceStates';
+import { markScrolling, useDeliberateTap } from '@/lib/tap';
 import { type Filters, readFilters, writeFilters, DEFAULT_FILTERS } from '@/components/board/FilterBar';
 import { useMobileShellLock } from '@/lib/useIsMobile';
 import { Icon } from '@/components/ui/Icon';
@@ -108,6 +109,9 @@ export function MobileBoard() {
   // Same collapse hook the desktop panels use — a four-day plan has to read in
   // one screen before you drill in, and that matters more on a phone than off.
   const expMineDays = useDayCollapse('mob-mine');
+  // A tap that began as a scroll, or landed to stop momentum, must not open a
+  // card. One instance binds every card — there's only ever one pointer.
+  const tap = useDeliberateTap();
   const [expShareSheet, setExpShareSheet] = useState(false);
   const [expLinkBusy, setExpLinkBusy] = useState(false);
   // Selecting for Scout is a mode, not a permanent second button on the photo.
@@ -278,7 +282,8 @@ export function MobileBoard() {
       ? <span className="rt"><Icon icon={Star} className="ico" /> {l.rating}</span>
       : <span className="rt none"><Icon icon={Star} className="ico" /> New</span>);
     return (
-      <article key={l.id} className={cn('mcard', opts.compact && 'compact')} onClick={() => openDetail(l.id)} role="button" tabIndex={0}>
+      <article key={l.id} className={cn('mcard', opts.compact && 'compact')} role="button" tabIndex={0}
+        {...tap.bind(() => openDetail(l.id))}>
         <div className="ph">
           <MobilePhotoCarousel photos={l.photos} alt={l.name}>
             {isOff
@@ -689,10 +694,10 @@ export function MobileBoard() {
                 className={cn('mcard', expPickMode && 'pickmode', expPicked.has(x.id) && 'picked')}
                 role="button"
                 tabIndex={0}
-                onClick={() => {
-                  if (expPickMode) { setExpPicked((s0) => { const n = new Set(s0); n.has(x.id) ? n.delete(x.id) : n.add(x.id); return n; }); return; }
+                {...tap.bind(() => {
+                  if (expPickMode) { setExpPicked((s0) => { const nx = new Set(s0); nx.has(x.id) ? nx.delete(x.id) : nx.add(x.id); return nx; }); return; }
                   setExpOpen(x); track('experience_detail_opened', { experience_id: x.id, surface: 'mobile' });
-                }}
+                })}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setExpOpen(x); track('experience_detail_opened', { experience_id: x.id, surface: 'mobile' }); } }}
               >
                 <div className="ph">
@@ -1058,7 +1063,7 @@ export function MobileBoard() {
           </div>
         )}
 
-        <div className="mb-scroll">
+        <div className="mb-scroll" onScroll={markScrolling}>
           {view === 'home' && homeView}
           {view === 'shortlist' && shortlistView}
           {view === 'saved' && savedView}

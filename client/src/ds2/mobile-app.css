@@ -1666,3 +1666,37 @@ html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidd
 .gp-mobile .xm-linknote { margin: 10px 8px 14px; font-size: 12.5px; line-height: 1.55; color: var(--text-2); }
 .gp-mobile .xm-linkacts { display: flex; flex-direction: column; gap: 9px; padding: 0 6px 6px; }
 .gp-mobile .xm-linkacts .btn { width: 100%; min-height: 48px; justify-content: center; text-decoration: none; }
+
+/* ── the graze problem ───────────────────────────────────────────────────────
+   "When you're scrolling and you click, it almost selects an image." Two
+   separate things were happening on one gesture:
+
+   1. The card's click fired for finger-downs that turned into scrolls and for
+      taps that landed to stop momentum. Fixed in lib/tap.ts — a click now has
+      to be a deliberate tap, not a graze. NOT a long press: making every card
+      require one would tax the taps that are intentional to stop the few that
+      aren't.
+
+   2. iOS was treating the same graze as the start of a selection — the image
+      callout, the text-selection highlight, the drag ghost. That's what made
+      it feel like the photo was being grabbed rather than scrolled past.
+
+   `user-select` and `-webkit-touch-callout` are off for card CHROME only.
+   Descriptions and reviews stay selectable, because copying a line out of a
+   review is a thing people legitimately do.
+   ------------------------------------------------------------------------- */
+.gp-mobile .mcard,
+.gp-mobile .card,
+.gp-mobile .xm-frow,
+.gp-mobile .pl-dayrow,
+.gp-mobile .xplan-it {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* Images never participate in selection or drag anywhere in the shell. */
+.gp-mobile img { -webkit-touch-callout: none; -webkit-user-drag: none; user-select: none; }
+/* …but prose stays selectable. */
+.gp-mobile .xabout, .gp-mobile .xd-quote, .gp-mobile .sub, .gp-mobile .xm-linkbox .u {
+  -webkit-user-select: text; user-select: text;
+}
