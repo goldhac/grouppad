@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { Image as ImageIcon } from 'lucide-react';
 import { Icon } from '@/components/ui/Icon';
+import { photoAt } from '@/lib/photo';
 
 /** Native CSS scroll-snap photo carousel for the mobile shell — swipe through
  *  every photo with real dot indicators. Used on board cards and the detail
@@ -10,12 +11,15 @@ export function MobilePhotoCarousel({
   alt = '',
   onPhotoTap,
   className = '',
+  width = 390,
   children,
 }: {
   photos?: string[];
   alt?: string;
   onPhotoTap?: (idx: number) => void;
   className?: string;
+  /** CSS px the carousel is painted at — drives the CDN size request. */
+  width?: number;
   children?: ReactNode;
 }) {
   const list = photos && photos.length ? photos : [];
@@ -54,7 +58,11 @@ export function MobilePhotoCarousel({
       >
         {list.map((p, i) => (
           <div className="pcar-slide" key={i}>
-            <img src={p} alt={alt} loading={i === 0 ? 'eager' : 'lazy'} draggable={false}
+            {/* Ask the CDN for the size we paint, and decode off the main thread.
+                A full-res JPEG landing in a card slot decodes mid-scroll, which
+                is felt as drag rather than as a slow image. */}
+            <img src={photoAt(p, width)} alt={alt} loading={i === 0 ? 'eager' : 'lazy'}
+              decoding="async" draggable={false}
               onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />
           </div>
         ))}

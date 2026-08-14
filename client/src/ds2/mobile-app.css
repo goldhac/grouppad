@@ -308,9 +308,15 @@
 .gp-mobile .card .corner .ico { width: var(--icon-md); height: var(--icon-md); color: var(--gold-dot); }
 
 /* top-choice star control — sits on photo, subtle until chosen */
-.gp-mobile .card .star-btn { position: absolute; top: 10px; right: 10px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-overlay); backdrop-filter: blur(6px); border: 1px solid var(--photo-border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); box-shadow: var(--shadow-sm); transition: transform var(--dur-fast) var(--ease-out); }
+/* Solid, not glass: a 34px puck sitting ON a photo inside a scroller. The blur
+   read as a tint at this size but cost a live backdrop sample per card, per
+   frame. One of these per card is what made a photo list scroll like tar. */
+.gp-mobile .card .star-btn { position: absolute; top: 10px; right: 10px; z-index: 3; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-raised); border: 1px solid var(--photo-border); display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text); box-shadow: var(--shadow-sm); }
 .gp-mobile .card .star-btn .ico { width: var(--icon-md); height: var(--icon-md); }
-.gp-mobile .card .star-btn:hover { transform: scale(1.08); }
+@media (hover: hover) and (pointer: fine) {
+  .gp-mobile .card .star-btn { transition: transform var(--dur-fast) var(--ease-out); }
+  .gp-mobile .card .star-btn:hover { transform: scale(1.08); }
+}
 .gp-mobile .card .star-btn.on { color: var(--star); }
 .gp-mobile .card .star-btn.on .ico { fill: var(--star); }
 
@@ -511,8 +517,15 @@
 
 .gp-mobile .mcard .ph { position: relative; aspect-ratio: 20 / 15; border-radius: var(--r-card); overflow: hidden; background: var(--surface-sunken); }
 .gp-mobile .mcard .ph::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px var(--photo-border); pointer-events: none; }
-.gp-mobile .mcard .ph img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform var(--dur-slow) var(--ease-out); }
-.gp-mobile .mcard:active .ph img { transform: scale(1.015); }
+.gp-mobile .mcard .ph img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* The press-zoom is a POINTER affordance and must never run on touch. `:active`
+   engages on touchstart, so on a phone every scroll gesture that began on a card
+   ran a slow scale on a full-bleed photo, then reversed it — which is exactly
+   what "drags when you scroll above an image" feels like. See §SCROLL below. */
+@media (hover: hover) and (pointer: fine) {
+  .gp-mobile .mcard .ph img { transition: transform var(--dur-slow) var(--ease-out); }
+  .gp-mobile .mcard:active .ph img { transform: scale(1.015); }
+}
 .gp-mobile .mcard .ph .fb { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--text-muted); }
 .gp-mobile .mcard .ph .fb .ico { width: 30px; height: 30px; }
 
@@ -1459,13 +1472,13 @@ html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidd
    Mobile carried the old card: two near-identical photo overlays, no urgency
    badge, no denominator — and a leaderboard measured against the current
    leader, so the first vote filled the row. */
-.gp-mobile .mcard .xrib { position: absolute; left: 10px; top: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: var(--r-pill); backdrop-filter: blur(6px); white-space: nowrap; }
+.gp-mobile .mcard .xrib { position: absolute; left: 10px; top: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: var(--r-pill); white-space: nowrap; }
 .gp-mobile .mcard .xrib .ico { width: 12px; height: 12px; }
 .gp-mobile .mcard .xrib.save { background: var(--under-bg); color: var(--under); border: 1px solid var(--under-border); }
-.gp-mobile .mcard .xrib.group { background: var(--surface-overlay); color: var(--text-2); border: 1px solid var(--photo-border); }
+.gp-mobile .mcard .xrib.group { background: var(--surface-raised); color: var(--text-2); border: 1px solid var(--photo-border); }
 
 /* Selection is a mode, so it can be unmistakable instead of a second circle. */
-.gp-mobile .mcard .pickbox { position: absolute; left: 10px; bottom: 10px; z-index: 3; width: 28px; height: 28px; border-radius: var(--r-xs); border: 2px solid var(--surface-raised); background: var(--surface-overlay); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; color: transparent; }
+.gp-mobile .mcard .pickbox { position: absolute; left: 10px; bottom: 10px; z-index: 3; width: 28px; height: 28px; border-radius: var(--r-xs); border: 2px solid var(--surface-raised); background: var(--surface-raised); display: flex; align-items: center; justify-content: center; color: transparent; }
 .gp-mobile .mcard .pickbox .ico { width: 16px; height: 16px; stroke-width: 3; }
 .gp-mobile .mcard.picked .pickbox { background: var(--accent); border-color: var(--surface-raised); color: var(--accent-fg); }
 .gp-mobile .mcard.pickmode.picked { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -1480,3 +1493,45 @@ html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidd
 
 /* The selection bar clears the bottom nav rather than hiding under it. */
 .gp-mobile .xpickbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--gp-tabbar, 64px) + 12px + env(safe-area-inset-bottom, 0px)); z-index: 40; width: auto; max-width: calc(100vw - 24px); }
+
+/* ============================================================================
+   §SCROLL — touch scrolling that doesn't drag
+   ============================================================================
+   Reported symptom: scrolling the phone board feels heavy, "almost like it's
+   dragging", and worst when the finger is over a photo. Three compounding
+   causes, all of them paid per frame:
+
+   1. A press-zoom bound to `:active`. On touch, `:active` engages at touchstart
+      — so beginning a swipe on a card started a slow scale on a full-bleed
+      photo and reversed it when the scroll took over. Now pointer-only (above).
+
+   2. A live `backdrop-filter` on every on-photo chip. Each one re-samples and
+      re-blurs the moving backdrop every frame, and blur cost scales with how
+      busy the source is — a photograph is the worst case, which is exactly why
+      it got worse over images. Ten cards meant ~20 of them. Now solid.
+
+   3. No paint containment, so offscreen cards were re-rastered while scrolling.
+
+   The two full-width glass bars (`.mb-top`, `.mb-nav`) KEEP their blur — that's
+   the signature chrome, it's two layers rather than twenty, and each is pinned
+   rather than moving. Don't "fix" scrolling by flattening those.
+   ------------------------------------------------------------------------- */
+
+/* Skip render + paint for cards outside the viewport. `auto` on the intrinsic
+   size means the browser remembers each card's last real height, so variable
+   card heights don't cause scrollbar drift the way a fixed guess would. */
+.gp-mobile .mb-scroll .mcard,
+.gp-mobile .mb-scroll .card { content-visibility: auto; contain-intrinsic-size: auto 420px; }
+
+/* The photo frame is a self-contained paint job — an image swap or a chip
+   restyle inside it must not invalidate the whole scrolling list. */
+.gp-mobile .mcard .ph,
+.gp-mobile .card .photo { contain: paint; }
+
+/* Momentum scrolling stays on the compositor if the scroller isn't asked to
+   hit-test a moving target mid-flick. */
+.gp-mobile .mb-scroll img { pointer-events: none; }
+
+/* A tap on a card shouldn't repaint the card; tint the surface, don't transform
+   it. Kept short so it reads as acknowledgement, not animation. */
+.gp-mobile .mcard:active { opacity: 0.92; }
