@@ -14,9 +14,37 @@ Fixed here so the announcement matches what ships. Original preserved in git.
 | 7 | `grouppad.app/#/…` (×3) | `grouppad.goldhac.com/#/…` | The real production domain. |
 | 8 | Coffee thumbnail beside "The house" | House photo | Leftover from the row it replaced. |
 
-## Still to do before sending (from the handoff README, unchanged)
-1. **Replace all 7 Unsplash hotlinks** with self-hosted images — bulk mail hotlinking is unreliable.
-2. Confirm the ESP resolves `assets/logo-2x.png`.
-3. Wire `#/unsubscribe` to the real list-unsubscribe header.
-4. Swap "Hi there," for a first-name merge tag.
-5. Test Gmail / Apple Mail / Outlook, and re-check dark-mode contrast (any `color:#134E4A` needs `class="ec-ink"`).
+## Made send-ready
+
+* **All 7 images are self-hosted.** Downloaded to `public/email/` and referenced
+  absolutely at `grouppad.goldhac.com/email/…`. Hotlinking Unsplash in bulk mail
+  is unreliable, and relative `assets/` paths only work if the ESP rewrites them.
+  Swapping the art is now replacing a file — no HTML edit. Same for the logo.
+* **Unsubscribe is real.** `{{unsubscribe}}` is filled per recipient with that
+  user's existing stable token, hitting the `/api/notify/unsubscribe` endpoint
+  that already exists — one click turns off *all* GroupPad mail, not just this.
+* **`List-Unsubscribe` + `List-Unsubscribe-Post` headers**, so Gmail and Apple
+  Mail render their native unsubscribe control. Without them a bulk send from a
+  young domain is a spam-folder bet, and it's legally required across most of
+  this list.
+* The README's "swap 'Hi there,' for a first-name token" is **stale** — this
+  version has no greeting; it opens on "You were here before it worked."
+
+## Sending
+
+```
+node scripts/send-announcement.js                        # dry run (the default)
+node scripts/send-announcement.js --only you@your.com    # one real test send
+node scripts/send-announcement.js --send                 # the real thing
+```
+
+Dry run is the default deliberately: there is no unsend. Anyone who has already
+unsubscribed is skipped — an announcement is not a loophole around their opt-out.
+The script refuses to run if any merge token is left unresolved.
+
+## Still worth doing
+1. The images are still generic Unsplash stock. Real experience photos would be
+   better — drop them into `public/email/` under the same filenames.
+2. Send `--only` to yourself first and read it in Gmail, Apple Mail and Outlook.
+3. Re-check dark mode: any `color:#134E4A` needs `class="ec-ink"` or it stays
+   dark teal on a dark card.
