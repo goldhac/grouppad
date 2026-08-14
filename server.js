@@ -3808,7 +3808,10 @@ async function fillExpDescriptions(tripId, trip) {
   try {
     const rows = loadExperiences(tripId);
     const about = loadExpAbout(tripId);
-    const missing = rows.filter((x) => aboutNeedsWork(about[x.id], expAboutHash(x)));
+    // A provider that ships its own copy needs no help from us. Airbnb's
+    // `descriptions.byline` survives on both search surfaces, and real copy
+    // beats generated copy every time — so those rows are skipped entirely.
+    const missing = rows.filter((x) => !x.description && aboutNeedsWork(about[x.id], expAboutHash(x)));
     if (!missing.length) return;
 
     // Deterministic line first — committed before any network call, so a capped

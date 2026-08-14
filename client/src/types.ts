@@ -235,9 +235,10 @@ export interface Experience {
   /** The one line a group reads before deciding. Providers rarely ship one (OSM
    *  never does), so Scout writes it — see docs/specs/scout.md §2 "Describe". */
   description?: string | null;
-  /** 'scout' = model-written, so the UI must attribute it; 'template' = a
+  /** 'provider' = the source's own copy (authoritative, no label needed);
+   *  'scout' = model-written, so the UI must attribute it; 'template' = a
    *  deterministic restatement of fields we already hold, which needs no label. */
-  descriptionBy?: 'scout' | 'template';
+  descriptionBy?: 'provider' | 'scout' | 'template';
 }
 /** experienceId → userId → vote. Separate store from home votes. */
 export type ExpVotesMap = Record<string, Record<string, VoteDir>>;

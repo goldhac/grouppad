@@ -97,7 +97,17 @@ function mapExperienceNode(r) {
   const title =
     descs.name?.localizedValue?.localizedStringWithTranslationPreference || null;
 
+  // MEASURED (2026-08-13, from the Railway container): when the search carries
+  // checkin/checkout, Airbnb serves a DIFFERENT result surface — 24 cards a page
+  // instead of 20 — on which `primaryThemeFormatted` is present but always null,
+  // and the theme appears nowhere else in the node. Undated searches still fill
+  // it. searchExperiences() therefore backfills from a second, undated pass;
+  // this stays as-is so an undated caller keeps working.
   const category = r.primaryThemeFormatted || null;   // "Water sports", "Food tours"…
+
+  // The provider's own one-liner. It survives on BOTH surfaces, and a real
+  // description always beats one Scout had to invent (see scout.md §2e).
+  const byline = descs.byline?.localizedValue?.localizedStringWithTranslationPreference || null;
 
   const priceLabel = r.displayPrice?.primaryLine?.accessibilityLabel || null;   // "From $65, per guest[, previously, $79]"
   const price    = parseExperiencePrice(priceLabel);
@@ -128,6 +138,7 @@ function mapExperienceNode(r) {
   // otherwise collide and land someone's vote on the wrong activity.
   return {
     id:       `airbnb:${id}`,
+    description: byline ? String(byline).trim().slice(0, 400) : null,
     source:   'airbnb',
     title,
     category,
@@ -206,6 +217,38 @@ async function searchExperiences({ location, checkin, checkout, adults = 2, maxI
       } catch (e) {
         console.error(`  ${location} page ${p + 1} failed: ${e.message.slice(0, 90)}`);
         break;
+      }
+    }
+    // ── Category backfill ────────────────────────────────────────────────────
+    // A dated search returns no themes (see mapExperienceNode). Rather than drop
+    // the date filter — which is what makes the list actually bookable for the
+    // trip — take one extra undated page and join on id. One request, and the
+    // vibe chips / card metadata / Scout descriptions all depend on it.
+    if (dateQs && out.some((x) => !x.category)) {
+      try {
+        const themeUrl = `https://www.airbnb.com/s/${experiencesSearchSlug(location)}/experiences?adults=${adults}&currency=USD&locale=en-US`;
+        await page.goto(themeUrl, { waitUntil: 'domcontentloaded', timeout: 40000 });
+        await page.waitForTimeout(2200);
+        const blob = await page.evaluate(() => {
+          for (const s of document.querySelectorAll('script[type="application/json"]')) {
+            const t = s.textContent || '';
+            if (t.includes('searchResults') && t.includes('paginationInfo')) {
+              try { return JSON.parse(t); } catch { return null; }
+            }
+          }
+          return null;
+        });
+        if (blob) {
+          const theme = new Map();
+          for (const r of extractExperienceResults(blob).results || []) {
+            if (r && r.id && r.primaryThemeFormatted) theme.set(`airbnb:${r.id}`, r.primaryThemeFormatted);
+          }
+          let filled = 0;
+          for (const x of out) if (!x.category && theme.has(x.id)) { x.category = theme.get(x.id); filled++; }
+          console.log(`  ${location}: backfilled ${filled} categor${filled === 1 ? 'y' : 'ies'} from an undated pass (${theme.size} known)`);
+        }
+      } catch (e) {
+        console.warn(`  ${location}: category backfill failed (non-fatal): ${e.message.slice(0, 80)}`);
       }
     }
   } catch (e) {
