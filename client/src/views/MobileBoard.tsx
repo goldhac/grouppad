@@ -438,6 +438,8 @@ export function MobileBoard() {
   const expDist = (x: (typeof experiences)[number]) => expDistanceMi(expAnch, x);
   // ONE predicate context, shared by the list and the sheet's counts.
   const expPredCtx = { split, dist: expDist };
+  // Selecting is only "on" when you can actually see the cards you're picking.
+  const expSelecting = expPickMode && view === 'todo' && expView === 'browse';
   const expActiveFilters = Object.keys(expFilters).filter((k) => expFilters[k] && EXP_PREDS[k]);
   let expPool = expVibe ? experiences.filter((x) => expMatchesVibe(x, expVibe)) : experiences;
   if (expSavedOnly) expPool = expPool.filter((x) => expSaved.has(x.id));
@@ -754,7 +756,7 @@ export function MobileBoard() {
           onClearFilters={() => { setExpVibe(null); setExpSavedOnly(false); setExpFilters({}); }}
         />
       ))}
-      {expPickMode && expView === 'browse' && (
+      {expSelecting && (
         <div className="xpickbar">
           <span className="cnt tnum">{expPicked.size} <span>selected</span></span>
           {expPicked.size > 0 && <button className="lnk" onClick={() => setExpPicked(new Set())}>Clear</button>}
@@ -977,7 +979,11 @@ export function MobileBoard() {
         </div>
 
         {cmpBar}
-        <div className="mb-nav">
+        {/* Selecting for Scout REPLACES the nav rather than floating above it.
+            The five destinations all leave Browse, and leaving mid-selection
+            silently discards the picks — so while you're choosing, the only
+            things in the thumb zone are the count, Clear, and Generate. */}
+        <div className={cn('mb-nav', expSelecting && 'is-hidden')} aria-hidden={expSelecting}>
           {navItem('home', Home, 'Homes')}
           {navItem('shortlist', Star, 'Shortlist', shortlist.length)}
           <div className="nav-add" onClick={openAdd}><div className="fab"><Icon icon={Plus} className="ico" /></div><div className="lab">Add</div></div>

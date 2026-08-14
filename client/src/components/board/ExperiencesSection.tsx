@@ -4,6 +4,7 @@ import { ArrowRight, ChevronRight, Home, ThumbsUp, ThumbsDown, ExternalLink, Sta
 import { useApp } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
+import { Avatar } from '@/components/ui/Avatar';
 import { ExperienceStates, expListState } from '@/components/board/ExperienceStates';
 import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { Carousel } from '@/components/Carousel';
@@ -158,8 +159,14 @@ function ExperienceCard({ x, dist, anchorLabel, onOpen, pinnedDay, saved, onTogg
  *  (auth.css modal-scrim/modal: centered on desktop, bottom-sheet on mobile).
  *  Exported for MobileBoard's "Things to do" view. */
 export function ExperienceModal({ x, dist, anchorLabel, onClose }: { x: Experience; dist?: number | null; anchorLabel?: string; onClose: () => void }) {
-  const { user, expVotes, castExpVote, split, tripId, requireSignIn, toast } = useApp();
+  const { user, expVotes, castExpVote, split, tripId, roster, requireSignIn, toast } = useApp();
   const t = expTally(expVotes, x.id, user?.id ?? null);
+  // Who actually said yes. Members only — a guest's roster is empty, and an
+  // avatar stack of strangers would be worse than none.
+  const upvoters = roster.length
+    ? Object.entries(expVotes[x.id] || {}).filter(([, v]) => v === 'up')
+        .map(([uid]) => roster.find((m) => m.id === uid)).filter((m): m is NonNullable<typeof m> => !!m)
+    : [];
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
@@ -257,17 +264,65 @@ export function ExperienceModal({ x, dist, anchorLabel, onClose }: { x: Experien
 
                   <h2 className="dx-title">{x.title}</h2>
 
-                  <div className="xd-facts">
-                    {x.price != null && (
-                      <span>
-                        <b className="tnum">${x.price}</b>&nbsp;/&nbsp;{x.priceUnit === 'group' ? 'group' : 'guest'}
-                        {x.originalPrice != null && x.originalPrice > x.price && <>&nbsp;<span className="xd-was tnum">${x.originalPrice}</span></>}
-                        {x.priceUnit === 'group' && split > 1 && <>&nbsp;· ~${Math.ceil(x.price / split)} pp</>}
+                  {/* The group's answer comes BEFORE the sales copy. On a phone
+                      the vote bar sat past the description, the facts and the
+                      reviews — so the one thing that decides whether this is
+                      worth reading was the last thing you reached. Social proof
+                      first is the handoff's call and it's right on any width,
+                      so there is exactly one signal here and none at the foot. */}
+                  <div className="xd-signal">
+                    <span className="nm">
+                      <b className={cn('tnum', t.net > 0 && 'pos', t.net < 0 && 'neg')}>{t.net > 0 ? `+${t.net}` : t.net}</b>
+                      {/* Name the denominator. "3" alone reads as consensus. */}
+                      <span className="of">of {split} would go</span>
+                    </span>
+                    {upvoters.length > 0 && (
+                      <span className="avs" aria-label={`${upvoters.map((m) => m.name).join(', ')} would go`}>
+                        {upvoters.slice(0, 4).map((m) => (
+                          <span className="av" key={m.id}><Avatar name={m.name} avatar={m.avatar} size={22} /></span>
+                        ))}
+                        {upvoters.length > 4 && <span className="more tnum">+{upvoters.length - 4}</span>}
                       </span>
                     )}
+                  </div>
+
+                  <div className="xd-facts">
                     {x.duration != null && <span><Icon icon={Clock} className="ico" /> {fmtMins(x.duration)}</span>}
                     {dist != null && <span><Icon icon={MapPin} className="ico" /> {dist} mi from {anchorLabel}</span>}
                   </div>
+
+                  {/* Show the arithmetic. "$75 / guest · ~$43 pp" made people do
+                      the sum themselves and get it wrong for group rates. It is
+                      labelled "from", not "all in": the provider quotes a from-
+                      price and we do not know their fees, so claiming all-in
+                      would be inventing a fact about someone's business. */}
+                  {x.price != null && x.price > 0 && (() => {
+                    const pp = expPerPerson(x, split)!;
+                    const groupTotal = x.priceUnit === 'group' ? x.price : x.price * split;
+                    const saved = x.originalPrice != null && x.originalPrice > x.price
+                      ? (x.originalPrice - x.price) * (x.priceUnit === 'group' ? 1 : split) : 0;
+                    return (
+                      <div className="xd-money">
+                        <div className="mrow">
+                          <span className="l">{x.priceUnit === 'group' ? 'Group rate' : `$${x.price} a guest`}</span>
+                          <span className="v tnum">{x.priceUnit === 'group' ? `$${x.price} \u00f7 ${split}` : `\u00d7 ${split}`}</span>
+                        </div>
+                        {saved > 0 && (
+                          <div className="mrow save">
+                            <span className="l">Group discount</span>
+                            <span className="v tnum">&minus;${Math.round(saved)}</span>
+                          </div>
+                        )}
+                        <div className="mrow tot">
+                          <span className="l">Per person, from</span>
+                          <span className="v tnum">${Math.ceil(pp)}</span>
+                        </div>
+                        <div className="fine">
+                          ${Math.round(groupTotal)} for all {split} &middot; you pay on {expSourceLabel(x)}, not here
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Providers rarely ship a blurb and OSM never does, so a place
                       could open as nothing but a name. Scout writes the missing
@@ -320,7 +375,6 @@ export function ExperienceModal({ x, dist, anchorLabel, onClose }: { x: Experien
                       <button className={cn('vote up', t.mine === 'up' && 'on')} aria-label="Want to do this" onClick={() => { void castExpVote(x.id, 'up'); track('experience_voted', { experience_id: x.id, dir: 'up', surface: 'modal' }); }}>
                         <Icon icon={ThumbsUp} className="ico" /> {t.up}
                       </button>
-                      <span className={cn('net', t.net > 0 && 'pos', t.net < 0 && 'neg', 'tnum')}>{t.net > 0 ? `+${t.net}` : t.net}</span>
                       <button className={cn('vote down', t.mine === 'down' && 'on')} aria-label="Not for me" onClick={() => { void castExpVote(x.id, 'down'); track('experience_voted', { experience_id: x.id, dir: 'down', surface: 'modal' }); }}>
                         <Icon icon={ThumbsDown} className="ico" /> {t.down}
                       </button>

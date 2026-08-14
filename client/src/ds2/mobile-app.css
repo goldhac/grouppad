@@ -1614,3 +1614,19 @@ html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidd
 .gp-mobile .xm-frow.on .c { color: var(--accent-text); }
 .gp-mobile .xm-sfoot { flex: none; padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); }
 .gp-mobile .xm-sfoot .btn { width: 100%; min-height: 48px; }
+
+/* While selecting for Scout, the nav is replaced rather than covered: every
+   destination in it leaves Browse, and leaving mid-selection discards the
+   picks. `visibility` rather than `display` so the shell's height is stable
+   and the scroll position doesn't jump when selection starts. */
+.gp-mobile .mb-nav.is-hidden { visibility: hidden; pointer-events: none; }
+.gp-mobile .mb-nav.is-hidden ~ .xpickbar,
+.gp-mobile .xpickbar { bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+
+/* Selection has to survive a glance across a scrolling list, so it's carried by
+   three things at once: the ring, the filled box, and a tint on the photo. The
+   ring alone reads as a focus outline; the box alone is 28px on a 360px card. */
+.gp-mobile .mcard.pickmode.picked .ph::before {
+  content: ''; position: absolute; inset: 0; z-index: 1; border-radius: inherit;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
