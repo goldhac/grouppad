@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ArrowRight, ChevronRight, Home, ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Lock, CornerDownRight, CloudOff, FilterX } from 'lucide-react';
+import { ArrowRight, ChevronRight, Home, ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Lock, CornerDownRight } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
+import { ExperienceStates, expListState } from '@/components/board/ExperienceStates';
 import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { Carousel } from '@/components/Carousel';
 import { SafeImg } from '@/components/ui/SafeImg';
@@ -371,6 +372,38 @@ export const expMatchesVibe = (x: Experience, key: string) => {
   const v = EXP_VIBES.find((z) => z.key === key);
   return !!v && v.re.test(`${x.category || ''} ${x.title || ''}`);
 };
+
+/** What one guest pays, with a group rate divided across the party. `null` when
+ *  we genuinely don't know — OSM has no pricing, and guessing would be a lie. */
+export const expPerPerson = (x: Experience, split: number) =>
+  x.price == null ? null : (x.priceUnit === 'group' ? x.price / Math.max(1, split) : x.price);
+
+/**
+ * The quick filters, as ONE map.
+ *
+ * The rule from the handoff: a filter sheet that shows counts must derive them
+ * from the same predicates it filters by. Two implementations of "under $50"
+ * will disagree eventually, and a sheet promising 12 results that yields 9 is
+ * worse than a sheet with no counts at all.
+ *
+ * `dist` is passed in rather than closed over because only the phone knows the
+ * anchor, and it's null until the group has locked a home.
+ */
+export const EXP_PREDS: Record<string, { label: string; hint: string; test: (x: Experience, o: { split: number; dist: (x: Experience) => number | null }) => boolean }> = {
+  under: {
+    label: 'Under $50 a person', hint: 'group rates split across the party',
+    test: (x, o) => { const pp = expPerPerson(x, o.split); return pp != null && pp <= 50; },
+  },
+  short: {
+    label: 'Two hours or less', hint: 'fits either side of a meal',
+    test: (x) => x.duration != null && x.duration <= 120,
+  },
+  close: {
+    label: 'Within 10 miles', hint: 'measured from the house',
+    test: (x, o) => { const d = o.dist(x); return d != null && d <= 10; },
+  },
+};
+export type ExpPredKey = keyof typeof EXP_PREDS;
 
 const dayLabel = (d: string | null) => {
   if (!d) return 'Any day';
@@ -1028,43 +1061,14 @@ export function ExperiencesSection() {
   // appeared as "no things to do found" — the product blaming the group's trip
   // for its own failure, with no way back.
   if (experiences.length === 0) {
-    if (expFailed) {
-      return (
-        <div className="xstate error">
-          <span className="ic"><Icon icon={CloudOff} className="ico" /></span>
-          <div className="kicker">Couldn&rsquo;t load</div>
-          <h3>We couldn&rsquo;t reach the list</h3>
-          <p>This is on us, not on your trip — <b>your votes are safe</b>. Try again in a moment.</p>
-          <span className="row">
-            <button className="btn btn-primary btn-sm" onClick={() => void retryExperiences()}>
-              <Icon icon={RefreshCw} className="ico" /> Try again
-            </button>
-          </span>
-        </div>
-      );
-    }
-    if (expPending) {
-      return (
-        <div className="xstate pending">
-          <span className="ic"><span className="xspin" /></span>
-          <div className="kicker">Working</div>
-          <h3>Finding things to do near {trip?.destination || 'your destination'}</h3>
-          <p>This usually takes about a minute — you can keep browsing homes and come back.</p>
-        </div>
-      );
-    }
+    const st = expListState({ total: 0, shown: 0, pending: expPending, failed: expFailed });
     return (
-      <div className="xstate empty">
-        <span className="ic"><Icon icon={Compass} className="ico" /></span>
-        <div className="kicker">Nothing found</div>
-        <h3>No things to do for these dates</h3>
-        <p>We looked and came back empty — it happens with smaller destinations or tight date windows.</p>
-        <span className="row">
-          <button className="btn btn-primary btn-sm" onClick={() => void refreshExperiences()}>
-            <Icon icon={RefreshCw} className="ico" /> Look again
-          </button>
-        </span>
-      </div>
+      <ExperienceStates
+        state={st ?? 'empty'}
+        destination={trip?.destination}
+        onRetry={() => void retryExperiences()}
+        onLookAgain={() => void refreshExperiences()}
+      />
     );
   }
 
@@ -1450,18 +1454,15 @@ export function ExperiencesSection() {
 
       {/* Filtered-empty is NOT the same as empty: the rest of the list is still
           there, and saying so is the difference between a dead end and a nudge. */}
+      {/* Filtered-empty is NOT the same as empty: the rest of the list is still
+          there, and saying so is the difference between a dead end and a nudge. */}
       {sorted.length === 0 && (vibe || showSavedOnly) && (
-        <div className="xstate filtered">
-          <span className="ic"><Icon icon={FilterX} className="ico" /></span>
-          <div className="kicker">Filtered</div>
-          <h3>Nothing in {showSavedOnly && !vibe ? 'your saved list' : `“${EXP_VIBES.find((v) => v.key === vibe)?.label ?? 'that vibe'}”`}</h3>
-          <p>Your other {experiences.length} {experiences.length === 1 ? 'thing' : 'things'} to do are still here — this filter just has no matches yet.</p>
-          <span className="row">
-            <button className="btn btn-ghost btn-sm" onClick={() => { setVibe(null); setShowSavedOnly(false); }}>
-              Show all {experiences.length}
-            </button>
-          </span>
-        </div>
+        <ExperienceStates
+          state="filtered"
+          total={experiences.length}
+          filterLabel={showSavedOnly && !vibe ? 'your saved list' : `\u201c${EXP_VIBES.find((v) => v.key === vibe)?.label ?? 'that vibe'}\u201d`}
+          onClearFilters={() => { setVibe(null); setShowSavedOnly(false); }}
+        />
       )}
 
       <div className="b-grid">

@@ -5,7 +5,7 @@ import {
   SlidersHorizontal, Check, Home,
   BadgeCheck, MessageSquare, Plus, Sparkles, Swords, Users,
   HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus, RotateCw, Pencil,
-  Compass, ThumbsUp, ThumbsDown, ExternalLink, MapPin, MoreHorizontal, Share2,
+  Compass, ThumbsUp, ThumbsDown, MapPin, MoreHorizontal, Share2,
   Tag, UsersRound, CalendarDays,
 } from 'lucide-react';
 import { useApp, isDeadListing } from '@/store/AppContext';
@@ -19,12 +19,13 @@ import { useCompare, toInput } from '@/hooks/useCompare';
 import { ComparisonModal } from '@/components/modals/ComparisonModal';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
 import { MobilePhotoCarousel } from '@/components/MobilePhotoCarousel';
+import { ExperienceStates, expListState } from '@/components/board/ExperienceStates';
 import { type Filters, readFilters, writeFilters, DEFAULT_FILTERS } from '@/components/board/FilterBar';
 import { useMobileShellLock } from '@/lib/useIsMobile';
 import { Icon } from '@/components/ui/Icon';
 import { fmt, fmtMins, netVotes, expAnchor, expDistanceMi } from '@/lib/utils';
 import { cn } from '@/lib/cn';
-import { expTally, ExpPrice, ExperienceModal, expGroupList, EXP_VIBES, expMatchesVibe } from '@/components/board/ExperiencesSection';
+import { expTally, ExpPrice, ExperienceModal, expGroupList, EXP_VIBES, expMatchesVibe, EXP_PREDS } from '@/components/board/ExperiencesSection';
 import { track } from '@/lib/analytics';
 import type { Listing, Experience, ExpPlan, ExpDaysMap } from '@/types';
 
@@ -52,7 +53,7 @@ export function MobileBoard() {
     toggleFavorite, toggleFinalPick, setDecision, openDetail, requireSignIn, postCaveat,
     approveCaveat, deleteCaveat, saveItinerary,
     submitListing, toast, selected, toggleSelect, clearSelection, startOnboarding,
-    experiences, expVotes, expPending, castExpVote, refreshExperiences, tripId,
+    experiences, expVotes, expPending, expFailed, castExpVote, refreshExperiences, retryExperiences, tripId,
   } = useApp();
   const compare = useCompare();
   const navigate = useNavigate();
@@ -98,6 +99,12 @@ export function MobileBoard() {
   const [myExpPlan, setMyExpPlan] = useState<ExpPlan | null>(null);
   const [expPlanning, setExpPlanning] = useState(false);
   const [expSavedOnly, setExpSavedOnly] = useState(false);
+  // Quick filters live in a sheet rather than more chips: the chip row is
+  // already the category axis, and stacking a second axis into it makes the
+  // row a lucky dip. Keys index EXP_PREDS — the counts and the filtering read
+  // the same predicate, so the sheet can never promise a number it won't show.
+  const [expFilters, setExpFilters] = useState<Record<string, boolean>>({});
+  const [expSheet, setExpSheet] = useState(false);
   // Selecting for Scout is a mode, not a permanent second button on the photo.
   const [expPickMode, setExpPickMode] = useState(false);
   // Browse (scan and vote) vs Plan (commit to a sequence) — the same split the
@@ -429,8 +436,22 @@ export function MobileBoard() {
   // (its coords when scraped, else the trip's primary ref point) + Nearest sort.
   const expAnch = final.decision ? expAnchor(findListing(final.decision.listing_id), trip) : null;
   const expDist = (x: (typeof experiences)[number]) => expDistanceMi(expAnch, x);
+  // ONE predicate context, shared by the list and the sheet's counts.
+  const expPredCtx = { split, dist: expDist };
+  const expActiveFilters = Object.keys(expFilters).filter((k) => expFilters[k] && EXP_PREDS[k]);
   let expPool = expVibe ? experiences.filter((x) => expMatchesVibe(x, expVibe)) : experiences;
   if (expSavedOnly) expPool = expPool.filter((x) => expSaved.has(x.id));
+  // AND across the quick filters: each one narrows, none of them widen.
+  for (const k of expActiveFilters) expPool = expPool.filter((x) => EXP_PREDS[k].test(x, expPredCtx));
+  /** How many of the CURRENTLY VISIBLE set a filter would leave — counted with
+   *  the same predicate that does the filtering, against the same pool the user
+   *  is looking at, so the number is a promise rather than a trivium. */
+  const expCountIf = (k: string) => {
+    let pool = expVibe ? experiences.filter((x) => expMatchesVibe(x, expVibe)) : experiences;
+    if (expSavedOnly) pool = pool.filter((x) => expSaved.has(x.id));
+    for (const o of expActiveFilters) if (o !== k) pool = pool.filter((x) => EXP_PREDS[o].test(x, expPredCtx));
+    return pool.filter((x) => EXP_PREDS[k].test(x, expPredCtx)).length;
+  };
   const expVibesAvail = EXP_VIBES.map((v) => ({ ...v, n: experiences.filter((x) => expMatchesVibe(x, v.key)).length })).filter((v) => v.n >= 2);
   const sortedExp = [...expPool].sort((a, b) =>
     expNearest && expAnch
@@ -515,26 +536,34 @@ export function MobileBoard() {
           {expView !== 'plan' && myExpPlan?.days.length ? <span className="dot" /> : null}
         </button>
       </div>
-      {/* Vibe chips (Phase 4) — horizontally scrollable, same fchips row idiom. */}
-      {expView === 'browse' && expVibesAvail.length > 1 && (
+      {/* The chip row. It used to be gated on `expVibesAvail.length > 1`, which
+          meant a trip with few categories hid the row entirely — and with it
+          the ONLY door into the plan flow. The plan action is not a filter and
+          must not share a filter's visibility condition. It now leads the row
+          as the one accent-filled chip, per the handoff's "two obvious doors". */}
+      {expView === 'browse' && (
         <div className="fchips" style={{ marginTop: 8 }}>
-          <button className={cn('fchip', !expVibe && !expSavedOnly && 'on')} onClick={() => { setExpVibe(null); setExpSavedOnly(false); }}>All {experiences.length}</button>
+          {user && (
+            <button className={cn('fchip', 'xm-mk', expPickMode && 'on')}
+              onClick={() => { setExpPickMode((v) => !v); if (!expPickMode) track('experiences_pickmode_on', { surface: 'mobile' }); }}>
+              <Icon icon={expPickMode ? Check : Sparkles} className="ico" /> {expPickMode ? 'Done picking' : 'Make a plan'}
+            </button>
+          )}
+          <button className={cn('fchip', expActiveFilters.length > 0 && 'on')} onClick={() => setExpSheet(true)} aria-haspopup="dialog">
+            <Icon icon={SlidersHorizontal} className="ico" /> Filters
+            {expActiveFilters.length > 0 && <span className="c tnum">{expActiveFilters.length}</span>}
+          </button>
+          <button className={cn('fchip', !expVibe && !expSavedOnly && expActiveFilters.length === 0 && 'on')} onClick={() => { setExpVibe(null); setExpSavedOnly(false); setExpFilters({}); }}>All {experiences.length}</button>
           {user && expSaved.size > 0 && (
             <button className={cn('fchip', expSavedOnly && 'on')} onClick={() => setExpSavedOnly((v) => !v)}>
-              <Icon icon={Bookmark} className="ico" /> Saved {expSaved.size}
+              <Icon icon={Bookmark} className="ico" /> Saved <span className="c tnum">{expSaved.size}</span>
             </button>
           )}
           {expVibesAvail.map((v) => (
             <button key={v.key} className={cn('fchip', expVibe === v.key && 'on')} onClick={() => { const n = expVibe === v.key ? null : v.key; setExpVibe(n); if (n) track('experiences_vibe_filtered', { vibe: n, surface: 'mobile' }); }}>
-              {v.label} {v.n}
+              {v.label} <span className="c tnum">{v.n}</span>
             </button>
           ))}
-          {user && (
-            <button className={cn('fchip', 'xpick', expPickMode && 'on')}
-              onClick={() => { setExpPickMode((v) => !v); if (!expPickMode) track('experiences_pickmode_on', { surface: 'mobile' }); }}>
-              <Icon icon={Check} className="ico" /> {expPickMode ? 'Done picking' : 'Test out a plan'}
-            </button>
-          )}
         </div>
       )}
       {/* Live leaderboard: liked experiences ranked by net likes, reordering as
@@ -680,35 +709,50 @@ export function MobileBoard() {
                   <div className="pr">
                     <ExpPrice x={x} split={split} />
                   </div>
-                  {/* Name the denominator, so support can't read as consensus. */}
-                  {tl.net > 0 && <div className="xsupport tnum" style={{ marginTop: 4 }}>{tl.net} <span>of {split} would go</span></div>}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
-                    <button className={cn('btn btn-sm', tl.mine === 'up' ? 'btn-primary' : 'btn-ghost')} onClick={() => { void castExpVote(x.id, 'up'); track('experience_voted', { experience_id: x.id, dir: 'up' }); }} aria-label="Want to do this">
-                      <Icon icon={ThumbsUp} className="ico" /> {tl.up}
-                    </button>
-                    <button className={cn('btn btn-sm', tl.mine === 'down' ? 'btn-primary' : 'btn-ghost')} onClick={() => { void castExpVote(x.id, 'down'); track('experience_voted', { experience_id: x.id, dir: 'down' }); }} aria-label="Not for me">
-                      <Icon icon={ThumbsDown} className="ico" /> {tl.down}
-                    </button>
-                    <span className={cn('tnum', tl.net > 0 && 'ok')} style={{ marginLeft: 'auto', fontWeight: 700 }}>{tl.net > 0 ? `+${tl.net}` : tl.net}</span>
-                    <a className="btn btn-ghost btn-sm" href={x.url} target="_blank" rel="noopener noreferrer" onClick={() => track('experience_outlink', { experience_id: x.id })} aria-label="Open on Airbnb">
-                      <Icon icon={ExternalLink} className="ico" />
-                    </a>
-                  </div>
                 </div>
+                {/* The vote footer states its own denominator ONCE. The old row
+                    said "3 of 14 would go" on one line and then "+3" on the
+                    next — the same fact twice, in two scales, with 30px thumb
+                    targets between them. One tally, two 44px thumbs. Hidden in
+                    pick mode: you're choosing, not judging. */}
+                {!expPickMode && (
+                  <div className="xm-vote" onClick={(e) => e.stopPropagation()}>
+                    <span className="xm-tally">
+                      <span className={cn('n tnum', tl.net > 0 && 'pos')}>{tl.net > 0 ? `+${tl.net}` : tl.net}</span>
+                      <span className="l">of {split} would go</span>
+                    </span>
+                    <span className="xm-acts">
+                      <button className={cn('xm-vbtn up', tl.mine === 'up' && 'on')} aria-pressed={tl.mine === 'up'} aria-label="Want to do this"
+                        onClick={() => { void castExpVote(x.id, 'up'); track('experience_voted', { experience_id: x.id, dir: 'up' }); }}>
+                        <Icon icon={ThumbsUp} className="ico" />
+                      </button>
+                      <button className={cn('xm-vbtn down', tl.mine === 'down' && 'on')} aria-pressed={tl.mine === 'down'} aria-label="Not for me"
+                        onClick={() => { void castExpVote(x.id, 'down'); track('experience_voted', { experience_id: x.id, dir: 'down' }); }}>
+                        <Icon icon={ThumbsDown} className="ico" />
+                      </button>
+                    </span>
+                  </div>
+                )}
               </article>
             );
           })}
         </div>
       ) : (
-        <div className="empty">
-          <div className="ec"><Icon icon={Compass} className="ico" /></div>
-          {expPending ? (
-            <><h3>Finding things to do…</h3><p>We&rsquo;re pulling experiences near {trip?.destination || 'your destination'}. Check back in a minute.</p></>
-          ) : (
-            <><h3>Nothing here yet</h3><p>We couldn&rsquo;t find things to do for this trip yet.</p>
-              <button className="btn btn-primary" onClick={() => void refreshExperiences()}><Icon icon={RotateCw} className="ico" /> Look for things to do</button></>
-          )}
-        </div>
+        /* Four situations, never conflated — the phone kept the old two-state
+           version (pending vs "nothing here") months after the desktop was
+           split, so a server outage read as "we couldn't find anything for
+           your trip" and a narrow chip read as an empty destination. Same
+           component as the desktop tab now, so they can't drift again. */
+        <ExperienceStates
+          className="xstate xm-state"
+          state={expListState({ total: experiences.length, shown: sortedExp.length, pending: expPending, failed: expFailed }) ?? 'empty'}
+          destination={trip?.destination}
+          total={experiences.length}
+          filterLabel={expSavedOnly && !expVibe ? 'your saved list' : `\u201c${EXP_VIBES.find((v) => v.key === expVibe)?.label ?? 'that vibe'}\u201d`}
+          onRetry={() => void retryExperiences()}
+          onLookAgain={() => void refreshExperiences()}
+          onClearFilters={() => { setExpVibe(null); setExpSavedOnly(false); setExpFilters({}); }}
+        />
       ))}
       {expPickMode && expView === 'browse' && (
         <div className="xpickbar">
@@ -718,6 +762,43 @@ export function MobileBoard() {
             onClick={async () => { await buildMyExpPlan(); setExpPickMode(false); setExpView('plan'); }}>
             <Icon icon={Sparkles} className="ico" /> Generate plan
           </button>
+        </div>
+      )}
+      {expSheet && (
+        <div className="xm-scrim" role="dialog" aria-modal="true" aria-label="Filter things to do" onClick={() => setExpSheet(false)}>
+          <div className="xm-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="xm-grab" aria-hidden="true" />
+            <div className="xm-shead">
+              <h3>Narrow it down</h3>
+              <button className="lnk" onClick={() => setExpFilters({})} disabled={expActiveFilters.length === 0}>Reset</button>
+            </div>
+            <div className="xm-sbody">
+              {Object.entries(EXP_PREDS).map(([k, pred]) => {
+                // `close` needs an anchor, and there isn't one until the group
+                // has locked a home. Offering it early would be a filter that
+                // silently matches nothing.
+                if (k === 'close' && !expAnch) return null;
+                const nMatch = expCountIf(k);
+                const on = !!expFilters[k];
+                return (
+                  <button key={k} className={cn('xm-frow', on && 'on')} aria-pressed={on}
+                    onClick={() => setExpFilters((f) => ({ ...f, [k]: !f[k] }))}>
+                    <span className="bx" aria-hidden="true">{on && <Icon icon={Check} className="ico" />}</span>
+                    <span className="tx">
+                      <b>{pred.label}</b>
+                      <small>{pred.hint}</small>
+                    </span>
+                    <span className="c tnum">{nMatch}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="xm-sfoot">
+              <button className="btn btn-primary" onClick={() => setExpSheet(false)}>
+                Show {sortedExp.length} {sortedExp.length === 1 ? 'thing' : 'things'} to do
+              </button>
+            </div>
+          </div>
         </div>
       )}
       {expOpen && (

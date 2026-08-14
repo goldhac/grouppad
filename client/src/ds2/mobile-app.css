@@ -1535,3 +1535,82 @@ html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidd
 /* A tap on a card shouldn't repaint the card; tint the surface, don't transform
    it. Kept short so it reads as acknowledgement, not animation. */
 .gp-mobile .mcard:active { opacity: 0.92; }
+
+/* ============================================================================
+   §STATES — the four situations, phone-sized
+   ============================================================================
+   Same component as the desktop tab (ExperienceStates.tsx); only the scale
+   changes. On a phone the state IS the screen, so it drops the card chrome
+   that makes sense inside a desktop grid and gets a full-width action — a
+   centred pill at the bottom of an empty screen is a hard tap target.
+   ------------------------------------------------------------------------- */
+.gp-mobile .xm-state { background: transparent; border: 0; box-shadow: none; padding: 56px 26px; }
+.gp-mobile .xm-state .ic { width: 56px; height: 56px; margin-bottom: 16px; }
+.gp-mobile .xm-state .ic .ico { width: 26px; height: 26px; }
+.gp-mobile .xm-state h3 { font-family: var(--font-display); font-size: 20px; letter-spacing: -0.025em; text-wrap: balance; }
+.gp-mobile .xm-state p { font-size: 14px; line-height: 1.55; margin: 9px 0 18px; max-width: 34ch; }
+/* Stacked and full-width: one thumb, one target. */
+.gp-mobile .xm-state .row { display: flex; flex-direction: column; gap: 9px; width: 100%; max-width: 280px; }
+.gp-mobile .xm-state .row .btn { width: 100%; min-height: 46px; }
+
+/* ── the card's vote footer ──────────────────────────────────────────────────
+   One tally, stating its own denominator, and two 44px thumbs. Replaces a row
+   that repeated the same fact ("3 of 14 would go", then "+3") at two scales
+   with sub-40px targets between them. Ported from the mobile handoff. */
+.gp-mobile .xm-vote { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 9px 14px; border-top: 1px solid var(--border); background: var(--surface-inset); }
+.gp-mobile .xm-tally { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.gp-mobile .xm-tally .n { font-family: var(--font-display); font-size: 19px; font-weight: 700; letter-spacing: -0.025em; color: var(--text); font-variant-numeric: tabular-nums; }
+.gp-mobile .xm-tally .n.pos { color: var(--up); }
+.gp-mobile .xm-tally .l { font-size: 11.5px; color: var(--text-muted); }
+.gp-mobile .xm-acts { margin-left: auto; display: inline-flex; gap: 8px; flex: none; }
+.gp-mobile .xm-vbtn { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface-raised); color: var(--text-2); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.gp-mobile .xm-vbtn .ico { width: 18px; height: 18px; }
+/* Transform on press is fine here — it's a 44px button, not a photo, and the
+   press is a deliberate tap rather than the start of a scroll. See §SCROLL. */
+.gp-mobile .xm-vbtn:active { transform: scale(0.9); }
+.gp-mobile .xm-vbtn.up.on { background: var(--up-bg); border-color: var(--up); color: var(--up); }
+.gp-mobile .xm-vbtn.down.on { background: var(--down-bg); border-color: var(--down); color: var(--down); }
+
+/* The save bookmark is a primary target, so it gets the full 44px the spec
+   asks for rather than the 34px puck it inherited from the homes card. */
+.gp-mobile .mcard .save { width: 44px; height: 44px; top: 6px; right: 6px; }
+
+/* The one accent-filled chip in the row: the door into the plan flow. It reads
+   as an action among filters because it IS one — everything else narrows the
+   list, this starts something. `.mk` in the handoff. */
+.gp-mobile .fchip.xm-mk { background: var(--accent); color: var(--accent-fg); border-color: transparent; font-weight: 700; }
+.gp-mobile .fchip.xm-mk .ico { color: currentColor; }
+.gp-mobile .fchip.xm-mk.on { background: var(--surface-raised); color: var(--accent-text); border-color: var(--accent); }
+/* Counts inside a chip are secondary to its label. */
+.gp-mobile .fchip .c { color: var(--text-muted); font-weight: 700; }
+.gp-mobile .fchip.on .c { color: var(--accent-text); }
+
+/* ============================================================================
+   §FILTER SHEET — the quick filters, with counts that are promises
+   ============================================================================
+   A second filter axis doesn't belong in the chip row: the row is already the
+   category axis, and stacking a second one into it makes the row a lucky dip.
+   The counts come from EXP_PREDS — the same predicates that do the filtering —
+   so a row promising 12 cannot then show 9.
+   ------------------------------------------------------------------------- */
+.gp-mobile .xm-scrim { position: absolute; inset: 0; z-index: 62; display: flex; align-items: flex-end; background: color-mix(in srgb, #000 48%, transparent); animation: xm-fade 160ms var(--ease-out); }
+@keyframes xm-fade { from { opacity: 0; } }
+.gp-mobile .xm-sheet { width: 100%; max-height: 82%; display: flex; flex-direction: column; background: var(--surface-raised); border-radius: var(--r-xl) var(--r-xl) 0 0; box-shadow: var(--shadow-pop); animation: xm-rise 260ms var(--ease-out); }
+@keyframes xm-rise { from { transform: translateY(100%); } }
+.gp-mobile .xm-grab { width: 38px; height: 4px; border-radius: var(--r-pill); background: var(--border-strong); margin: 9px auto 2px; flex: none; }
+.gp-mobile .xm-shead { display: flex; align-items: baseline; gap: 12px; padding: 10px 18px 6px; flex: none; }
+.gp-mobile .xm-shead h3 { flex: 1; font-family: var(--font-display); font-size: 19px; font-weight: 700; letter-spacing: -0.025em; color: var(--text); }
+.gp-mobile .xm-sbody { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 12px 4px; scrollbar-width: none; }
+/* A whole row is the target, not the checkbox — 44px minimum, per the spec. */
+.gp-mobile .xm-frow { display: flex; align-items: center; gap: 13px; width: 100%; min-height: 56px; padding: 10px 12px; border: 0; background: transparent; border-radius: var(--r-md); text-align: left; cursor: pointer; color: var(--text); }
+.gp-mobile .xm-frow:active { background: var(--surface-inset); }
+.gp-mobile .xm-frow .bx { width: 24px; height: 24px; flex: none; border-radius: var(--r-xs); border: 2px solid var(--border-strong); display: flex; align-items: center; justify-content: center; color: transparent; }
+.gp-mobile .xm-frow .bx .ico { width: 15px; height: 15px; stroke-width: 3; }
+.gp-mobile .xm-frow.on .bx { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.gp-mobile .xm-frow .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gp-mobile .xm-frow .tx b { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
+.gp-mobile .xm-frow .tx small { font-size: 11.5px; color: var(--text-muted); }
+.gp-mobile .xm-frow .c { flex: none; font-size: 13px; font-weight: 700; color: var(--text-muted); }
+.gp-mobile .xm-frow.on .c { color: var(--accent-text); }
+.gp-mobile .xm-sfoot { flex: none; padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); }
+.gp-mobile .xm-sfoot .btn { width: 100%; min-height: 48px; }
