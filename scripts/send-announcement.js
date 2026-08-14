@@ -45,17 +45,27 @@ const GAP_MS = Number(process.env.ANNOUNCE_GAP_MS || 600);
 
 const isEmail = (v) => typeof v === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
-/** userId -> their most recently created trip id (or null). Lets the CTA drop
- *  someone straight onto their own things-to-do rather than a trip list. */
-function newestTripByUser() {
+/**
+ * userId -> the trip that's actually worth linking them to.
+ *
+ * "Most recent" was wrong: it sent me to `dist-verify-a452e74a`, a throwaway
+ * verification trip I'd made minutes earlier. A real group trip has other
+ * people in it, so rank by member count first and only break ties on recency.
+ * Anything that still looks like a scratch trip gets no deep link at all —
+ * the trip list is a better landing than somebody's test data.
+ */
+function bestTripByUser() {
   const out = {};
   let trips = {};
   try { trips = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'trips.json'), 'utf8')); } catch { return out; }
-  const ordered = Object.values(trips).sort(
-    (a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0),
-  );
-  for (const t of ordered) {
-    for (const m of t?.members || []) if (!out[m]) out[m] = t.id;
+  const looksLikeScratch = (t) => /(^|-)(test|dist-verify|demo|scratch|tmp)(-|$)/i.test(String(t?.id || ''));
+  const ranked = Object.values(trips)
+    .filter((t) => t && t.id && !looksLikeScratch(t))
+    .sort((a, b) =>
+      (b.members?.length || 0) - (a.members?.length || 0) ||
+      new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  for (const t of ranked) {
+    for (const m of t.members || []) if (!out[m]) out[m] = t.id;
   }
   return out;
 }
@@ -63,7 +73,7 @@ function newestTripByUser() {
 function recipients() {
   const file = path.join(DATA_DIR, 'users.json');
   const users = JSON.parse(fs.readFileSync(file, 'utf8'));
-  const trips = newestTripByUser();
+  const trips = bestTripByUser();
   let dirty = false;
   const out = [];
   for (const u of Object.values(users)) {
