@@ -665,3 +665,39 @@ so it follows every skin automatically, weighs nothing, stays sharp at any
 density, and matches the editorial house style. It self-draws once on entry
 (1.1s) and then the far pins breathe at 3.2s — slow enough to read as calm.
 Everything collapses under `prefers-reduced-motion`.
+
+---
+
+## 4j. Four fixes from using it on the real board (SHIPPED 2026-08-13)
+
+**1. The day started from "Downtown LA" instead of the booked house.**
+A bug I introduced. `loadListings()` returns `{ trip, listings }` — *not* an
+array — so `[...loadListings(tripId)]` threw, `tripAnchor()`'s own `try/catch`
+swallowed it, and every routed day silently fell back to the trip's ref point.
+The house was in `submitted.json` with good coordinates the whole time. A
+swallowed exception that degrades instead of failing is the worst kind.
+
+**2. Days now end back at the house.** A plan that just stopped at the last
+activity hid the last drive of the night — the one people actually feel — and
+left it out of both the finish time and the driving total.
+
+**3. Optional stops, and the "never invent a stop" rule survives intact.**
+The original rule was that Scout must not fabricate "Coffee at République",
+because that recommends a real business nobody verified. That still holds. What
+changed is that we now *have* real places to offer: the board already carries
+OSM rows (parks, viewpoints, beaches, museums) with genuine coordinates. So a
+suggestion is a real, named, mapped place within **1.6 mi of the straight line
+between two stops** (`distToLegMi`, flat-earth projection with a cos(lat)
+correction — fine at city scale). Rendered quieter, with a hollow dot and an
+"on the way" tag, and **never counted in the day's time or cost**, because
+nobody agreed to it. The pool is OSM-only: suggesting a ticketed experience
+would be recommending a purchase nobody voted on.
+
+**4. The shared link now renders the routed day.** It was showing strictly less
+than the app — a flat list of activities with no times, legs or totals, which is
+the whole point of the feature.
+
+Copy fixes found by reading the output: the gap says "Nothing **planned** after
+4:10p" (the day itself ends later, once the drive home is in), and a suggestion
+says "optional" rather than "free to skip" — several of these are ticketed
+places, and "free" read as free entry.

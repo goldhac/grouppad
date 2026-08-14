@@ -861,3 +861,12 @@ body { background: var(--surface); }
   .xart .draw { animation: none; stroke-dashoffset: 0; }
   .xart .b1, .xart .b2, .xart .b3 { animation: none; }
 }
+
+/* An optional stop: a real mapped place that sits on the way. Visually quieter
+   than a real stop and marked with a hollow dot, because nobody agreed to it and
+   it costs the day no time and no money until someone does. */
+.stop.suggest { opacity: 0.82; }
+.stop.suggest::before { background: var(--surface-raised); border-color: var(--border-strong); box-shadow: none; }
+.stop.suggest .stop-name { font-weight: 500; color: var(--text-2); }
+.stop.suggest .stop-time { color: var(--text-muted); }
+.stop-tag.opt { background: var(--surface-sunken); color: var(--text-muted); border: 1px solid var(--border); }

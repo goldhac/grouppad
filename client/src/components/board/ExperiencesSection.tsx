@@ -443,6 +443,25 @@ function RoutedDay({ day, route, byId, onOpen }: { day: string | null; route: Da
                 </div>
               );
             }
+            if ('suggest' in row) {
+              const x = byId.get(row.suggest.id);
+              return (
+                <div className="stop suggest" key={i}>
+                  <div className="stop-top">
+                    <span className="stop-time">&mdash;</span>
+                    {x ? (
+                      <button className="stop-name" onClick={() => onOpen(x)}>{row.suggest.n}</button>
+                    ) : (
+                      <span className="stop-name">{row.suggest.n}</span>
+                    )}
+                    <span className="stop-tag opt">on the way</span>
+                  </div>
+                  <div className="stop-facts">
+                    <span>{row.suggest.kind}</span><span className="sep">·</span><span>{row.suggest.why}</span>
+                  </div>
+                </div>
+              );
+            }
             if ('gap' in row) {
               // Scout admits the hole instead of inventing a stop to look
               // complete. Do not "improve" this by auto-filling it.

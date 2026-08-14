@@ -251,6 +251,9 @@ export type ExpDaysMap = Record<string, string>;
 export type RouteRow =
   | { k: 'anchor' | 'stop'; t: string; id?: string; n: string; tag?: 'voted' | 'pinned' | null; facts?: string[]; why?: string | null }
   | { leg: 'drive' | 'walk'; dur: string; mi: string; tight?: boolean; why?: string | null }
+  /** A real, mapped place that happens to sit on the way. Offered, never
+   *  scheduled — it costs no time and no money until someone adds it. */
+  | { suggest: { id: string; n: string; kind: string; why: string } }
   | { gap: string };
 
 /** A day rendered as a journey rather than a list. Computed by the server at

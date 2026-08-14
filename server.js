@@ -347,13 +347,39 @@ svg .fade3{animation:d 3.2s ease-in-out 1s infinite}
   }
   const byId = new Map(loadExperiences(trip.id).map((x) => [String(x.id), x]));
   const who = plan.owner_name || 'A member';
+  // The routed day is the whole point of the feature — a shared link that only
+  // listed activities was showing strictly less than the app does.
+  const routed = withRoutes(trip.id, trip, plan);
   const dayName = (d) => {
     if (!d) return 'Any day';
     try { return new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }); }
     catch { return d; }
   };
   let firstPhoto = null;
-  const sections = plan.days.map((d) => {
+  const legRow = (r) => `<li class="lg">${r.leg === 'walk' ? '🚶' : '🚗'} ${ogEsc(r.dur)} ${r.leg} · ${ogEsc(r.mi)}${r.why ? ` — ${ogEsc(r.why)}` : ''}</li>`;
+  const routeSection = (d) => {
+    const rt = d.route;
+    if (!rt || !rt.rows.length) return null;
+    const li = rt.rows.map((r) => {
+      if (r.leg) return legRow(r);
+      if (r.gap) return `<li class="gp">${ogEsc(r.gap)}</li>`;
+      // The `why` already says "on the way" — don't print it twice.
+      if (r.suggest) return `<li class="sg"><b>${ogEsc(r.suggest.n)}</b> <span>${ogEsc(r.suggest.kind)} · ${ogEsc(r.suggest.why)}</span></li>`;
+      const x = r.id ? byId.get(String(r.id)) : null;
+      if (x && !firstPhoto) firstPhoto = x.photo;
+      const facts = (r.facts || []).map(ogEsc).join(' · ');
+      return `<li class="st${r.k === 'anchor' ? ' an' : ''}">
+        <span class="tm">${ogEsc(r.t)}</span>
+        <span class="nm">${x ? `<a href="${ogEsc(x.url)}" target="_blank" rel="noopener">${ogEsc(r.n)}</a>` : ogEsc(r.n)}${r.tag ? ` <em class="tg ${r.tag}">${r.tag === 'voted' ? 'voted in' : 'pinned'}</em>` : ''}
+          ${facts ? `<small>${facts}</small>` : ''}${r.why ? `<small class="wh">↳ ${ogEsc(r.why)}</small>` : ''}</span></li>`;
+    }).join('');
+    const tot = [rt.out ? `<b>${ogEsc(rt.out)}</b> out` : '', rt.drive ? `<b>${ogEsc(rt.drive)}</b> driving` : '', rt.pp != null ? `<b>$${rt.pp}</b> pp` : ''].filter(Boolean).join(' · ');
+    return `<section><h2>${ogEsc(dayName(d.day))}</h2><ul class="rt">${li}</ul>
+      <div class="wrap${rt.heavy ? ' hv' : ''}">${tot}${rt.heavy ? ' · that\u2019s a lot of driving for one day' : ''}</div></section>`;
+  };
+  const sections = routed.days.map((d) => {
+    const r = routeSection(d);
+    if (r) return r;
     const items = d.items.map((it) => byId.get(String(it.id))).filter(Boolean);
     if (!items.length) return '';
     if (!firstPhoto) firstPhoto = items[0].photo;
@@ -389,6 +415,24 @@ ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px
 .go{flex:none;color:var(--ac);text-decoration:none;font-size:13px;font-weight:600;border:1px solid var(--line);padding:6px 11px;border-radius:8px}
 .cta{display:block;margin-top:26px;text-align:center;background:var(--ac);color:#08120f;font-weight:700;text-decoration:none;padding:13px;border-radius:12px}
 .ft{margin-top:14px;text-align:center;color:var(--mut);font-size:12px}
+.rt{gap:0}
+.rt .st{display:flex;gap:11px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.rt .st.an{background:none;border-color:transparent;padding:6px 12px}
+.rt .tm{font:600 12px/1.6 'Courier New',Courier,monospace;color:var(--ac);flex:none;min-width:52px}
+.rt .st.an .tm{color:var(--mut)}
+.rt .nm{flex:1;min-width:0;font-size:14.5px;font-weight:600}
+.rt .st.an .nm{font-weight:500;color:var(--mut)}
+.rt .nm a{color:inherit;text-decoration:none}
+.rt .nm small{display:block;font-weight:400;font-size:12.5px;color:var(--mut);margin-top:2px}
+.rt .nm small.wh{color:var(--tx);opacity:.75}
+.rt .tg{font-style:normal;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:999px;background:#1d3a30;color:#7fd6c2;margin-left:6px}
+.rt .lg{padding:6px 12px 6px 63px;font-size:12.5px;color:var(--mut)}
+.rt .sg{padding:8px 12px;border:1px dashed var(--line);border-radius:10px;font-size:13px;color:var(--mut)}
+.rt .sg b{color:var(--tx);font-weight:600}
+.rt .gp{padding:8px 12px;border:1px dashed var(--line);border-radius:10px;font-size:12.5px;color:var(--mut)}
+.wrap{margin-top:8px;padding:9px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);font-size:12.5px;color:var(--mut)}
+.wrap b{color:var(--tx)}
+.wrap.hv{border-color:#5d4a1f}
 /* Watermark. NOT the "unlicensed sample" kind — it carries a claim that is both
    true and load-bearing: this is ONE MEMBER'S proposal, not what the group
    decided. Same honesty rule as Scout's attribution. Kept faint enough that it
@@ -3732,9 +3776,12 @@ function tripAnchor(tripId, trip) {
   try {
     const dec = loadDecision(tripId);
     if (dec) {
-      // Curated + submitted only: the scraped pipeline lives in SQLite behind a
-      // query, and a missing home just falls through to the trip's ref point.
-      const home = [...loadListings(tripId), ...loadSubmitted(tripId)]
+      // loadListings() returns { trip, listings } — NOT an array. Spreading it
+      // threw, the catch below swallowed it, and every routed day silently
+      // started from the trip's ref point ("Downtown LA") instead of the house
+      // the group actually booked. Failing loudly would have been kinder.
+      const curated = loadListings(tripId);
+      const home = [...(curated?.listings || []), ...loadSubmitted(tripId)]
         .find((l) => String(l.id) === String(dec.listing_id));
       if (home && typeof home.lat === 'number' && typeof home.lng === 'number') {
         return { name: 'The house', lat: home.lat, lng: home.lng };
@@ -3783,6 +3830,56 @@ function orderByProximity(stops, anchor) {
   return [...out, ...rest];
 }
 
+/**
+ * Optional stops: real places that happen to sit on the way.
+ *
+ * The rule from the start of this feature was that Scout never invents a stop —
+ * "Coffee at République" tagged *Scout added* would be fabricating a
+ * recommendation for a real business. That rule stands. What changed is that we
+ * now HAVE real places to offer: the board already carries OSM rows (parks,
+ * viewpoints, beaches, museums) with genuine coordinates.
+ *
+ * So a suggestion is a real, named, mapped place that is genuinely near a leg —
+ * within DETOUR_MI of the straight line between two stops. It is rendered as
+ * optional and never counted in the day's time or cost, because the group
+ * hasn't agreed to it.
+ */
+const DETOUR_MI = 1.6;
+
+/** Perpendicular-ish distance from p to the segment a→b, in miles. */
+function distToLegMi(p, a, b) {
+  // Flat-earth is fine at city scale: project onto the segment in degrees,
+  // scaling longitude by cos(lat) so the geometry isn't skewed.
+  const k = Math.cos((a.lat * Math.PI) / 180) || 1;
+  const ax = a.lng * k, ay = a.lat, bx = b.lng * k, by = b.lat, px = p.lng * k, py = p.lat;
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2)) : 0;
+  return straightLineMi({ lat: py, lng: px / k }, { lat: ay + t * dy, lng: (ax + t * dx) / k });
+}
+
+function suggestionsFor(from, to, ctx, used) {
+  if (!from || !to) return [];
+  const out = [];
+  for (const x of ctx.pool) {
+    if (used.has(String(x.id))) continue;
+    if (typeof x.lat !== 'number' || typeof x.lng !== 'number') continue;
+    const d = distToLegMi(x, from, to);
+    if (d > DETOUR_MI) continue;
+    out.push({ x, d });
+  }
+  return out.sort((a, b) => a.d - b.d).slice(0, 1).map(({ x, d }) => ({
+    suggest: {
+      id: String(x.id),
+      n: x.title,
+      kind: x.category || 'Nearby',
+      // NOT "free to skip" — several of these are ticketed places, and that
+      // phrasing reads as "free entry" rather than "optional".
+      why: `${d < 0.4 ? 'right on the way' : `about ${d.toFixed(1)} mi off the route`} · optional`,
+    },
+  }));
+}
+
 function routeDay(day, ctx) {
   const { byId, anchor, pins, votes, party, dayStartMin } = ctx;
   const raw = day.items.map((it) => ({ it, x: byId.get(it.id) })).filter((s) => s.x);
@@ -3790,6 +3887,7 @@ function routeDay(day, ctx) {
   const stops = orderByProximity(raw, anchor);
 
   const rows = [];
+  const used = new Set(stops.map(({ x }) => String(x.id)));
   let clock = dayStartMin;
   let driveMins = 0, perPerson = 0, unpriced = 0;
   let here = anchor;
@@ -3816,6 +3914,8 @@ function routeDay(day, ctx) {
       });
       clock += mins;
       if (!walk) driveMins += mins;
+      // Anything real and genuinely on the way, offered but never scheduled.
+      if (ctx.pool?.length) rows.push(...suggestionsFor(here, x, ctx, used));
       here = { lat: x.lat, lng: x.lng };
     } else if (typeof x.lat === 'number' && typeof x.lng === 'number') {
       here = { lat: x.lat, lng: x.lng };
@@ -3843,7 +3943,27 @@ function routeDay(day, ctx) {
   // before 6pm is a real gap in a group's day, and Scout should say so.
   const EVENING = 18 * 60;
   if (clock < EVENING) {
-    rows.push({ gap: `Nothing after ${clockOf(clock)} — the group hasn’t voted on anything for this evening` });
+    // "planned" matters: the day itself ends later, once the drive home is in.
+    rows.push({ gap: `Nothing planned after ${clockOf(clock)} — the group hasn’t voted on anything for this evening` });
+  }
+
+  // …and everyone goes home. A day that just stops at the last activity hides
+  // the last drive of the night, which is the one people actually feel — and it
+  // was missing from both the totals and the finish time.
+  if (anchor && here && (here.lat !== anchor.lat || here.lng !== anchor.lng)) {
+    const mi = straightLineMi(here, anchor) * ROAD_FACTOR;
+    const walk = mi <= WALK_MI;
+    const mins = Math.max(5, Math.round((walk ? (mi / 3) * 60 : (mi / driveMph(mi)) * 60) / 5) * 5);
+    rows.push({
+      leg: walk ? 'walk' : 'drive',
+      dur: mins >= 60 ? `~${spanOf(mins)}` : `~${mins} min`,
+      mi: `${mi.toFixed(1)} mi`,
+      tight: mins >= 45,
+      why: 'back to the house',
+    });
+    clock += mins;
+    if (!walk) driveMins += mins;
+    rows.push({ k: 'anchor', t: clockOf(clock), n: `${anchor.name} · home for the night` });
   }
 
   return {
@@ -3868,8 +3988,13 @@ function routeDay(day, ctx) {
 function withRoutes(tripId, trip, plan) {
   if (!plan || !Array.isArray(plan.days)) return plan;
   try {
+    const rows0 = loadExperiences(tripId);
     const ctx = {
-      byId: new Map(loadExperiences(tripId).map((x) => [String(x.id), x])),
+      byId: new Map(rows0.map((x) => [String(x.id), x])),
+      // Only OSM rows: parks, viewpoints, beaches, museums — real mapped places
+      // that make sense as a five-minute detour. Never a ticketed experience,
+      // which would be recommending a purchase nobody voted on.
+      pool: rows0.filter((x) => x.source === 'osm' && typeof x.lat === 'number'),
       anchor: tripAnchor(tripId, trip),
       pins: readJson(tripFile(tripId, 'exp-days.json'), {}),
       votes: loadExpVotes(tripId),
