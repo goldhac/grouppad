@@ -45,9 +45,25 @@ const GAP_MS = Number(process.env.ANNOUNCE_GAP_MS || 600);
 
 const isEmail = (v) => typeof v === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 
+/** userId -> their most recently created trip id (or null). Lets the CTA drop
+ *  someone straight onto their own things-to-do rather than a trip list. */
+function newestTripByUser() {
+  const out = {};
+  let trips = {};
+  try { trips = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'trips.json'), 'utf8')); } catch { return out; }
+  const ordered = Object.values(trips).sort(
+    (a, b) => new Date(b?.created_at || 0) - new Date(a?.created_at || 0),
+  );
+  for (const t of ordered) {
+    for (const m of t?.members || []) if (!out[m]) out[m] = t.id;
+  }
+  return out;
+}
+
 function recipients() {
   const file = path.join(DATA_DIR, 'users.json');
   const users = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const trips = newestTripByUser();
   let dirty = false;
   const out = [];
   for (const u of Object.values(users)) {
@@ -60,7 +76,11 @@ function recipients() {
       u.unsub = require('crypto').randomBytes(16).toString('hex');
       dirty = true;
     }
-    out.push({ id: u.id, email: u.email, name: u.name || String(u.email).split('@')[0], unsub: u.unsub });
+    out.push({
+      id: u.id, email: u.email, name: u.name || String(u.email).split('@')[0], unsub: u.unsub,
+      // No trip yet → the trip list is the only sensible landing.
+      cta: trips[u.id] ? `${BASE}/#/t/${encodeURIComponent(trips[u.id])}/board?tab=todo` : `${BASE}/#/trips`,
+    });
   }
   // Persist any freshly minted tokens, or the links in the mail we just sent
   // would point at nothing.
@@ -92,7 +112,7 @@ async function send(to, html, unsubUrl) {
 async function main() {
   const template = fs.readFileSync(HTML_FILE, 'utf8');
   const left = template.match(/\{\{(\w+)\}\}/g) || [];
-  const unknown = [...new Set(left)].filter((t) => t !== '{{unsubscribe}}');
+  const unknown = [...new Set(left)].filter((t) => !['{{unsubscribe}}', '{{cta}}'].includes(t));
   if (unknown.length) {
     console.error(`Refusing to send: unresolved merge tokens ${unknown.join(', ')}`);
     process.exit(1);
@@ -100,7 +120,7 @@ async function main() {
 
   let list, skipped = [];
   if (SAMPLE) {
-    list = [{ email: SAMPLE, name: 'sample', unsub: 'sample-not-a-real-token' }];
+    list = [{ email: SAMPLE, name: 'sample', unsub: 'sample-not-a-real-token', cta: `${BASE}/#/trips` }];
   } else {
     list = recipients();
     skipped = list.filter((r) => r.skipped);
@@ -119,8 +139,10 @@ async function main() {
   let ok = 0, failed = 0;
   for (const r of list) {
     const unsubUrl = `${BASE}/api/notify/unsubscribe?u=${encodeURIComponent(r.unsub)}`;
-    const html = template.replace(/\{\{unsubscribe\}\}/g, unsubUrl);
-    if (!SEND) { console.log(`  · would send → ${r.email}`); continue; }
+    const html = template
+      .replace(/\{\{unsubscribe\}\}/g, unsubUrl)
+      .replace(/\{\{cta\}\}/g, r.cta || `${BASE}/#/trips`);
+    if (!SEND) { console.log(`  · would send → ${r.email}   ${r.cta.replace(BASE, '')}`); continue; }
     try {
       const id = await send(r.email, html, unsubUrl);
       ok++; console.log(`  ✓ ${r.email}  (${id})`);

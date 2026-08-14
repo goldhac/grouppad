@@ -146,6 +146,18 @@ export function BoardView() {
     if (siteTourSignal > 0) { setTab('all'); setTourOpen(true); }
   }, [siteTourSignal]);
 
+  // ── Deep-link a tab (?tab=todo) ──────────────────────────────────────────
+  // So an email or a shared link can drop someone straight onto the things to
+  // do, rather than the homes grid with a "now find the right tab" puzzle.
+  const tabParam = searchParams.get('tab');
+  useEffect(() => {
+    const valid: Tab[] = ['all', 'shortlist', 'saved', 'todo', 'decision', 'discussion'];
+    if (tabParam && (valid as string[]).includes(tabParam)) setTab(tabParam as Tab);
+    // Only on arrival — after that the tab bar owns the state, and re-running
+    // this would fight every click.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParam]);
+
   // ── Deep-link the detail modal (?listing=<id> ⇄ DetailModal) ──────────────
   const linkParam = searchParams.get('listing');
   const prevDetail = useRef<string | null>(null);

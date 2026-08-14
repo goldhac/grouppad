@@ -701,3 +701,35 @@ Copy fixes found by reading the output: the gap says "Nothing **planned** after
 4:10p" (the day itself ends later, once the drive home is in), and a suggestion
 says "optional" rather than "free to skip" — several of these are ticketed
 places, and "free" read as free entry.
+
+---
+
+## 4k. The itinerary is load-bearing (SHIPPED 2026-08-13)
+
+Two findings and two changes, prompted by wanting to upload a new itinerary.
+
+**It was being silently truncated.** The LA trip's itinerary is *exactly* 8000
+characters — the old `.slice(0, 8000)` cap. Somebody pasted a document and the
+end of it was cut mid-sentence, with nothing said. The cap is now 40,000, the
+POST response reports `{ truncated, received, max }`, the upload path warns when
+a file is longer, and the editor shows a live character count.
+
+**Scout only reads the first 4000 of it** when ranking homes (a token-cost
+decision, unchanged). The editor now says so once you're past that, because an
+organizer whose day-5 plans are ignored deserves to know why rather than
+guessing — "put the days and places near the top".
+
+**Scout's Plan job now works around the itinerary.** It is the organizer's
+canonical *what is already happening*; planning activities blind to it is how
+you get a four-hour hike on top of the birthday dinner. The first 2,500
+characters go into the Plan prompt with an instruction to avoid busy days and to
+leave a day empty rather than double-book it.
+
+**Opt-out, not opt-in.** "Work around our itinerary" sits checked next to the
+plan button, and only appears when an itinerary exists. Unchecking it sends
+`isolated: true` and plans on a blank slate — the right call when the posted
+itinerary is stale or aspirational. The two modes hash differently, so an
+isolated plan can never be served from the itinerary-aware cache or vice versa.
+
+**Deep-linking**: the board now honours `?tab=todo`, so an email or shared link
+can land on the things to do instead of the homes grid.

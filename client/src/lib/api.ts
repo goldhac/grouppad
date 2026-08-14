@@ -208,8 +208,10 @@ export const api = {
     request<ExpPlan>(`${t(tripId)}/my-plan`, { method: 'POST', body: { ids } }),
   setExpDay: (tripId: string, experience_id: string, day: string | null) =>
     request<ExpDaysMap>(`${t(tripId)}/exp-days`, { method: 'POST', body: { experience_id, day } }),
-  planExperiences: (tripId: string, force?: boolean) =>
-    request<ExpPlan>(`${t(tripId)}/plan-experiences`, { method: 'POST', body: { force } }),
+  /** `isolated` plans on a blank slate instead of working around the trip
+   *  itinerary — right when the posted itinerary is stale or aspirational. */
+  planExperiences: (tripId: string, force?: boolean, isolated?: boolean) =>
+    request<ExpPlan>(`${t(tripId)}/plan-experiences`, { method: 'POST', body: { force, isolated } }),
   expVote: (tripId: string, experience_id: string, vote: VoteDir | null) =>
     request<ExpVotesMap>(`${t(tripId)}/exp-votes`, { method: 'POST', body: { experience_id, vote } }),
 

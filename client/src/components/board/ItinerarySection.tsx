@@ -4,8 +4,15 @@ import { useApp } from '@/store/AppContext';
 import { Button } from '@/components/ui/Button';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
 
+// Matches ITINERARY_MAX on the server. A real itinerary is a pasted document,
+// and the old 8000 silently cut the LA trip's mid-sentence.
+const MAX = 40000;
+/** How much of the itinerary Scout actually reads when ranking homes. Worth
+ *  saying out loud rather than letting an organizer wonder why day 5 is ignored. */
+const SCOUT_WINDOW = 4000;
+
 export function ItinerarySection() {
-  const { itinerary, isOwner, saveItinerary } = useApp();
+  const { itinerary, isOwner, saveItinerary, toast } = useApp();
   const [draft, setDraft] = useState(itinerary.text);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -29,7 +36,11 @@ export function ItinerarySection() {
     const file = e.target.files?.[0];
     if (!file) return;
     const text = await file.text();
-    setDraft(text.slice(0, 8000));
+    // Say so rather than quietly dropping the end of someone's document.
+    if (text.length > MAX) {
+      toast(`That file is ${text.length.toLocaleString()} characters — keeping the first ${MAX.toLocaleString()}.`, 'info');
+    }
+    setDraft(text.slice(0, MAX));
     if (fileRef.current) fileRef.current.value = '';
   }
 
@@ -55,11 +66,17 @@ export function ItinerarySection() {
               value={draft}
               onFocus={() => (focused.current = true)}
               onBlur={() => (focused.current = false)}
-              onChange={(e) => setDraft(e.target.value.slice(0, 8000))}
-              rows={4}
+              onChange={(e) => setDraft(e.target.value.slice(0, MAX))}
+              rows={6}
               placeholder="Admin: post the one canonical itinerary here. e.g. Day 1: arrive, dinner in Santa Monica…"
               className="w-full rounded-md border border-border bg-panel-2 p-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
             />
+            <div className="mt-1.5 text-xs text-muted">
+              {draft.length.toLocaleString()} / {MAX.toLocaleString()} characters
+              {draft.length > SCOUT_WINDOW && (
+                <> · Scout reads the first {SCOUT_WINDOW.toLocaleString()} when ranking homes, so put the days and places near the top.</>
+              )}
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <input
                 ref={fileRef}

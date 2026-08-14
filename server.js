@@ -3289,11 +3289,17 @@ const hGetItinerary = (req, res) => res.json(loadItinerary(req.params.tripId));
 app.get('/api/itinerary', hGetItinerary);
 app.get('/api/trips/:tripId/itinerary', loadTripOr404, hGetItinerary);
 
+// A real itinerary is a pasted document, not a note. The old 8000-char cap was
+// hit exactly by the LA trip's — meaning it was silently cut mid-sentence and
+// nobody was told. Bigger cap, and the response reports what happened so the UI
+// can say so out loud.
+const ITINERARY_MAX = 40000;
 const hSetItinerary = (req, res) => {
-  const text = String((req.body && req.body.text) || '').slice(0, 8000);
+  const raw = String((req.body && req.body.text) || '');
+  const text = raw.slice(0, ITINERARY_MAX);
   const it = { text, updated_at: new Date().toISOString() };
   saveItinerary(it, req.params.tripId);
-  res.json(it);
+  res.json({ ...it, truncated: raw.length > text.length, received: raw.length, max: ITINERARY_MAX });
 };
 app.post('/api/admin/itinerary', requireAdmin, hSetItinerary);
 app.post('/api/trips/:tripId/itinerary', requireTripOwner, hSetItinerary);
@@ -4170,8 +4176,15 @@ app.post('/api/trips/:tripId/plan-experiences', requireAuth, loadTripOr404, requ
   if (!picks.length) return res.status(400).json({ error: 'Vote on a few things first — Scout plans from what the group likes.' });
 
   const days = tripDays(trip);
+  // The trip itinerary is the organizer's canonical "what is already happening".
+  // Planning activities without it is how you end up with a four-hour hike on
+  // top of the birthday dinner. Opt-OUT rather than opt-in: the common case is
+  // that a group wants the two to agree. `isolated: true` plans on a blank
+  // slate, which is right when the itinerary is stale or aspirational.
+  const isolated = !!req.body?.isolated;
+  const itinText = isolated ? '' : String(loadItinerary(tripId).text || '').slice(0, 2500);
   const hash = crypto.createHash('sha1')
-    .update(JSON.stringify(picks.map((p) => [p.id, netOf(p.id)])) + days.join(','))
+    .update(JSON.stringify(picks.map((p) => [p.id, netOf(p.id)])) + days.join(',') + (itinText ? 'itin' : 'solo'))
     .digest('hex');
   const cached = loadExpPlan(tripId);
   if (cached && cached.hash === hash && !req.body?.force) return res.json(withRoutes(tripId, trip, cached));
@@ -4197,6 +4210,12 @@ app.post('/api/trips/:tripId/plan-experiences', requireAuth, loadTripOr404, requ
 
 Activities (JSON): ${JSON.stringify(compact)}
 Trip days: ${days.length ? days.join(', ') : 'unknown dates — just group them sensibly'}
+${itinText ? `
+The organizer has ALREADY posted this itinerary. Work around it: do not put an activity on a day that is already busy, and prefer days that look free. If nothing fits, leave the day empty rather than double-booking it.
+--- itinerary ---
+${itinText}
+--- end itinerary ---
+` : ''}
 
 Build a realistic day-by-day plan. Rules: at most 2 activities per day; keep total time per day under ~6 hours (use "mins"); put the most-liked activities on earlier days; don't repeat an activity; it's fine to leave a day empty for rest. Only use the activities given.
 

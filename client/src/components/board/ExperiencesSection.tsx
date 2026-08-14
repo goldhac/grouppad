@@ -740,6 +740,10 @@ export function ExperiencesSection() {
   const [view, setView] = useState<'browse' | 'plan'>('browse');
   // The studio is open while you look at the result of an experiment.
   const [studioOpen, setStudioOpen] = useState(false);
+  // Scout works around the posted itinerary by default — planning a hike on top
+  // of the birthday dinner is the obvious failure. Turn it off when the
+  // itinerary is stale and you want a clean slate.
+  const [isolated, setIsolated] = useState(false);
   useEffect(() => {
     if (!tripId || !user) return;
     let dead = false;
@@ -886,7 +890,7 @@ export function ExperiencesSection() {
     if (!tripId || planning) return;
     setPlanning(true);
     try {
-      const p = await api.planExperiences(tripId, force);
+      const p = await api.planExperiences(tripId, force, isolated);
       setPlan(p);
       track('experiences_planned', { days: p.days.length, fallback: !!p.fallback });
       if (p.fallback) toast('Scout is resting — grouped your picks by votes instead.', 'info');
@@ -1025,6 +1029,12 @@ export function ExperiencesSection() {
           </div>
           {groupList.length > 0 && (
             <span className="xp-acts">
+              {itinerary.text?.trim() && (
+                <label className="xitin" title="Your trip itinerary is what the organizer posted. Scout works around it unless you turn this off.">
+                  <input type="checkbox" checked={!isolated} onChange={(e) => setIsolated(!e.target.checked)} />
+                  <span>Work around our itinerary</span>
+                </label>
+              )}
               <button className="btn btn-sm" onClick={() => void runPlan(!!plan)} disabled={planning}>
                 <Icon icon={Sparkles} className="ico" /> {planning ? 'Scout is planning…' : plan ? 'Re-plan' : 'Scout: plan our days'}
               </button>
