@@ -36,7 +36,7 @@ const ONLY = val('--only');
 // a working opt-out key belonging to somebody else.
 const SAMPLE = val('--sample');
 const HTML_FILE = val('--html') || path.join(__dirname, '..', 'docs', 'emails', '07-early-access-scout.html');
-const SUBJECT = val('--subject') || 'You were here first — and Scout just learned to plan your day';
+const SUBJECT = val('--subject') || '\u{1F389} You were here first — and Scout just learned to plan your day';
 const DATA_DIR = process.env.PIPELINE_DATA_DIR || path.join(__dirname, '..', 'data');
 const BASE = process.env.APP_BASE_URL || 'https://grouppad.goldhac.com';
 const KEY = process.env.RESEND_API_KEY;
