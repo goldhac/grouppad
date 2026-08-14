@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ArrowRight, ChevronRight, Home, ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Trophy, Users, Lock, Flag, CornerDownRight, Car, Footprints, CloudOff, FilterX } from 'lucide-react';
+import { ArrowRight, ChevronRight, Home, ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Lock, CornerDownRight, CloudOff, FilterX } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { Carousel } from '@/components/Carousel';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { cn } from '@/lib/cn';
@@ -485,7 +486,7 @@ function RoutedDay({ day, route, byId, onOpen, open, onToggle, domId }: { day: s
                 if ('leg' in row) {
                   return (
                     <div className={cn('leg', row.tight && 'tight')} key={i}>
-                      <Icon icon={row.leg === 'walk' ? Footprints : Car} className="ico ic" />
+                      <SignatureIcon name={row.leg === 'walk' ? 'walk' : 'car'} className="ico ic" />
                       <span className="dur">{row.dur} {row.leg}</span>
                       <span>· {row.mi}</span>
                       {row.why && <span className="why">— {row.why}</span>}
@@ -539,7 +540,7 @@ function RoutedDay({ day, route, byId, onOpen, open, onToggle, domId }: { day: s
             )}
           </div>
           <div className="itin-wrap">
-            <Icon icon={Flag} className="ico" />
+            <SignatureIcon name="flag" className="ico" />
             <span className="txt">
               That&rsquo;s a wrap for {weekdayLong(day)}
               {route.heavy && <> &middot; <span style={{ color: 'var(--marginal)' }}>that&rsquo;s a lot of driving for one day</span></>}
@@ -712,7 +713,7 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
           <div className="dx-modal" style={{ maxWidth: 720 }}>
             <div className="xstudio">
               <div className="xstudio-h">
-                <div className="mk"><Icon icon={Sparkles} className="ico" /></div>
+                <div className="mk"><SignatureIcon name="sparkles" className="ico" /></div>
                 <div className="hh">
                   <div className="t">{generating ? 'Building your plan' : 'Your plan'}</div>
                   <div className="s">
@@ -1125,9 +1126,11 @@ export function ExperiencesSection() {
       <div className={cn('xp', 'k-group', panels.group && 'open')}>
         <div className="xp-h pl-ph" onClick={() => togglePanel('group')}>
           <Icon icon={ChevronRight} className="ico pchev" />
-          <div className="mk"><Icon icon={Trophy} className="ico" /></div>
+          {/* Gold marks decisions. The group's answer is one; Scout's proposal
+              and a private draft are not — see SignatureIcon. */}
+          <div className="mk"><SignatureIcon name="officialPick" className="ico" /></div>
           <div className="hh">
-            <span className="xp-kind"><Icon icon={Users} className="ico" /> The group&rsquo;s answer</span>
+            <span className="xp-kind"><SignatureIcon name="users" className="ico" /> The group&rsquo;s answer</span>
             <div className="xp-t">Top of the list</div>
             <div className="xp-s">
               {groupList.length
@@ -1216,7 +1219,7 @@ export function ExperiencesSection() {
         {/* The denominator, out loud. A bar nobody can size against a total is
             just a decoration. */}
         {panels.group && <div className="xlb-quorum">
-          <Icon icon={Users} className="ico" />
+          <SignatureIcon name="users" className="ico" />
           <span><b className="tnum">{voterCount}</b> of {split} have voted</span>
           <span className="track"><span className="fill" style={{ width: `${Math.min(100, (voterCount / Math.max(1, split)) * 100)}%` }} /></span>
         </div>}
@@ -1317,7 +1320,7 @@ export function ExperiencesSection() {
         <div className={cn('xp', 'k-mine', panels.mine && 'open')}>
           <div className="xp-h pl-ph" onClick={() => togglePanel('mine')}>
             <Icon icon={ChevronRight} className="ico pchev" />
-            <div className="mk"><Icon icon={Bookmark} className="ico" /></div>
+            <div className="mk"><SignatureIcon name="bookmark" className="ico" /></div>
             <div className="hh">
               <span className="xp-kind"><Icon icon={Lock} className="ico" /> Private to you</span>
               <div className="xp-t">My plan{myPlan?.fallback ? ' · by picks' : ''}</div>
