@@ -152,6 +152,25 @@ export const api = {
   itinerary: (tripId: string) => request<Itinerary>(`${t(tripId)}/itinerary`),
   setItinerary: (tripId: string, text: string) =>
     request<Itinerary>(`${t(tripId)}/itinerary`, { method: 'POST', body: { text } }),
+  /** Pull the text out of an itinerary PDF. Returns it for REVIEW — it does not
+   *  save anything, because replacing a trip's canonical plan is a human's call. */
+  extractItinerary: async (tripId: string, file: File) => {
+    let res: Response;
+    try {
+      res = await fetch(`${t(tripId)}/itinerary/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/pdf' },
+        credentials: 'include',
+        body: file,
+      });
+    } catch {
+      throw new ApiError(0, 'Network error — check your connection and try again.');
+    }
+    const raw = await res.text();
+    const data = raw ? safeJson(raw) : null;
+    if (!res.ok) throw new ApiError(res.status, (data as { error?: string })?.error || 'Could not read that PDF.');
+    return data as { text: string; raw: string; pages: number; chars: number; tidied: boolean; truncated: boolean };
+  },
   caveats: (tripId: string) => request<Caveat[]>(`${t(tripId)}/caveats`),
   postCaveat: (tripId: string, text: string) =>
     request<Caveat[]>(`${t(tripId)}/caveats`, { method: 'POST', body: { text } }),

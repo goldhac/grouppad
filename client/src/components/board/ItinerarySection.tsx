@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Map, Upload, Save, Trash2 } from 'lucide-react';
+import { Map, Upload, Save, Trash2, FileText, Sparkles } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
+import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
 
@@ -12,9 +13,13 @@ const MAX = 40000;
 const SCOUT_WINDOW = 4000;
 
 export function ItinerarySection() {
-  const { itinerary, isOwner, saveItinerary, toast } = useApp();
+  const { itinerary, isOwner, saveItinerary, toast, tripId } = useApp();
   const [draft, setDraft] = useState(itinerary.text);
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState(false);
+  // Set after an extract so the organizer knows the box holds machine output
+  // they haven't saved yet — and that they can still edit it.
+  const [pending, setPending] = useState<null | { pages: number; tidied: boolean }>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const focused = useRef(false);
 
@@ -34,14 +39,35 @@ export function ItinerarySection() {
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = '';
     if (!file) return;
+
+    // PDFs go to the server, which has the parser. Text files we can read here.
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (isPdf) {
+      if (!tripId) return;
+      setReading(true);
+      setPending(null);
+      try {
+        const r = await api.extractItinerary(tripId, file);
+        setDraft(r.text);
+        setPending({ pages: r.pages, tidied: r.tidied });
+        if (r.truncated) toast(`That PDF is longer than we can store — keeping the first ${MAX.toLocaleString()} characters.`, 'info');
+      } catch (err) {
+        toast(err instanceof Error ? err.message : 'Could not read that PDF.', 'error');
+      } finally {
+        setReading(false);
+      }
+      return;
+    }
+
     const text = await file.text();
     // Say so rather than quietly dropping the end of someone's document.
     if (text.length > MAX) {
       toast(`That file is ${text.length.toLocaleString()} characters — keeping the first ${MAX.toLocaleString()}.`, 'info');
     }
     setDraft(text.slice(0, MAX));
-    if (fileRef.current) fileRef.current.value = '';
+    setPending(null);
   }
 
   return (
@@ -71,6 +97,16 @@ export function ItinerarySection() {
               placeholder="Admin: post the one canonical itinerary here. e.g. Day 1: arrive, dinner in Santa Monica…"
               className="w-full rounded-md border border-border bg-panel-2 p-2.5 text-sm outline-none focus:ring-2 focus:ring-accent"
             />
+            {pending && (
+              <div className="mt-2 flex items-start gap-2 rounded-md border border-accent-tint-border bg-accent-tint p-2.5 text-xs">
+                <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-text" />
+                <span>
+                  Pulled {draft.length.toLocaleString()} characters from {pending.pages} page{pending.pages === 1 ? '' : 's'}.
+                  {pending.tidied && <> <Sparkles className="inline h-3 w-3 align-text-bottom text-accent-text" /> Scout reflowed the spacing — it only tidied, it didn&rsquo;t add anything.</>}
+                  {' '}<b>Read it over and edit anything wrong, then Save.</b> Nothing is stored until you do.
+                </span>
+              </div>
+            )}
             <div className="mt-1.5 text-xs text-muted">
               {draft.length.toLocaleString()} / {MAX.toLocaleString()} characters
               {draft.length > SCOUT_WINDOW && (
@@ -81,12 +117,12 @@ export function ItinerarySection() {
               <input
                 ref={fileRef}
                 type="file"
-                accept=".txt,.md,text/plain"
+                accept=".pdf,.txt,.md,application/pdf,text/plain"
                 hidden
                 onChange={onFile}
               />
-              <Button variant="default" size="sm" onClick={() => fileRef.current?.click()}>
-                <Upload className="h-3.5 w-3.5" /> Upload text
+              <Button variant="default" size="sm" disabled={reading} onClick={() => fileRef.current?.click()}>
+                <Upload className="h-3.5 w-3.5" /> {reading ? 'Reading PDF…' : 'Upload PDF or text'}
               </Button>
               <Button variant="primary" size="sm" disabled={busy} onClick={() => void save(draft)}>
                 <Save className="h-3.5 w-3.5" /> Save itinerary

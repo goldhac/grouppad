@@ -3304,6 +3304,105 @@ const hSetItinerary = (req, res) => {
 app.post('/api/admin/itinerary', requireAdmin, hSetItinerary);
 app.post('/api/trips/:tripId/itinerary', requireTripOwner, hSetItinerary);
 
+// ── Upload an itinerary as a PDF ─────────────────────────────────────────────
+// Nobody keeps their trip plan as plain text — it's a doc, a Canva export, a
+// screenshot-of-a-PDF. Asking an organizer to retype it is why the field sat
+// empty. Extract it here, hand it BACK for review, and let a human press save:
+// this endpoint deliberately does NOT write the itinerary, because silently
+// replacing a trip's canonical plan with machine output is not ours to do.
+//
+// Raw body rather than multipart: one file, no new middleware, no base64 bloat.
+const PDF_MAX = 12 * 1024 * 1024;
+app.post('/api/trips/:tripId/itinerary/extract',
+  requireTripOwner,
+  express.raw({ type: ['application/pdf', 'application/octet-stream'], limit: PDF_MAX }),
+  async (req, res) => {
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || !buf.length) return res.status(400).json({ error: 'Send the PDF as the request body.' });
+    // Cheap magic-number check — a mislabelled JPEG shouldn't reach the parser.
+    if (buf.slice(0, 5).toString('latin1') !== '%PDF-') return res.status(400).json({ error: "That doesn't look like a PDF." });
+
+    let raw = '', pages = 0;
+    try {
+      const { extractText, getDocumentProxy } = await import('unpdf');
+      const pdf = await getDocumentProxy(new Uint8Array(buf));
+      const out = await extractText(pdf, { mergePages: true });
+      pages = out.totalPages || 0;
+      raw = String(out.text || '').replace(/\r/g, '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    } catch (e) {
+      console.error('[itinerary/extract]', e.message);
+      return res.status(422).json({ error: "We couldn't read that PDF. If it's a scan, the text isn't selectable — paste it instead." });
+    }
+    if (raw.length < 20) {
+      // Almost certainly a scan or an image-only export. Say which, so the
+      // organizer knows retyping isn't the only option.
+      return res.status(422).json({ error: 'That PDF has no selectable text — it looks like a scan or an image export. Paste the text instead.' });
+    }
+
+    const clipped = raw.slice(0, ITINERARY_MAX);
+    const tidy = await tidyItinerary(clipped, req.trip);
+    res.json({
+      text: tidy.text,
+      raw: clipped,
+      pages,
+      chars: tidy.text.length,
+      tidied: tidy.by === 'scout',
+      truncated: raw.length > clipped.length,
+    });
+  });
+
+/**
+ * PDF text comes out as page furniture and broken spacing ("children here .
+ * Every adult"). Scout reflows it into something a human — and the Plan job —
+ * can actually read.
+ *
+ * Hard rule, same as every other Scout job: it may only REMOVE and REFLOW.
+ * Inventing a day or a time here would put fiction into the one document the
+ * whole trip treats as canonical. Any failure falls back to the raw text, which
+ * is always better than nothing.
+ */
+async function tidyItinerary(raw, trip) {
+  if (!GEMINI_API_KEY || !geminiGuard() || raw.length < 80) return { text: raw, by: 'raw' };
+  try {
+    const prompt = `Below is text extracted from a PDF of a group trip itinerary for ${trip?.destination || 'a trip'}. PDF extraction mangles spacing and mixes in page furniture.
+
+Reflow it into a clean, readable itinerary.
+
+RULES — you are tidying, not writing:
+- NEVER add a day, a time, a place, an activity or a detail that is not in the text below.
+- Never remove a real detail. Times, dates, addresses, names and rules all stay.
+- Fix broken spacing ("children here . Every adult" -> "children here. Every adult") and rejoin words split across lines.
+- Drop page numbers, headers/footers and repeated decoration.
+- Keep the original ordering. Use plain text with a line per item; keep day headings on their own line.
+- If the text is already clean, return it essentially unchanged.
+
+--- extracted text ---
+${raw.slice(0, 12000)}
+--- end ---
+
+Return ONLY JSON: {"text":"<the tidied itinerary>"}`;
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json', maxOutputTokens: 8192, thinkingConfig: { thinkingBudget: 0 } } }),
+    });
+    const data = await r.json();
+    if (!r.ok) { console.error('[tidy] gemini', r.status); return { text: raw, by: 'raw' }; }
+    const um = data.usageMetadata || {};
+    bumpUsage('gemini', { calls: 1, promptTokens: um.promptTokenCount || 0, candidatesTokens: um.candidatesTokenCount || 0, totalTokens: um.totalTokenCount || 0 });
+    const out = JSON.parse(data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}');
+    const text = typeof out.text === 'string' ? out.text.trim() : '';
+    // A tidy that lost most of the document is a summary, not a tidy — refuse it.
+    if (text.length < raw.length * 0.45) {
+      console.warn(`[tidy] rejected: ${text.length} chars from ${raw.length} — too much dropped`);
+      return { text: raw, by: 'raw' };
+    }
+    return { text: text.slice(0, ITINERARY_MAX), by: 'scout' };
+  } catch (e) {
+    console.error('[tidy]', e.message);
+    return { text: raw, by: 'raw' };
+  }
+}
+
 // ── Member caveats (small chat: each member adds their own must-haves) ──────────
 const hGetCaveats = (req, res) => res.json(loadCaveats(req.params.tripId));
 app.get('/api/caveats', hGetCaveats);
