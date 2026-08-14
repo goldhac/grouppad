@@ -225,6 +225,10 @@ export const api = {
   myPlan: (tripId: string) => request<ExpPlan | null>(`${t(tripId)}/my-plan`),
   buildMyPlan: (tripId: string, ids?: string[]) =>
     request<ExpPlan>(`${t(tripId)}/my-plan`, { method: 'POST', body: { ids } }),
+  /** Turn the share link off / back on. "Off" is expiry set to now, so every
+   *  path that already handles an expired link keeps working unchanged. */
+  revokeMyPlan: (tripId: string) => request<ExpPlan>(`${t(tripId)}/my-plan/revoke`, { method: 'POST' }),
+  reshareMyPlan: (tripId: string) => request<ExpPlan>(`${t(tripId)}/my-plan/reshare`, { method: 'POST' }),
   setExpDay: (tripId: string, experience_id: string, day: string | null) =>
     request<ExpDaysMap>(`${t(tripId)}/exp-days`, { method: 'POST', body: { experience_id, day } }),
   /** `isolated` plans on a blank slate instead of working around the trip

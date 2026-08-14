@@ -4599,6 +4599,40 @@ app.get('/api/trips/:tripId/my-plan', requireAuth, loadTripOr404, (req, res) => 
   res.json(withPlanExpiry(withRoutes(req.params.tripId, req.trip, loadMyPlans(req.params.tripId)[req.user.id] || null)));
 });
 
+/**
+ * Turn a share link off before its seven days are up.
+ *
+ * Deliberately NOT a new concept: "off" is just "expired now", so every path
+ * that already handles expiry — the 410 on the public read, the HTML share
+ * route, the owner's countdown — keeps working with no changes. A separate
+ * `revoked` flag would have meant teaching four call sites about a second way
+ * for a link to be dead, and one of them would have been missed.
+ *
+ * The plan itself is untouched. This kills the link, not the work: you can
+ * re-share and get a fresh seven days.
+ */
+app.post('/api/trips/:tripId/my-plan/revoke', requireAuth, loadTripOr404, requireTripMember, (req, res) => {
+  const { tripId } = req.params;
+  const all = loadMyPlans(tripId);
+  const p = all[req.user.id];
+  if (!p) return res.status(404).json({ error: 'No plan yet' });
+  p.expires_at = new Date(Date.now() - 1000).toISOString();
+  saveMyPlans(all, tripId);
+  res.json(withPlanExpiry(withRoutes(tripId, req.trip, p)));
+});
+
+/** Re-open a link the owner turned off (or one that aged out), for another
+ *  full TTL. Same endpoint shape so the client can toggle. */
+app.post('/api/trips/:tripId/my-plan/reshare', requireAuth, loadTripOr404, requireTripMember, (req, res) => {
+  const { tripId } = req.params;
+  const all = loadMyPlans(tripId);
+  const p = all[req.user.id];
+  if (!p) return res.status(404).json({ error: 'No plan yet' });
+  p.expires_at = new Date(Date.now() + PLAN_LINK_TTL_MS).toISOString();
+  saveMyPlans(all, tripId);
+  res.json(withPlanExpiry(withRoutes(tripId, req.trip, p)));
+});
+
 // Public read for the share page (no auth: the URL is the secret, same model as
 // the board share links).
 app.get('/api/trips/:tripId/plans/:userId', loadTripOr404, (req, res) => {

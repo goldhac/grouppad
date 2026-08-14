@@ -511,7 +511,7 @@ export function expPlanToItinerary(plan: ExpPlan, byId: Map<string, Experience>,
  * with a "~" — we have no routing provider, and a fabricated-precise "14 min"
  * would be worse than an honest approximation.
  */
-function RoutedDay({ day, route, byId, onOpen, open, onToggle, domId }: { day: string | null; route: DayRoute; byId: Map<string, Experience>; onOpen: (x: Experience) => void; open: boolean; onToggle: () => void; domId?: string }) {
+export function RoutedDay({ day, route, byId, onOpen, open, onToggle, domId }: { day: string | null; route: DayRoute; byId: Map<string, Experience>; onOpen: (x: Experience) => void; open: boolean; onToggle: () => void; domId?: string }) {
   const rows = route.rows;
   // House bookends absorb the drive next to them. "Leave the house 9:30a" and
   // the 45-minute haul that follows are one thought, not two rows, and pulling
@@ -675,7 +675,7 @@ function RouteArt({ size = 132 }: { size?: number }) {
 }
 
 /** What a collapsed panel says instead of nothing. */
-function PanelDigest({ facts, photos }: { facts: string[]; photos: (string | null | undefined)[] }) {
+export function PanelDigest({ facts, photos }: { facts: string[]; photos: (string | null | undefined)[] }) {
   const shots = photos.filter(Boolean).slice(0, 5) as string[];
   return (
     <div className="pl-digest">
@@ -695,7 +695,7 @@ function PanelDigest({ facts, photos }: { facts: string[]; photos: (string | nul
 
 /** Per-surface day expansion. Compact by default — the whole point is that a
  *  four-day plan reads in one screen before you drill in. */
-function useDayCollapse(prefix: string) {
+export function useDayCollapse(prefix: string) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [density, setDensity] = useState<'compact' | 'full'>('compact');
   const key = (i: number) => `${prefix}-${i}`;
@@ -726,7 +726,7 @@ function useDayCollapse(prefix: string) {
 }
 
 /** Whole days until a shared plan link stops working. */
-const planDaysLeft = (p: ExpPlan | null) => {
+export const planDaysLeft = (p: ExpPlan | null) => {
   if (!p?.expires_at) return null;
   const ms = new Date(p.expires_at).getTime() - Date.now();
   return ms <= 0 ? 0 : Math.ceil(ms / 86400000);

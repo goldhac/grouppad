@@ -1630,3 +1630,39 @@ html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidd
   content: ''; position: absolute; inset: 0; z-index: 1; border-radius: inherit;
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
+
+/* ============================================================================
+   §ROUTED DAY on a phone
+   ============================================================================
+   The phone's plan lane was a flat list of activity names: no clock times, no
+   drives, no sense that a day was a sequence at all. It now renders the same
+   RoutedDay the desktop got. Two things change at this width:
+
+   · The vertical rail goes. At ~360px of usable width a 2px rule plus its
+     inset eats the left margin that the stop photos and times need, and the
+     sequence is already obvious in a single column.
+   · The summary row loses its fourth track, so the figures wrap under the
+     activity rather than crushing it to a few characters.
+   ------------------------------------------------------------------------- */
+.gp-mobile .itin-line::before { display: none; }
+.gp-mobile .itin-line { padding-left: 0; }
+.gp-mobile .itin-body { padding: 2px 12px 10px; }
+.gp-mobile .pl-dayrow { grid-template-columns: 18px 58px 1fr; gap: 10px; padding: 10px 12px; min-height: 58px; }
+.gp-mobile .pl-dayrow .figs { grid-column: 2 / -1; justify-content: flex-start; margin-top: 6px; flex-wrap: wrap; }
+/* The digest is the whole point of a closed panel, so it must not be cramped. */
+.gp-mobile .pl-digest { padding: 0 12px 12px; }
+
+/* ── the share sheet's link-ready state ──────────────────────────────────────
+   The link IS the product of this screen, so show the actual URL rather than
+   only a Copy button — people want to see what they're about to paste into a
+   group chat. Turning it off reuses expiry, so an off link and an aged-out one
+   look and behave identically. */
+.gp-mobile .xm-linkbox { display: flex; align-items: center; gap: 9px; margin: 4px 6px 0; padding: 12px 13px; border: 1px solid var(--border-strong); border-radius: var(--r-md); background: var(--surface-inset); }
+.gp-mobile .xm-linkbox .ico { width: 17px; height: 17px; flex: none; color: var(--accent-text); }
+.gp-mobile .xm-linkbox .u { min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gp-mobile .xm-linkbox.is-off { border-style: dashed; background: transparent; }
+.gp-mobile .xm-linkbox.is-off .ico { color: var(--text-muted); }
+.gp-mobile .xm-linkbox.is-off .u { color: var(--text-muted); text-decoration: line-through; }
+.gp-mobile .xm-linknote { margin: 10px 8px 14px; font-size: 12.5px; line-height: 1.55; color: var(--text-2); }
+.gp-mobile .xm-linkacts { display: flex; flex-direction: column; gap: 9px; padding: 0 6px 6px; }
+.gp-mobile .xm-linkacts .btn { width: 100%; min-height: 48px; justify-content: center; text-decoration: none; }

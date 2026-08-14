@@ -6,7 +6,7 @@ import {
   BadgeCheck, MessageSquare, Plus, Sparkles, Swords, Users,
   HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus, RotateCw, Pencil,
   Compass, ThumbsUp, ThumbsDown, MapPin, MoreHorizontal, Share2,
-  Tag, UsersRound, CalendarDays,
+  Tag, UsersRound, CalendarDays, Link2, Link2Off, Eye,
 } from 'lucide-react';
 import { useApp, isDeadListing } from '@/store/AppContext';
 import { api } from '@/lib/api';
@@ -25,7 +25,7 @@ import { useMobileShellLock } from '@/lib/useIsMobile';
 import { Icon } from '@/components/ui/Icon';
 import { fmt, fmtMins, netVotes, expAnchor, expDistanceMi } from '@/lib/utils';
 import { cn } from '@/lib/cn';
-import { expTally, ExpPrice, ExperienceModal, expGroupList, EXP_VIBES, expMatchesVibe, EXP_PREDS } from '@/components/board/ExperiencesSection';
+import { expTally, ExpPrice, ExperienceModal, expGroupList, EXP_VIBES, expMatchesVibe, EXP_PREDS, RoutedDay, PanelDigest, useDayCollapse, expPlanPerPerson, planDaysLeft as expPlanDaysLeft } from '@/components/board/ExperiencesSection';
 import { track } from '@/lib/analytics';
 import type { Listing, Experience, ExpPlan, ExpDaysMap } from '@/types';
 
@@ -105,6 +105,11 @@ export function MobileBoard() {
   // the same predicate, so the sheet can never promise a number it won't show.
   const [expFilters, setExpFilters] = useState<Record<string, boolean>>({});
   const [expSheet, setExpSheet] = useState(false);
+  // Same collapse hook the desktop panels use — a four-day plan has to read in
+  // one screen before you drill in, and that matters more on a phone than off.
+  const expMineDays = useDayCollapse('mob-mine');
+  const [expShareSheet, setExpShareSheet] = useState(false);
+  const [expLinkBusy, setExpLinkBusy] = useState(false);
   // Selecting for Scout is a mode, not a permanent second button on the photo.
   const [expPickMode, setExpPickMode] = useState(false);
   // Browse (scan and vote) vs Plan (commit to a sequence) — the same split the
@@ -503,15 +508,6 @@ export function MobileBoard() {
       toast(e instanceof Error ? e.message : 'Scout could not plan that.', 'error');
     } finally { setExpPlanning(false); }
   };
-  const shareMyExpPlan = async () => {
-    if (!trip || !user) return;
-    const url = `${window.location.origin}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(user.id)}`;
-    try {
-      if (navigator.share) await navigator.share({ title: 'My plan', url });
-      else { await navigator.clipboard.writeText(url); toast('Link copied — paste it in the group chat.', 'success'); }
-      track('my_plan_shared', { surface: 'mobile' });
-    } catch { /* dismissed */ }
-  };
   const todoView = (
     <div className="sec">
       <div className="sec-h">
@@ -619,20 +615,48 @@ export function MobileBoard() {
           </div>
           {myExpPlan && myExpPlan.days.length > 0 && (
             <div className="xplan">
+              {/* Closed panels say something. "4 days · 6 activities · $253 pp"
+                  plus the thumbnails beats a collapsed panel showing nothing. */}
+              <PanelDigest
+                facts={[
+                  `${myExpPlan.days.length} ${myExpPlan.days.length === 1 ? 'day' : 'days'}`,
+                  `${myExpPlan.days.reduce((k, d) => k + d.items.length, 0)} activities`,
+                  ...(expPlanPerPerson(myExpPlan, expById, split) != null ? [`$${expPlanPerPerson(myExpPlan, expById, split)} pp`] : []),
+                ]}
+                photos={myExpPlan.days.flatMap((d) => d.items.map((it) => expById.get(it.id)?.photo))}
+              />
               {myExpPlan.days.map((d, di) => (
-                <div className="xplan-day" key={di} style={{ animationDelay: `${di * 70}ms` }}>
-                  <div className="xplan-dh">{d.day ? new Date(`${d.day}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'Any day'}</div>
-                  {d.items.map((it) => {
-                    const x = expById.get(it.id);
-                    if (!x) return null;
-                    return (
-                      <button key={it.id} className="xplan-it" onClick={() => setExpOpen(x)}>
-                        {x.photo ? <img src={x.photo} alt="" loading="lazy" /> : <span className="ph" />}
-                        <span className="tx"><b>{x.title}</b><small>{[x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : null, x.duration != null ? fmtMins(x.duration) : null].filter(Boolean).join(' · ')}</small></span>
-                      </button>
-                    );
-                  })}
-                </div>
+                d.route && d.route.rows.length > 0 ? (
+                  /* The same routed day the desktop got: clock times, drives,
+                     and the house bookends folded into their adjoining leg. The
+                     phone had a flat list of names — no times, no drives, no
+                     sense that the day was a sequence at all. */
+                  <RoutedDay
+                    key={di}
+                    day={d.day}
+                    route={d.route}
+                    byId={expById}
+                    onOpen={(x) => setExpOpen(x)}
+                    open={expMineDays.isOpen(di)}
+                    onToggle={() => expMineDays.toggle(di)}
+                  />
+                ) : (
+                  /* No coordinates means no route — say what we have rather
+                     than invent times. Gaps get named, not filled. */
+                  <div className="xplan-day" key={di}>
+                    <div className="xplan-dh">{d.day ? new Date(`${d.day}T00:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'Any day'}</div>
+                    {d.items.map((it) => {
+                      const x = expById.get(it.id);
+                      if (!x) return null;
+                      return (
+                        <button key={it.id} className="xplan-it" onClick={() => setExpOpen(x)}>
+                          {x.photo ? <img src={x.photo} alt="" loading="lazy" /> : <span className="ph" />}
+                          <span className="tx"><b>{x.title}</b><small>{[x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : null, x.duration != null ? fmtMins(x.duration) : null].filter(Boolean).join(' · ')}</small></span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )
               ))}
             </div>
           )}
@@ -646,7 +670,7 @@ export function MobileBoard() {
               </a>
             )}
             {myExpPlan && (
-              <button className="btn btn-primary btn-sm" onClick={() => void shareMyExpPlan()} style={{ flex: 1 }}>
+              <button className="btn btn-primary btn-sm" onClick={() => setExpShareSheet(true)} style={{ flex: 1 }}>
                 <Icon icon={Share2} className="ico" /> Share
               </button>
             )}
@@ -803,6 +827,71 @@ export function MobileBoard() {
           </div>
         </div>
       )}
+      {expShareSheet && trip && user && (() => {
+        const url = `${window.location.origin}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(user.id)}`;
+        const left = expPlanDaysLeft(myExpPlan);
+        const off = left === 0;
+        const setLink = async (on: boolean) => {
+          if (expLinkBusy) return;
+          setExpLinkBusy(true);
+          try {
+            setMyExpPlan(on ? await api.reshareMyPlan(trip.id) : await api.revokeMyPlan(trip.id));
+            toast(on ? 'Link is live again for 7 days.' : 'Link turned off. Anyone who opens it now sees that it expired.', 'success');
+          } catch (e) {
+            toast(e instanceof Error ? e.message : 'Could not change the link.', 'error');
+          } finally { setExpLinkBusy(false); }
+        };
+        return (
+          <div className="xm-scrim" role="dialog" aria-modal="true" aria-label="Share your plan" onClick={() => setExpShareSheet(false)}>
+            <div className="xm-sheet" onClick={(e) => e.stopPropagation()}>
+              <div className="xm-grab" aria-hidden="true" />
+              <div className="xm-shead"><h3>{off ? 'Link is off' : 'Share your plan'}</h3></div>
+              <div className="xm-sbody">
+                {/* The link is the product of this screen, so show the actual
+                    URL rather than only a Copy button — people want to see what
+                    they're about to paste into a group chat. */}
+                <div className={cn('xm-linkbox', off && 'is-off')}>
+                  <Icon icon={off ? Link2Off : Link2} className="ico" />
+                  <span className="u">{url.replace(/^https?:\/\//, '')}</span>
+                </div>
+                <p className="xm-linknote">
+                  {off
+                    ? 'Anyone opening this link now sees that it expired. Your plan is untouched — turn it back on and it works again.'
+                    : left != null
+                      ? <>Anyone with the link can read it — no account needed. It stops working in <b>{left} day{left === 1 ? '' : 's'}</b>.</>
+                      : <>Anyone with the link can read it — no account needed.</>}
+                </p>
+                <div className="xm-linkacts">
+                  {!off && (
+                    <button className="btn btn-primary" onClick={async () => {
+                      try {
+                        if (navigator.share) await navigator.share({ title: 'My plan', url });
+                        else { await navigator.clipboard.writeText(url); toast('Link copied — paste it in the group chat.', 'success'); }
+                        track('my_plan_shared', { surface: 'mobile' });
+                      } catch { /* dismissed */ }
+                    }}><Icon icon={Share2} className="ico" /> Send the link</button>
+                  )}
+                  {/* Seeing the watermarked page before sending it is the whole
+                      reason people trust sharing a draft. */}
+                  {!off && (
+                    <a className="btn" href={url} target="_blank" rel="noopener noreferrer">
+                      <Icon icon={Eye} className="ico" /> Preview as your group sees it
+                    </a>
+                  )}
+                  <button className={cn('btn', off ? 'btn-primary' : 'btn-ghost')} disabled={expLinkBusy}
+                    onClick={() => void setLink(off)}>
+                    <Icon icon={off ? Link2 : Link2Off} className="ico" />
+                    {expLinkBusy ? 'Working…' : off ? 'Turn the link back on' : 'Turn the link off'}
+                  </button>
+                </div>
+              </div>
+              <div className="xm-sfoot">
+                <button className="btn btn-ghost" onClick={() => setExpShareSheet(false)}>Done</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {expOpen && (
         <ExperienceModal x={expOpen} dist={expDist(expOpen)} anchorLabel={expAnch?.label} onClose={() => setExpOpen(null)} />
       )}
