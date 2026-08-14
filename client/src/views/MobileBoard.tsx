@@ -112,6 +112,8 @@ export function MobileBoard() {
   // A tap that began as a scroll, or landed to stop momentum, must not open a
   // card. One instance binds every card — there's only ever one pointer.
   const tap = useDeliberateTap();
+  const [expTripDays, setExpTripDays] = useState<string[]>([]);
+  const [expReview, setExpReview] = useState(false);
   const [expShareSheet, setExpShareSheet] = useState(false);
   const [expLinkBusy, setExpLinkBusy] = useState(false);
   // Selecting for Scout is a mode, not a permanent second button on the photo.
@@ -130,6 +132,7 @@ export function MobileBoard() {
     if (!trip || !user) return;
     let dead = false;
     api.expSaves(trip.id).then((r) => { if (!dead) setExpSaved(new Set(r.ids)); }).catch(() => {});
+    api.tripDays(trip.id).then((d) => { if (!dead) setExpTripDays(d.days || []); }).catch(() => {});
     api.myPlan(trip.id).then((p) => { if (!dead) setMyExpPlan(p); }).catch(() => {});
     return () => { dead = true; };
   }, [trip?.id, user?.id]);
@@ -499,10 +502,12 @@ export function MobileBoard() {
       toast(e instanceof Error ? e.message : 'Could not save that.', 'error');
     }
   };
-  const buildMyExpPlan = async () => {
+  /** `only` is the reviewed, kept slice — so what the review showed dimmed is
+   *  exactly what doesn't arrive, rather than the server silently slicing. */
+  const buildMyExpPlan = async (only?: string[]) => {
     if (!trip || expPlanning) return;
     if (!requireSignIn('plan your days')) return;
-    const ids = expPicked.size ? [...expPicked] : [...expSaved];
+    const ids = only?.length ? only : (expPicked.size ? [...expPicked] : [...expSaved]);
     if (!ids.length) { toast('Save or select a few things first.', 'error'); return; }
     setExpPlanning(true);
     try {
@@ -571,6 +576,23 @@ export function MobileBoard() {
       )}
       {/* Live leaderboard: liked experiences ranked by net likes, reordering as
           votes land. Same beat as the desktop tab (and the homes top-choice board). */}
+      {/* At zero votes this used to render nothing at all, so the one surface
+          that explains how the group decides was invisible exactly when someone
+          needed to learn it. An empty leaderboard teaches; it doesn't hide. */}
+      {expView === 'plan' && expLeaders.length === 0 && experiences.length > 0 && (
+        <div className="xlb xlb-teach" style={{ marginTop: 10 }}>
+          <span className="ic"><Icon icon={ThumbsUp} className="ico" /></span>
+          <b>Nothing has risen yet</b>
+          <p>
+            Anything the group net-likes shows up here, ranked, with a bar for how much of
+            the party wants it. One vote of {split} fills a {Math.round(100 / Math.max(1, split))}% sliver —
+            that&rsquo;s deliberate, so a single yes never reads as agreement.
+          </p>
+          <button className="btn btn-primary btn-sm" onClick={() => setExpView('browse')}>
+            <Icon icon={Compass} className="ico" /> Start voting
+          </button>
+        </div>
+      )}
       {expView === 'plan' && expLeaders.length > 0 && (
         <div className="xlb" style={{ marginTop: 10 }}>
           <div className="xlb-head">
@@ -789,9 +811,11 @@ export function MobileBoard() {
         <div className="xpickbar">
           <span className="cnt tnum">{expPicked.size} <span>selected</span></span>
           {expPicked.size > 0 && <button className="lnk" onClick={() => setExpPicked(new Set())}>Clear</button>}
-          <button className="btn btn-primary btn-sm" disabled={expPlanning || expPicked.size === 0}
-            onClick={async () => { await buildMyExpPlan(); setExpPickMode(false); setExpView('plan'); }}>
-            <Icon icon={Sparkles} className="ico" /> Generate plan
+          {/* Evidence precedes commitment: you see what these picks add up to
+              — and what won't fit — before Scout spends a minute on them. */}
+          <button className="btn btn-primary btn-sm" disabled={expPicked.size === 0}
+            onClick={() => setExpReview(true)}>
+            <Icon icon={Sparkles} className="ico" /> Review &amp; generate
           </button>
         </div>
       )}
@@ -832,6 +856,99 @@ export function MobileBoard() {
           </div>
         </div>
       )}
+      {expReview && (() => {
+        // The two caps the server actually applies, surfaced rather than hidden.
+        // POST /my-plan slices to 12 and Scout packs at most 2 a day, so the
+        // real ceiling is whichever bites first. Anything past it was being
+        // dropped in silence — the user picked it and never learned it was gone.
+        const PER_DAY = 2, HARD_CAP = 12;
+        const dayCap = expTripDays.length ? expTripDays.length * PER_DAY : HARD_CAP;
+        const ceiling = Math.min(HARD_CAP, dayCap);
+        const ordered = [...expPicked].map((id) => expById.get(id)).filter((x): x is Experience => !!x);
+        const kept = ordered.slice(0, ceiling);
+        const spill = ordered.slice(ceiling);
+        // Totals count the KEPT slice only. Summing the spill would promise a
+        // day that isn't going to exist.
+        const mins = kept.reduce((k, x) => k + (x.duration || 0), 0);
+        const pp = kept.reduce((k, x) => k + (x.price != null ? (x.priceUnit === 'group' ? x.price / Math.max(1, split) : x.price) : 0), 0);
+        const daysNeeded = Math.max(1, Math.ceil(kept.length / PER_DAY));
+        const row = (l: string, v: React.ReactNode) => (
+          <div className="xm-sumrow"><span className="l">{l}</span><span className="v tnum">{v}</span></div>
+        );
+        return (
+          <div className="xm-full" role="dialog" aria-modal="true" aria-label="Build a plan">
+            <div className="xm-fullhead">
+              <button className="xm-back" onClick={() => setExpReview(false)} aria-label="Back"><Icon icon={ChevronLeft} className="ico" /></button>
+              <h3>Build a plan</h3>
+            </div>
+            <div className="xm-fullbody">
+              <ol className="xm-picklist">
+                {ordered.map((x, i) => {
+                  const over = i >= ceiling;
+                  return (
+                    <li key={x.id} className={cn('xm-pickrow', over && 'over')}>
+                      <span className="rk tnum">{i + 1}</span>
+                      {x.photo ? <img src={x.photo} alt="" loading="lazy" decoding="async" /> : <span className="ph" />}
+                      <span className="tx">
+                        <b>{x.title}</b>
+                        <small>{[x.duration != null ? fmtMins(x.duration) : null, x.category].filter(Boolean).join(' \u00b7 ') || 'Experience'}</small>
+                      </span>
+                      {over && <span className="wont">Won&rsquo;t fit</span>}
+                      <button className="rm" aria-label={`Remove ${x.title}`}
+                        onClick={() => setExpPicked((s0) => { const nx = new Set(s0); nx.delete(x.id); return nx; })}>
+                        <Icon icon={X} className="ico" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {spill.length > 0 && (
+                <p className="xm-spill">
+                  {expTripDays.length
+                    ? <>Your trip is <b>{expTripDays.length} {expTripDays.length === 1 ? 'day' : 'days'}</b>, and Scout plans at most {PER_DAY} things a day — so {spill.length} of these {spill.length === 1 ? 'has' : 'have'} nowhere to go. Remove something to make room.</>
+                    : <>Scout plans up to {HARD_CAP} things, so {spill.length} of these won&rsquo;t make it in. Remove something to make room.</>}
+                </p>
+              )}
+
+              <div className="xm-sum">
+                {row('Activities', spill.length ? `${kept.length} of ${ordered.length}` : `${kept.length}`)}
+                {row('Days it needs', expTripDays.length ? `${daysNeeded} of ${expTripDays.length}` : `${daysNeeded}`)}
+                {mins > 0 && row('Time on activities', fmtMins(mins))}
+                {pp > 0 && row('Per person, from', `$${Math.ceil(pp)}`)}
+                {/* No invented driving figure. We don't know the route until the
+                    server builds it, and a number here that changes after you
+                    press the button is worse than no number. */}
+                {row('Driving', <span className="soft">worked out when Scout routes it</span>)}
+              </div>
+
+              <div className="xm-mkintro">
+                <span className="mk"><Icon icon={Sparkles} className="ico" /></span>
+                <div>
+                  <b>What Scout does next</b>
+                  <p>
+                    Orders these by where they are so you aren&rsquo;t crossing town twice, fits them to your dates,
+                    and starts and ends each day at the house. It won&rsquo;t add anything you didn&rsquo;t pick, and it
+                    says so when an evening is empty rather than filling it.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="xm-fullfoot">
+              <button className="btn btn-ghost" onClick={() => setExpReview(false)}>Keep picking</button>
+              <button className="btn btn-primary" disabled={expPlanning || kept.length === 0}
+                onClick={async () => {
+                  // Send exactly the kept slice, so what was shown dimmed is
+                  // what actually doesn't arrive.
+                  await buildMyExpPlan(kept.map((x) => x.id));
+                  setExpReview(false); setExpPickMode(false); setExpView('plan');
+                }}>
+                <Icon icon={Sparkles} className="ico" /> {expPlanning ? 'Planning\u2026' : `Generate ${daysNeeded} ${daysNeeded === 1 ? 'day' : 'days'}`}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
       {expShareSheet && trip && user && (() => {
         const url = `${window.location.origin}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(user.id)}`;
         const left = expPlanDaysLeft(myExpPlan);
