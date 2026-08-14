@@ -2,7 +2,12 @@
 # Docker build reinstalls deps + rebuilds the client from source. A bloated
 # upload (the ~284MB marketing/ dir, node_modules, dist) was timing out
 # `railway up` mid-transfer and dying at INITIALIZING.
-docs/
+# docs/emails is the ONE exception: scripts/send-announcement.js reads the
+# template at runtime, and it can only run in the container because that's where
+# the user list lives. Written as `docs/*` + a negation because gitignore syntax
+# cannot re-include anything under an excluded directory.
+docs/*
+!docs/emails/
 design-v2/
 .agents/
 marketing/
