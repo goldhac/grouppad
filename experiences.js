@@ -226,26 +226,39 @@ async function searchExperiences({ location, checkin, checkout, adults = 2, maxI
     // vibe chips / card metadata / Scout descriptions all depend on it.
     if (dateQs && out.some((x) => !x.category)) {
       try {
-        const themeUrl = `https://www.airbnb.com/s/${experiencesSearchSlug(location)}/experiences?adults=${adults}&currency=USD&locale=en-US`;
-        await page.goto(themeUrl, { waitUntil: 'domcontentloaded', timeout: 40000 });
-        await page.waitForTimeout(2200);
-        const blob = await page.evaluate(() => {
-          for (const s of document.querySelectorAll('script[type="application/json"]')) {
-            const t = s.textContent || '';
-            if (t.includes('searchResults') && t.includes('paginationInfo')) {
-              try { return JSON.parse(t); } catch { return null; }
+        // Page the undated search too. One page returns ~20 themes against a
+        // dated list of 48, which left more than half the board uncategorised.
+        const themeBase = `https://www.airbnb.com/s/${experiencesSearchSlug(location)}/experiences?adults=${adults}&currency=USD&locale=en-US`;
+        const theme = new Map();
+        let tCursor = null;
+        for (let tp = 0; tp < maxPages; tp++) {
+          if (tp > 0 && !tCursor) break;
+          const tUrl = tp === 0 ? themeBase : `${themeBase}&cursor=${encodeURIComponent(tCursor)}`;
+          await page.goto(tUrl, { waitUntil: 'domcontentloaded', timeout: 40000 });
+          await page.waitForTimeout(2200);
+          const blob = await page.evaluate(() => {
+            for (const s of document.querySelectorAll('script[type="application/json"]')) {
+              const t = s.textContent || '';
+              if (t.includes('searchResults') && t.includes('paginationInfo')) {
+                try { return JSON.parse(t); } catch { return null; }
+              }
             }
-          }
-          return null;
-        });
-        if (blob) {
-          const theme = new Map();
-          for (const r of extractExperienceResults(blob).results || []) {
+            return null;
+          });
+          if (!blob) break;
+          const { results: tRes, nextCursor: tNext } = extractExperienceResults(blob);
+          tCursor = tNext;
+          for (const r of tRes || []) {
             if (r && r.id && r.primaryThemeFormatted) theme.set(`airbnb:${r.id}`, r.primaryThemeFormatted);
           }
+          if (!(tRes || []).length) break;
+          await page.waitForTimeout(600 + Math.floor(Math.random() * 600));
+        }
+        if (theme.size) {
           let filled = 0;
           for (const x of out) if (!x.category && theme.has(x.id)) { x.category = theme.get(x.id); filled++; }
-          console.log(`  ${location}: backfilled ${filled} categor${filled === 1 ? 'y' : 'ies'} from an undated pass (${theme.size} known)`);
+          const still = out.filter((x) => !x.category).length;
+          console.log(`  ${location}: backfilled ${filled} categor${filled === 1 ? 'y' : 'ies'} from ${theme.size} undated results (${still} still uncategorised)`);
         }
       } catch (e) {
         console.warn(`  ${location}: category backfill failed (non-fatal): ${e.message.slice(0, 80)}`);

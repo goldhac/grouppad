@@ -3924,12 +3924,15 @@ app.get('/api/trips/:tripId/experiences', loadTripOr404, (req, res) => {
   // we have now rather than making the board wait on a model.
   const about = loadExpAbout(tripId);
   const out = rows.map((x) => {
+    // The provider's own blurb wins outright — it is authoritative, and needs
+    // no attribution chip because Scout didn't write it.
+    if (x.description) return { ...x, descriptionBy: 'provider' };
     const a = about[x.id];
     return a ? { ...x, description: a.text, descriptionBy: a.by } : x;
   });
   // Same predicate the fill uses — checking only the hash here meant a row
   // sitting on its template line never triggered an upgrade attempt.
-  if (rows.some((x) => aboutNeedsWork(about[x.id], expAboutHash(x)))) fillExpDescriptions(tripId, req.trip);
+  if (rows.some((x) => !x.description && aboutNeedsWork(about[x.id], expAboutHash(x)))) fillExpDescriptions(tripId, req.trip);
   res.json({ experiences: out, pending });
 });
 
