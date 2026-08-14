@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Sparkles, Check, X, RotateCw, Bookmark, ChevronRight, ChevronDown, HelpCircle, Compass } from 'lucide-react';
+import { UserPlus, LayoutGrid, Rows3, Heart, Trophy, MessagesSquare, Plus, SlidersHorizontal, Check, X, RotateCw, Bookmark, ChevronRight, ChevronDown, HelpCircle, Compass } from 'lucide-react';
 import { GuidedTour, type TourStep } from '@/components/ui/GuidedTour';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
@@ -11,6 +11,7 @@ import { Card } from '@/components/Card';
 import { BoardTable } from '@/components/board/BoardTable';
 import { EmptyBoardArt } from '@/components/ui/EmptyBoardArt';
 import { Icon } from '@/components/ui/Icon';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { BoardHeader } from '@/components/chrome/BoardHeader';
 import { DecisionStrip } from '@/components/board/DecisionStrip';
 import { type Filters, readFilters, writeFilters } from '@/components/board/FilterBar';
@@ -364,7 +365,7 @@ export function BoardView() {
         </button>
         {selected.size >= 2 ? (
           <button className="btn btn-primary btn-sm" onClick={() => void compare.runSelected('multi')}>
-            <Icon icon={Sparkles} className="ico" /> Compare {selected.size}
+            <SignatureIcon name="scout" className="ico" /> Compare {selected.size}
           </button>
         ) : (
           <button className="btn btn-primary btn-sm" onClick={() => setTab('decision')}>

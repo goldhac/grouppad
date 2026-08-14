@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
-  LayoutGrid, ThumbsUp, ThumbsDown, Star, Users, Swords, Sparkles, BadgeCheck, ArrowUp, Circle, Lock,
+  LayoutGrid, ThumbsUp, ThumbsDown, Star, Users, Swords, BadgeCheck, ArrowUp, Circle, Lock,
 } from 'lucide-react';
 import { Icon } from '@/components/ui/Icon';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { ScoutMark } from '@/components/ui/ScoutMark';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { SealMark } from '@/components/ui/SealMark';
@@ -153,7 +154,7 @@ export function CoreLoopDemo() {
             </div>
           </div>
           <div className="dm-verdict">
-            <span className="vh"><Icon icon={Sparkles} size="sm" className="ico" /> Scout’s verdict</span> <b>Huge 7BR Pad</b> wins — $53/person cheaper, 20 min closer to downtown, and the only one with a pool <i>and</i> Superhost.
+            <span className="vh"><SignatureIcon name="scout" className="ico" /> Scout’s verdict</span> <b>Huge 7BR Pad</b> wins — $53/person cheaper, 20 min closer to downtown, and the only one with a pool <i>and</i> Superhost.
           </div>
         </section>
 

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft, ChevronRight, Crown, Settings, Bookmark, Moon, Sun, Star,
   SlidersHorizontal, Check, Home,
-  BadgeCheck, MessageSquare, Plus, Sparkles, Swords, Users,
+  BadgeCheck, MessageSquare, Plus, Swords, Users,
   HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus, RotateCw, Pencil,
   Compass, ThumbsUp, ThumbsDown, MapPin, MoreHorizontal, Share2,
   Tag, UsersRound, CalendarDays, Link2, Link2Off, Eye,
@@ -24,6 +24,7 @@ import { markScrolling, useDeliberateTap } from '@/lib/tap';
 import { type Filters, readFilters, writeFilters, DEFAULT_FILTERS } from '@/components/board/FilterBar';
 import { useMobileShellLock } from '@/lib/useIsMobile';
 import { Icon } from '@/components/ui/Icon';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { fmt, fmtMins, netVotes, expAnchor, expDistanceMi } from '@/lib/utils';
 import { cn } from '@/lib/cn';
 import { expTally, ExpPrice, ExperienceModal, expGroupList, EXP_VIBES, expMatchesVibe, EXP_PREDS, RoutedDay, PanelDigest, useDayCollapse, expPlanPerPerson, planDaysLeft as expPlanDaysLeft } from '@/components/board/ExperiencesSection';
@@ -324,7 +325,7 @@ export function MobileBoard() {
             </div>
           )}
           {!opts.compact && aiWhy[l.id] && (
-            <div className="ai-why"><Icon icon={Sparkles} className="ico" /><span>{aiWhy[l.id]}</span></div>
+            <div className="ai-why"><SignatureIcon name="scout" className="ico" /><span>{aiWhy[l.id]}</span></div>
           )}
         </div>
       </article>
@@ -382,10 +383,10 @@ export function MobileBoard() {
 
   const aiCard = (
     <div className="ai-card">
-      <div className="ah"><div className="sp"><Icon icon={Sparkles} className="ico" /></div><div><div className="at">Compare with Scout</div><div className="as">Ranks the shortlist against your group's criteria</div></div></div>
+      <div className="ah"><div className="sp"><SignatureIcon name="scout" className="ico" /></div><div><div className="at">Compare with Scout</div><div className="as">Ranks the shortlist against your group's criteria</div></div></div>
       {caveats.length > 0 && <div className="crit">{caveats.slice(0, 6).map((c) => <span key={c.id} className="c">{c.text}</span>)}</div>}
       <div className="acts">
-        <button className="btn btn-primary btn-sm" onClick={() => { if (requireSignIn('compare with Scout')) void compare.runWhole(shortlist); }} disabled={!shortlist.length || compare.running}><Icon icon={Sparkles} className="ico" /> {compare.running ? 'Thinking…' : `Ask Scout (${shortlist.length})`}</button>
+        <button className="btn btn-primary btn-sm" onClick={() => { if (requireSignIn('compare with Scout')) void compare.runWhole(shortlist); }} disabled={!shortlist.length || compare.running}><SignatureIcon name="scout" className="ico" /> {compare.running ? 'Thinking…' : `Ask Scout (${shortlist.length})`}</button>
         {selected.size >= 2
           ? <button className="btn btn-ghost btn-sm" onClick={() => void compare.runSelected(selected.size === 2 ? '1v1' : 'multi')} disabled={compare.running}><Icon icon={Swords} className="ico" /> Compare {selected.size}</button>
           : <button className="btn btn-ghost btn-sm" disabled><Icon icon={Swords} className="ico" /> 1v1 · pick 2</button>}
@@ -396,7 +397,7 @@ export function MobileBoard() {
       </div>
       {askAns && (
         <div className="ai-answer">
-          <div className="ai-answer-h"><Icon icon={Sparkles} className="ico" /> Just for you <span>private</span><button onClick={() => setAskAns(null)} aria-label="Dismiss"><Icon icon={X} className="ico" /></button></div>
+          <div className="ai-answer-h"><SignatureIcon name="scout" className="ico" /> Just for you <span>private</span><button onClick={() => setAskAns(null)} aria-label="Dismiss"><Icon icon={X} className="ico" /></button></div>
           <Markdown text={askAns} />
         </div>
       )}
@@ -413,7 +414,7 @@ export function MobileBoard() {
       {insights?.analysis && (
         <details style={{ marginTop: 12, background: 'var(--surface-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)', padding: '12px 15px' }}>
           <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 14, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 7 }}>
-            <Icon icon={Sparkles} className="ico" style={{ color: 'var(--accent-text)' }} /> Scout's last analysis
+            <SignatureIcon name="scout" className="ico" /> Scout's last analysis
           </summary>
           <div style={{ marginTop: 8, fontSize: 13.5, lineHeight: 1.55, color: 'var(--text-2)' }}><ScoutVerdict verdict={insights.verdict} fallback={insights.analysis} /></div>
         </details>
@@ -430,9 +431,9 @@ export function MobileBoard() {
       <div className="sec-sub">Private to you · bookmarked homes only you can see</div>
       {savedItems.length >= 2 && (
         <div className="ai-card">
-          <div className="ah"><div className="sp"><Icon icon={Sparkles} className="ico" /></div><div><div className="at">Ask Scout · for me</div><div className="as">Ranks your saved homes by your priorities · private, doesn't touch the group</div></div></div>
+          <div className="ah"><div className="sp"><SignatureIcon name="scout" className="ico" /></div><div><div className="at">Ask Scout · for me</div><div className="as">Ranks your saved homes by your priorities · private, doesn't touch the group</div></div></div>
           <div className="acts">
-            <button className="btn btn-primary btn-sm" onClick={() => { if (requireSignIn('rank your saved')) void compare.runWhole(savedItems); }} disabled={compare.running}><Icon icon={Sparkles} className="ico" /> {compare.running ? 'Thinking…' : `Rank my ${savedItems.length} saved`}</button>
+            <button className="btn btn-primary btn-sm" onClick={() => { if (requireSignIn('rank your saved')) void compare.runWhole(savedItems); }} disabled={compare.running}><SignatureIcon name="scout" className="ico" /> {compare.running ? 'Thinking…' : `Rank my ${savedItems.length} saved`}</button>
             {selected.size >= 2 && <button className="btn btn-ghost btn-sm" onClick={() => void compare.runSelected(selected.size === 2 ? '1v1' : 'multi')} disabled={compare.running}><Icon icon={Swords} className="ico" /> Compare {selected.size}</button>}
           </div>
         </div>
@@ -554,7 +555,7 @@ export function MobileBoard() {
           {user && (
             <button className={cn('fchip', 'xm-mk', expPickMode && 'on')}
               onClick={() => { setExpPickMode((v) => !v); if (!expPickMode) track('experiences_pickmode_on', { surface: 'mobile' }); }}>
-              <Icon icon={expPickMode ? Check : Sparkles} className="ico" /> {expPickMode ? 'Done picking' : 'Make a plan'}
+              {expPickMode ? <Icon icon={Check} className="ico" /> : <SignatureIcon name="scout" className="ico" />} {expPickMode ? 'Done picking' : 'Make a plan'}
             </button>
           )}
           <button className={cn('fchip', expActiveFilters.length > 0 && 'on')} onClick={() => setExpSheet(true)} aria-haspopup="dialog">
@@ -689,7 +690,7 @@ export function MobileBoard() {
           )}
           <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-sm" onClick={() => void buildMyExpPlan()} disabled={expPlanning} style={{ flex: 1 }}>
-              <Icon icon={Sparkles} className="ico" /> {expPlanning ? 'Planning…' : myExpPlan ? 'Re-plan mine' : 'Plan my days'}
+              <SignatureIcon name="scout" className="ico" /> {expPlanning ? 'Planning…' : myExpPlan ? 'Re-plan mine' : 'Plan my days'}
             </button>
             {myExpPlan && trip && user && (
               <a className="btn btn-ghost btn-sm" href={`/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(user.id)}.pdf`} onClick={() => track('my_plan_pdf', { surface: 'mobile' })}>
@@ -815,7 +816,7 @@ export function MobileBoard() {
               — and what won't fit — before Scout spends a minute on them. */}
           <button className="btn btn-primary btn-sm" disabled={expPicked.size === 0}
             onClick={() => setExpReview(true)}>
-            <Icon icon={Sparkles} className="ico" /> Review &amp; generate
+            <SignatureIcon name="scout" className="ico" /> Review &amp; generate
           </button>
         </div>
       )}
@@ -923,7 +924,7 @@ export function MobileBoard() {
               </div>
 
               <div className="xm-mkintro">
-                <span className="mk"><Icon icon={Sparkles} className="ico" /></span>
+                <span className="mk"><SignatureIcon name="scout" className="ico" /></span>
                 <div>
                   <b>What Scout does next</b>
                   <p>
@@ -943,7 +944,7 @@ export function MobileBoard() {
                   await buildMyExpPlan(kept.map((x) => x.id));
                   setExpReview(false); setExpPickMode(false); setExpView('plan');
                 }}>
-                <Icon icon={Sparkles} className="ico" /> {expPlanning ? 'Planning\u2026' : `Generate ${daysNeeded} ${daysNeeded === 1 ? 'day' : 'days'}`}
+                <SignatureIcon name="scout" className="ico" /> {expPlanning ? 'Planning\u2026' : `Generate ${daysNeeded} ${daysNeeded === 1 ? 'day' : 'days'}`}
               </button>
             </div>
           </div>

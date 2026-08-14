@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Map, Upload, Save, Trash2, FileText, Sparkles } from 'lucide-react';
+import { Map, Upload, Save, Trash2, FileText } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { ItineraryCard } from '@/components/board/ItineraryCard';
@@ -102,7 +103,7 @@ export function ItinerarySection() {
                 <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent-text" />
                 <span>
                   Pulled {draft.length.toLocaleString()} characters from {pending.pages} page{pending.pages === 1 ? '' : 's'}.
-                  {pending.tidied && <> <Sparkles className="inline h-3 w-3 align-text-bottom text-accent-text" /> Scout reflowed the spacing — it only tidied, it didn&rsquo;t add anything.</>}
+                  {pending.tidied && <> <SignatureIcon name="scout" className="inline h-3 w-3 align-text-bottom text-accent-text" /> Scout reflowed the spacing — it only tidied, it didn&rsquo;t add anything.</>}
                   {' '}<b>Read it over and edit anything wrong, then Save.</b> Nothing is stored until you do.
                 </span>
               </div>

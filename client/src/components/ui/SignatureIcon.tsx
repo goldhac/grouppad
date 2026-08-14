@@ -62,7 +62,36 @@ const G: Record<string, Glyph> = {
   star: { d: <path d="M12 3.6 L14.5 8.7 L20.1 9.5 L16 13.4 L17 19 L12 16.3 L7 19 L8 13.4 L3.9 9.5 L9.5 8.7 Z" /> },
   crown: { d: <><path d="M3.6 8.2 L7.2 12.6 L12 6 L16.8 12.6 L20.4 8.2 L18.8 18.4 H5.2 Z" /><path d="M5.2 18.4 H18.8" /></> },
 
-  /* — AI — deliberately no gold: a proposal is not a decision — */
+  /* — Scout — */
+  /**
+   * Scout's mark: two stops joined by a path that forks, junction node in gold.
+   *
+   * It was `sparkles` — the most-used AI signifier in software, which announced
+   * "AI feature" and said nothing about the job. Scout's job is ROUTING: taking
+   * what the group voted for and working out the order and the drives between.
+   *
+   * The gold is legitimate under the registry's own rule rather than borrowed to
+   * decorate: the gold node IS the chosen stop, so this is a decision mark. Do
+   * not recolour it, and do not put the dot on a second node.
+   *
+   * If the fork ever closes into a blob at 16px on a real device, widen the gap
+   * — never thin the stroke.
+   */
+  scout: {
+    decision: true,
+    d: <>
+      <path d="M5.8 18.4 C5.8 13.8 12.2 14.4 12.2 9.8" />
+      <path d="M12.2 9.8 C12.2 14.4 18.2 13.8 18.2 18.4" />
+      <circle cx="5.8" cy="18.4" r="1.8" />
+      <circle cx="18.2" cy="18.4" r="1.8" />
+      <circle cx="12.2" cy="8.2" r="2.5" fill={GOLD} stroke="none" />
+    </>,
+  },
+
+  /* — generic AI — NOT Scout. Still valid for decorative kickers (the
+       onboarding coachmark, form eyebrows, the landing "four steps"), where
+       nothing is claiming to be the agent. No gold: a flourish is not a
+       decision. — */
   sparkles: {
     d: <>
       <path d="M11 3.8 L12.1 9.4 L17.7 10.5 L12.1 11.6 L11 17.2 L9.9 11.6 L4.3 10.5 L9.9 9.4 Z" />

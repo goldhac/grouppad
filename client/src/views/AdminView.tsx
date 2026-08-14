@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowLeft, ShieldCheck, KeyRound, RefreshCw, Play, Sparkles, Globe, Flame,
+  ArrowLeft, ShieldCheck, KeyRound, RefreshCw, Play, Globe, Flame,
   Home, Users, ThumbsUp, BadgeCheck, Table2, Video,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
+import type { LucideIcon } from 'lucide-react';
 import { money, num } from '@/lib/utils';
 import type { AdminUsage, AdminTripRow } from '@/types';
 
@@ -15,14 +17,14 @@ function stateOf(pct: number): MeterState { return pct >= 90 ? 'over' : pct >= 7
 const STATE_LABEL: Record<MeterState, string> = { ok: 'Healthy', warn: 'Near limit', over: 'Over limit' };
 
 function Meter({ icon, name, src, used, limit, usedLabel, limitLabel, note, configured = true }:
-  { icon: typeof Sparkles; name: string; src: string; used: number; limit: number | null; usedLabel: string; limitLabel: string; note: string; configured?: boolean }) {
+  { icon: LucideIcon | 'scout'; name: string; src: string; used: number; limit: number | null; usedLabel: string; limitLabel: string; note: string; configured?: boolean }) {
   const hasLimit = configured && limit != null && limit > 0;
   const pct = hasLimit ? Math.round((used / limit!) * 100) : 0;
   const st = stateOf(pct);
   return (
     <div className="meter">
       <div className="m-top">
-        <div className="mi"><Icon icon={icon} className="ico" /></div>
+        <div className="mi">{icon === 'scout' ? <SignatureIcon name="scout" className="ico" /> : <Icon icon={icon} className="ico" />}</div>
         <div><div className="nm">{name}</div><div className="src">{src}</div></div>
         <span className={`state ${configured ? st : 'warn'}`}>{configured ? STATE_LABEL[st] : 'Not configured'}</span>
       </div>
@@ -105,7 +107,7 @@ export function AdminView() {
         <>
           <div className="meters">
             <Meter
-              icon={Sparkles} name="Scout AI" src={g!.configured ? `AI compare · ${g!.model}` : 'AI compare · geocoding'}
+              icon="scout" name="Scout AI" src={g!.configured ? `AI compare · ${g!.model}` : 'AI compare · geocoding'}
               configured={g!.configured}
               used={g!.estCostUsd} limit={GEMINI_SOFT_BUDGET}
               usedLabel={money(g!.estCostUsd)} limitLabel={`$${GEMINI_SOFT_BUDGET} / mo · soft`}

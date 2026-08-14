@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import {
   ChevronLeft, Bookmark, Share2, ThumbsUp, ThumbsDown, Star, BadgeCheck, Award,
-  Waves, SquareParking, Bath, HelpCircle, X, Sparkles, ExternalLink, MapPin, Scale, Check, Clapperboard, LockOpen, Trash2, Compass,
+  Waves, SquareParking, Bath, HelpCircle, X, ExternalLink, MapPin, Scale, Check, Clapperboard, LockOpen, Trash2, Compass,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { Icon } from '@/components/ui/Icon';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { MapWidget } from '@/components/MapWidget';
 import { MobilePhotoCarousel } from '@/components/MobilePhotoCarousel';
 import { PhotoLightbox } from '@/components/PhotoLightbox';
@@ -129,7 +130,7 @@ export function MobileDetail() {
               {l.est_4n != null && <div className="brow"><span>4-night est</span><span className="v tnum">{fmt(l.est_4n)}</span></div>}
               <div className="brow total"><span>Per person (÷{split})</span><span className="v tnum">{pp || 'on inquiry'}</span></div>
             </div>
-            {(aiWhy[l.id] || l.note) && <div className="d-why"><div className="h"><Icon icon={Sparkles} className="ico" /> Why Scout ranks it here</div><p>{aiWhy[l.id] || l.note}</p></div>}
+            {(aiWhy[l.id] || l.note) && <div className="d-why"><div className="h"><SignatureIcon name="scout" className="ico" /> Why Scout ranks it here</div><p>{aiWhy[l.id] || l.note}</p></div>}
 
             {(l.amenities?.length ?? 0) > 0 && (
               <div style={{ marginTop: 6 }}>
@@ -155,7 +156,7 @@ export function MobileDetail() {
                 {tourClip ? (
                   <video controls playsInline preload="metadata" poster={tourClip.photo || undefined} src={tourClip.videoUrl!} style={{ width: '100%', borderRadius: 12, border: '1px solid var(--border)', background: '#000' }} />
                 ) : tour?.status === 'generating' ? (
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}><Icon icon={Sparkles} className="ico" /> Generating a walkthrough of the best spaces… (~a minute)</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}><SignatureIcon name="scout" className="ico" /> Generating a walkthrough of the best spaces… (~a minute)</p>
                 ) : (
                   <button className="btn btn-ghost btn-sm" onClick={() => void generateTour(l.id)}><Icon icon={Clapperboard} className="ico" /> Generate walkthrough tour</button>
                 )}

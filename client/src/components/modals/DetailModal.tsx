@@ -3,13 +3,14 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   ThumbsUp, ThumbsDown, Star, ExternalLink, MapPin, Plane, FerrisWheel, Link2, X,
   ChevronLeft, ChevronRight, Maximize2, Navigation, Wallet, Users, BedDouble, Bath,
-  ListChecks, Sparkles, Waves, SquareParking, Wifi, Utensils, Wind, WashingMachine,
+  ListChecks, Waves, SquareParking, Wifi, Utensils, Wind, WashingMachine,
   Award, BadgeCheck, GitCompare, Lock, HelpCircle, Check, Clapperboard, Bookmark, Compass,
 } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { MobileDetail } from '@/views/MobileDetail';
 import { Icon } from '@/components/ui/Icon';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { SafeImg } from '@/components/ui/SafeImg';
 import { cn } from '@/lib/cn';
 import { fmt, fmtMins, tallyVotes, expAnchor, expDistanceMi } from '@/lib/utils';
@@ -225,7 +226,7 @@ export function DetailModal() {
 
                   {(aiWhy[l.id] || l.note) && (
                     <div className="dx-note">
-                      <div className="nh"><Icon icon={Sparkles} className="ico" /> Why Scout ranks it here</div>
+                      <div className="nh"><SignatureIcon name="scout" className="ico" /> Why Scout ranks it here</div>
                       <p>{aiWhy[l.id] || l.note}</p>
                     </div>
                   )}
@@ -330,7 +331,7 @@ export function DetailModal() {
                     <div>
                       <div className="dx-section-label"><Icon icon={Clapperboard} className="ico" /> Walkthrough tour</div>
                       {hasTour ? <TourPlayer tour={tour!} />
-                        : tour?.status === 'generating' ? <p className="text-[13px] text-text-muted"><Icon icon={Sparkles} className="ico animate-pulse" /> Generating a walkthrough of the best spaces… (~a minute)</p>
+                        : tour?.status === 'generating' ? <p className="text-[13px] text-text-muted"><SignatureIcon name="scout" className="ico animate-pulse" /> Generating a walkthrough of the best spaces… (~a minute)</p>
                         : <button className="btn btn-ghost btn-sm" onClick={() => void onGenTour()}><Icon icon={Clapperboard} className="ico" /> Generate walkthrough tour</button>}
                     </div>
                   )}

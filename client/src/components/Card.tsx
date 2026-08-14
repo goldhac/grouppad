@@ -3,6 +3,7 @@ import { ThumbsUp, ThumbsDown, Star, Trash2, ExternalLink, Lock, Users, Check, X
 import { useApp } from '@/store/AppContext';
 import { Carousel } from '@/components/Carousel';
 import { Icon } from '@/components/ui/Icon';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { Avatar } from '@/components/ui/Avatar';
 import { cn } from '@/lib/cn';
 import { fmt, tallyVotes } from '@/lib/utils';
@@ -221,7 +222,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
         {/* Scout's take — the AI's one-line reason this home ranks where it does */}
         {aiNote && (
           <div className="ai-why">
-            <Icon icon={Sparkles} className="ico" />
+            <SignatureIcon name="scout" className="ico" />
             <span className="line-clamp-2">{aiNote}</span>
           </div>
         )}
@@ -258,7 +259,7 @@ export function Card({ listing: l, isSubmitted = false, isPipeline = false, comp
 
             {l.note && (
               <div className="reviews">
-                <Icon icon={Sparkles} className="ico" style={{ color: 'var(--accent-text)', fill: 'none' }} />
+                <SignatureIcon name="scout" className="ico" />
                 <span className="line-clamp-2">{l.note}</span>
               </div>
             )}

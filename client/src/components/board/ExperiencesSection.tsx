@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ArrowRight, ChevronRight, Home, ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Lock, CornerDownRight } from 'lucide-react';
+import { ArrowRight, ChevronRight, Home, ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Lock, CornerDownRight } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
@@ -333,7 +333,7 @@ export function ExperienceModal({ x, dist, anchorLabel, onClose }: { x: Experien
                     <p className="xabout">
                       {x.description}
                       {x.descriptionBy === 'scout' && (
-                        <span className="xabout-by"><Icon icon={Sparkles} className="ico" /> Scout</span>
+                        <span className="xabout-by"><SignatureIcon name="scout" className="ico" /> Scout</span>
                       )}
                     </p>
                   )}
@@ -800,7 +800,7 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
           <div className="dx-modal" style={{ maxWidth: 720 }}>
             <div className="xstudio">
               <div className="xstudio-h">
-                <div className="mk"><SignatureIcon name="sparkles" className="ico" /></div>
+                <div className="mk"><SignatureIcon name="scout" className="ico" /></div>
                 <div className="hh">
                   <div className="t">{generating ? 'Building your plan' : 'Your plan'}</div>
                   <div className="s">
@@ -837,7 +837,7 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
                     <RouteArt size={116} />
                     <div className="orb">
                       <span className="ring" />
-                      <Icon icon={Sparkles} className="ico" />
+                      <SignatureIcon name="scout" className="ico" />
                     </div>
                     <div className="t">Scout is routing your day</div>
                     <div className="s" key={note}>{NOTES[note]}</div>
@@ -1141,7 +1141,7 @@ export function ExperiencesSection() {
               className="btn btn-primary btn-sm"
               onClick={() => { setPickMode(true); track('experiences_pickmode_on', { from: 'cta' }); }}
             >
-              <Icon icon={Sparkles} className="ico" /> Test out a plan
+              <SignatureIcon name="scout" className="ico" /> Test out a plan
             </button>
           )}
           {/* Sorting and refreshing act on the grid, so they belong to Browse. */}
@@ -1205,7 +1205,7 @@ export function ExperiencesSection() {
                 </label>
               )}
               <button className="btn btn-sm" onClick={() => void runPlan(!!plan)} disabled={planning}>
-                <Icon icon={Sparkles} className="ico" /> {planning ? 'Scout is planning…' : plan ? 'Re-plan' : 'Scout: plan our days'}
+                <SignatureIcon name="scout" className="ico" /> {planning ? 'Scout is planning…' : plan ? 'Re-plan' : 'Scout: plan our days'}
               </button>
               {isOwner && (
                 <button className="btn btn-ghost btn-sm" onClick={() => void sendToItinerary()} disabled={sending}>
@@ -1292,9 +1292,9 @@ export function ExperiencesSection() {
         <div className={cn('xp', 'k-scout', panels.scout && 'open')}>
           <div className="xp-h pl-ph" onClick={() => togglePanel('scout')}>
             <Icon icon={ChevronRight} className="ico pchev" />
-            <div className="mk"><Icon icon={Sparkles} className="ico" /></div>
+            <div className="mk"><SignatureIcon name="scout" className="ico" /></div>
             <div className="hh">
-              <span className="xp-kind"><Icon icon={Sparkles} className="ico" /> Scout · proposal</span>
+              <span className="xp-kind"><SignatureIcon name="scout" className="ico" /> Scout · proposal</span>
               <div className="xp-t">Scout&rsquo;s plan{plan.fallback ? ' · by votes' : ''}</div>
               <div className="xp-s">
                 {plan.days.length} day{plan.days.length === 1 ? '' : 's'} routed from the group&rsquo;s votes
@@ -1406,7 +1406,7 @@ export function ExperiencesSection() {
                 <Icon icon={Check} className="ico" /> {picked.size ? `Change picks · ${picked.size}` : 'Pick things'}
               </button>
               <button className="btn btn-sm" onClick={() => { setStudioOpen(true); void buildMyPlan(); }} disabled={myPlanning}>
-                <Icon icon={Sparkles} className="ico" /> {myPlanning ? 'Planning…' : myPlan ? 'Re-plan mine' : 'Plan my days'}
+                <SignatureIcon name="scout" className="ico" /> {myPlanning ? 'Planning…' : myPlan ? 'Re-plan mine' : 'Plan my days'}
               </button>
               {myPlan && (
                 <a
@@ -1550,7 +1550,7 @@ export function ExperiencesSection() {
             disabled={myPlanning || picked.size === 0}
             onClick={() => { setStudioOpen(true); void buildMyPlan(); }}
           >
-            <Icon icon={Sparkles} className="ico" /> Generate plan
+            <SignatureIcon name="scout" className="ico" /> Generate plan
           </button>
         </div>
       )}

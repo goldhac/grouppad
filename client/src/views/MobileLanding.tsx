@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Moon, Sun, LayoutGrid, ThumbsUp, Sparkles, Lock, Users, Swords, Clapperboard } from 'lucide-react';
 import { Icon } from '@/components/ui/Icon';
+import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { useApp } from '@/store/AppContext';
 
 const IMG = (id: string, w = 1000) => `https://images.unsplash.com/photo-${id}?w=${w}&q=80&auto=format&fit=crop`;
@@ -12,7 +13,7 @@ const BrandMark = ({ s }: { s: number }) => (
 const LOOP = [
   { icon: LayoutGrid, h: 'Get every option in one place', p: 'Drop in any rental link, or browse the homes we already pulled together. No more ten tabs and a lost group chat.' },
   { icon: ThumbsUp, h: 'Vote, and see what it really costs', p: 'Thumbs up the ones you like. Each home shows the all-in total and what that works out to per person, updated as people join.' },
-  { icon: Sparkles, h: 'Ask Scout when you cannot decide', p: 'Put two homes head to head, or hand Scout the whole shortlist. It weighs price, distance, and your plans, then makes the call.' },
+  { icon: 'scout' as const, h: 'Ask Scout when you cannot decide', p: 'Put two homes head to head, or hand Scout the whole shortlist. It weighs price, distance, and your plans, then makes the call.' },
   { icon: Lock, h: 'Lock it in', p: 'Everyone picks their favorite. Whoever set up the trip makes it official, and the back-and-forth is done.' },
 ];
 const PAIRS = [
@@ -69,7 +70,7 @@ export function MobileLanding() {
             <span className="ln-try"><Icon icon={Sparkles} className="ico" /> The whole flow in four steps</span>
             <div className="ln-loop">
               {LOOP.map((l, i) => (
-                <div className="ln-loopitem" key={i}><span className="ix"><Icon icon={l.icon} className="ico" /></span><div><h4>{l.h}</h4><p>{l.p}</p></div></div>
+                <div className="ln-loopitem" key={i}><span className="ix">{l.icon === 'scout' ? <SignatureIcon name="scout" className="ico" /> : <Icon icon={l.icon} className="ico" />}</span><div><h4>{l.h}</h4><p>{l.p}</p></div></div>
               ))}
             </div>
             <div className="ln-preview"><img src={IMG('1600607687939-ce8a6c25118c', 900)} alt="" /><div className="pv-cap"><Icon icon={LayoutGrid} className="ico" /> One board, everyone votes, per-person pricing on every card</div></div>
