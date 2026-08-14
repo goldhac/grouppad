@@ -35,6 +35,11 @@ const ONLY = val('--only');
 // (the endpoint answers "link expired"), because a sample must never hand out
 // a working opt-out key belonging to somebody else.
 const SAMPLE = val('--sample');
+// --trip <id> narrows the send to the MEMBERS OF ONE TRIP. A mail whose footer
+// says "you're on the Los Angeles board" must not reach people who aren't on
+// it: it's untrue, it reads as a leak, and it teaches the four of them that our
+// mail isn't about them. Without this flag the send is every account, as before.
+const TRIP = val('--trip');
 const HTML_FILE = val('--html') || path.join(__dirname, '..', 'docs', 'emails', '07-early-access-scout.html');
 const SUBJECT = val('--subject') || '\u{1F389} You were here first — and Scout just learned to plan your day';
 const DATA_DIR = process.env.PIPELINE_DATA_DIR || path.join(__dirname, '..', 'data');
@@ -74,10 +79,21 @@ function recipients() {
   const file = path.join(DATA_DIR, 'users.json');
   const users = JSON.parse(fs.readFileSync(file, 'utf8'));
   const trips = bestTripByUser();
+  // When targeting one trip, its roster is the whole list and its board is the
+  // only sensible landing — never the generic trip index.
+  let roster = null;
+  if (TRIP) {
+    const all = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'trips.json'), 'utf8'));
+    const t = all[TRIP];
+    if (!t) { console.error(`Refusing to send: no trip "${TRIP}".`); process.exit(1); }
+    roster = new Set(t.members || []);
+    if (!roster.size) { console.error(`Refusing to send: trip "${TRIP}" has no members.`); process.exit(1); }
+  }
   let dirty = false;
   const out = [];
   for (const u of Object.values(users)) {
     if (!u || !isEmail(u.email)) continue;
+    if (roster && !roster.has(u.id)) continue;
     const n = u.notif || {};
     // Opt-out model, same as notifPrefs() in server.js: absent means subscribed.
     // Someone who turned everything off has unsubscribed — respect it.
@@ -89,7 +105,8 @@ function recipients() {
     out.push({
       id: u.id, email: u.email, name: u.name || String(u.email).split('@')[0], unsub: u.unsub,
       // No trip yet → the trip list is the only sensible landing.
-      cta: trips[u.id] ? `${BASE}/#/t/${encodeURIComponent(trips[u.id])}/board?tab=todo` : `${BASE}/#/trips`,
+      cta: TRIP ? `${BASE}/#/t/${encodeURIComponent(TRIP)}/board?tab=todo`
+        : trips[u.id] ? `${BASE}/#/t/${encodeURIComponent(trips[u.id])}/board?tab=todo` : `${BASE}/#/trips`,
     });
   }
   // Persist any freshly minted tokens, or the links in the mail we just sent
@@ -141,7 +158,7 @@ async function main() {
   console.log(`\n${SEND ? (SAMPLE ? 'SAMPLE' : ONLY ? 'TEST SEND' : 'LIVE SEND') : 'DRY RUN'} — "${SUBJECT}"`);
   console.log(`  from      : ${FROM}`);
   console.log(`  template  : ${path.relative(process.cwd(), HTML_FILE)}`);
-  console.log(`  recipients: ${list.length}${skipped.length ? `  (${skipped.length} unsubscribed, skipped)` : ''}`);
+  console.log(`  recipients: ${list.length}${TRIP ? `  (members of ${TRIP} only)` : '  (every account)'}${skipped.length ? ` · ${skipped.length} unsubscribed, skipped` : ''}`);
   if (SAMPLE) console.log('  note      : sample — the unsubscribe link is inert, and nobody on the list is touched');
   if (!KEY && SEND) { console.error('\nRESEND_API_KEY is not set — nothing sent.'); process.exit(1); }
   if (!list.length) { console.log('\nNobody to send to.'); return; }
