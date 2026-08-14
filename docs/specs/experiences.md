@@ -764,3 +764,31 @@ Handoff preserved at `docs/specs/handoffs/plan-screens/`.
 ledger band, chapter numerals, real print CSS), the icon registry (`GP_ICONS` /
 `GP_TRAVEL` — our share page still uses 🚗/🚶 emoji, which that spec bans), and
 panel-level collapse with digests.
+
+
+---
+
+## 4m. The share page, redesigned (SHIPPED 2026-08-13)
+
+The public link is what a member actually sends into the group chat, so it is
+the highest-leverage surface we have — and it was the plainest. Ported from
+`docs/specs/handoffs/plan-screens/` (`GroupPad Shared Plan.html`).
+
+* **Cinematic hero** — full-bleed photo, dual-gradient scrim so type stays
+  legible on any image, gold-ruled byline, Fraunces display title at
+  `clamp(38px, 7vw, 62px)`.
+* **Ledger band** — Planned / Activities / Behind the wheel / Per person. The
+  four numbers that decide whether a plan is sane, before any detail.
+* **Day chapters** on a continuous hairline rail, numbered `01`, `02`.
+* **Reasoning is a pull-quote** with a gold left rule, not an ASCII arrow.
+* **Travel glyphs are inline SVG on the rail**, in a circular break in the
+  hairline — closing half of the emoji issue the icon spec raised. A leg over
+  45 min turns the glyph amber.
+* **Print is real.** White paper, dark ink, hero cropped to a 132px band,
+  `break-inside: avoid` on days/rows/wrap, chrome hidden, watermark forced
+  through with `print-color-adjust`. Verified at 4 pages.
+
+Print caught two defects worth remembering: `.byline b` and `.sp-note b`
+inherited the dark-theme ink and vanished on white. **Every bold run in the body
+needs an explicit print colour** — inheriting is what makes text disappear on
+paper.

@@ -306,37 +306,27 @@ app.get('/s/plan/:tripId/:userId', (req, res) => {
   if (!trip) return res.redirect(302, `${base}/`);
   const plan = loadMyPlans(req.params.tripId)[req.params.userId];
   if (!plan) return res.redirect(302, boardHash(trip.id, '', base));
-  // Expired: a real page, not a redirect. Someone followed a link a friend sent
-  // them and deserves to be told what happened rather than dumped on a board
-  // with no explanation. 410 is the honest status; the page is still friendly.
   if (planExpired(plan)) {
     const who = plan.owner_name || 'A member';
     return res.status(410).set('Cache-Control', 'no-store').type('html').send(`<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>This plan link has expired</title><meta name="robots" content="noindex">
 <style>
-:root{color-scheme:dark;--bg:#121a18;--card:#182421;--line:#24322e;--tx:#eaf2ef;--mut:#9db3ac;--ac:#3fa88a}
+:root{color-scheme:dark;--bg:#121a18;--line:#24322e;--tx:#eaf2ef;--mut:#9db3ac;--ac:#3fa88a}
 *{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;background:var(--bg);color:var(--tx);
   font:16px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:28px}
-.c{max-width:420px;text-align:center}
-.c h1{font-size:23px;margin:22px 0 8px;letter-spacing:-.02em}
+.c{max-width:420px;text-align:center}.c h1{font-size:23px;margin:22px 0 8px;letter-spacing:-.02em}
 .c p{color:var(--mut);font-size:14.5px;margin:0 0 22px}
 .c a{display:inline-block;background:var(--ac);color:#08120f;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:12px}
 .ft{margin-top:18px;color:var(--mut);font-size:12px}
-/* The illustration is drawn, not shipped: it inherits the palette, weighs
-   nothing, and stays sharp at any density. */
-svg .fade{animation:d 3.2s ease-in-out infinite}
-svg .fade2{animation:d 3.2s ease-in-out .5s infinite}
-svg .fade3{animation:d 3.2s ease-in-out 1s infinite}
+svg .f{animation:d 3.2s ease-in-out infinite}svg .f2{animation:d 3.2s ease-in-out .5s infinite}svg .f3{animation:d 3.2s ease-in-out 1s infinite}
 @keyframes d{0%,100%{opacity:.28}50%{opacity:.07}}
-@media (prefers-reduced-motion:reduce){svg .fade,svg .fade2,svg .fade3{animation:none}}
+@media (prefers-reduced-motion:reduce){svg .f,svg .f2,svg .f3{animation:none}}
 </style></head><body><div class="c">
 <svg width="132" height="104" viewBox="0 0 132 104" fill="none" aria-hidden="true">
   <path d="M18 78 C40 58, 52 74, 72 52 S104 26, 116 30" stroke="var(--line)" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="1 7"/>
-  <circle cx="18" cy="78" r="6.5" fill="var(--ac)" opacity=".9"/>
-  <circle cx="72" cy="52" r="5" fill="var(--ac)" class="fade"/>
-  <circle cx="116" cy="30" r="5" fill="var(--ac)" class="fade2"/>
-  <circle cx="94" cy="38" r="3.5" fill="var(--ac)" class="fade3"/>
+  <circle cx="18" cy="78" r="6.5" fill="var(--ac)" opacity=".9"/><circle cx="72" cy="52" r="5" fill="var(--ac)" class="f"/>
+  <circle cx="116" cy="30" r="5" fill="var(--ac)" class="f2"/><circle cx="94" cy="38" r="3.5" fill="var(--ac)" class="f3"/>
   <circle cx="18" cy="78" r="13" stroke="var(--ac)" stroke-width="1.5" opacity=".28"/>
 </svg>
 <h1>This plan link has expired</h1>
@@ -345,132 +335,259 @@ svg .fade3{animation:d 3.2s ease-in-out 1s infinite}
 <p class="ft">Made with GroupPad</p>
 </div></body></html>`);
   }
+
   const byId = new Map(loadExperiences(trip.id).map((x) => [String(x.id), x]));
   const who = plan.owner_name || 'A member';
-  // The routed day is the whole point of the feature — a shared link that only
-  // listed activities was showing strictly less than the app does.
   const routed = withRoutes(trip.id, trip, plan);
   const dayName = (d) => {
     if (!d) return 'Any day';
-    try { return new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }); }
+    try { return new Date(`${d}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); }
     catch { return d; }
   };
-  let firstPhoto = null;
-  const legRow = (r) => `<li class="lg">${r.leg === 'walk' ? '🚶' : '🚗'} ${ogEsc(r.dur)} ${r.leg} · ${ogEsc(r.mi)}${r.why ? ` — ${ogEsc(r.why)}` : ''}</li>`;
-  const routeSection = (d) => {
-    const rt = d.route;
-    if (!rt || !rt.rows.length) return null;
-    const li = rt.rows.map((r) => {
-      if (r.leg) return legRow(r);
-      if (r.gap) return `<li class="gp">${ogEsc(r.gap)}</li>`;
-      // The `why` already says "on the way" — don't print it twice.
-      if (r.suggest) return `<li class="sg"><b>${ogEsc(r.suggest.n)}</b> <span>${ogEsc(r.suggest.kind)} · ${ogEsc(r.suggest.why)}</span></li>`;
-      const x = r.id ? byId.get(String(r.id)) : null;
-      if (x && !firstPhoto) firstPhoto = x.photo;
-      const facts = (r.facts || []).map(ogEsc).join(' · ');
-      return `<li class="st${r.k === 'anchor' ? ' an' : ''}">
-        <span class="tm">${ogEsc(r.t)}</span>
-        <span class="nm">${x ? `<a href="${ogEsc(x.url)}" target="_blank" rel="noopener">${ogEsc(r.n)}</a>` : ogEsc(r.n)}${r.tag ? ` <em class="tg ${r.tag}">${r.tag === 'voted' ? 'voted in' : 'pinned'}</em>` : ''}
-          ${facts ? `<small>${facts}</small>` : ''}${r.why ? `<small class="wh">↳ ${ogEsc(r.why)}</small>` : ''}</span></li>`;
-    }).join('');
-    const tot = [rt.out ? `<b>${ogEsc(rt.out)}</b> out` : '', rt.drive ? `<b>${ogEsc(rt.drive)}</b> driving` : '', rt.pp != null ? `<b>$${rt.pp}</b> pp` : ''].filter(Boolean).join(' · ');
-    return `<section><h2>${ogEsc(dayName(d.day))}</h2><ul class="rt">${li}</ul>
-      <div class="wrap${rt.heavy ? ' hv' : ''}">${tot}${rt.heavy ? ' · that\u2019s a lot of driving for one day' : ''}</div></section>`;
+  const thumb = (u) => (u && !u.includes('?') ? `${u}?im_w=240` : u);
+
+  // Inline SVG, never emoji — the design spec bans stock glyphs outright, and
+  // an emoji renders as a different picture on every platform anyway.
+  const G = {
+    car: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l1.5-4.5A2 2 0 018.4 7h7.2a2 2 0 011.9 1.5L19 13"/><path d="M4 13h16v4a1 1 0 01-1 1h-1a1 1 0 01-1-1v-1H7v1a1 1 0 01-1 1H5a1 1 0 01-1-1v-4z"/><circle cx="7.5" cy="15.5" r=".8" fill="currentColor" stroke="none"/><circle cx="16.5" cy="15.5" r=".8" fill="currentColor" stroke="none"/></svg>',
+    walk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4.5" r="1.6"/><path d="M11 21l1.5-5.5-2.5-2.2V9.5L13 8l2.5 2 2 1"/><path d="M10 12.5L7.5 15 6.5 21"/></svg>',
+    flag: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 21V4"/><path d="M6 5h9l-1.5 3L15 11H6z"/></svg>',
+    house: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5L12 4l8 6.5"/><path d="M6 10v9h12v-9"/></svg>',
+    dashed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="8" stroke-dasharray="2.4 3.2"/></svg>',
   };
-  const sections = routed.days.map((d) => {
-    const r = routeSection(d);
-    if (r) return r;
+
+  let firstPhoto = null;
+  const stopRow = (r) => {
+    const x = r.id ? byId.get(String(r.id)) : null;
+    if (x && !firstPhoto) firstPhoto = x.photo;
+    const facts = (r.facts || []).map(ogEsc).join(' &middot; ');
+    const anchor = r.k === 'anchor';
+    return `<div class="sp-row stop${anchor ? ' anchor' : ''}">
+      <div class="rail"><span class="node"></span></div>
+      <div class="sp-stop">
+        <div class="tm">${ogEsc(r.t)}</div>
+        <div class="hd">
+          <h3>${x ? `<a href="${ogEsc(x.url)}" target="_blank" rel="noopener">${ogEsc(r.n)}</a>` : ogEsc(r.n)}</h3>
+          ${r.tag === 'voted' ? '<span class="tag voted">voted in</span>' : r.tag === 'pinned' ? '<span class="tag pinned">pinned</span>' : ''}
+        </div>
+        ${facts ? `<div class="fx">${facts}</div>` : ''}
+        ${r.why ? `<p class="sp-why">${ogEsc(r.why)}</p>` : ''}
+      </div>
+      ${x && x.photo && !anchor ? `<img class="shotm" src="${ogEsc(thumb(x.photo))}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}
+    </div>`;
+  };
+  const legRow = (r) => `<div class="sp-row leg${r.tight ? ' long' : ''}">
+      <div class="rail"><span class="leg-glyph">${r.leg === 'walk' ? G.walk : G.car}</span></div>
+      <div class="sp-leg"><span class="dur">${ogEsc(r.dur)} ${r.leg}</span> &middot; ${ogEsc(r.mi)}${r.why ? ` &mdash; <i>${ogEsc(r.why)}</i>` : ''}</div>
+    </div>`;
+  const noteRow = (txt, kind) => `<div class="sp-row note">
+      <div class="rail"><span class="leg-glyph sm">${G.dashed}</span></div>
+      <div class="sp-note${kind === 'gap' ? ' gap' : ''}">${txt}</div>
+    </div>`;
+
+  let chapter = 0;
+  const chapters = routed.days.map((d) => {
+    const rt = d.route;
+    if (rt && rt.rows.length) {
+      chapter++;
+      const body = rt.rows.map((r) => {
+        if (r.leg) return legRow(r);
+        if (r.gap) return noteRow(ogEsc(r.gap), 'gap');
+        if (r.suggest) return noteRow(`<b>${ogEsc(r.suggest.n)}</b> &mdash; ${ogEsc(r.suggest.kind.toLowerCase())}, ${ogEsc(r.suggest.why)}`);
+        return stopRow(r);
+      }).join('');
+      const tot = [rt.out ? `<b>${ogEsc(rt.out)}</b> out` : '', rt.drive ? `<b>${ogEsc(rt.drive)}</b> driving` : '', rt.pp != null ? `<b>$${rt.pp}</b> pp` : ''].filter(Boolean).join(' &middot; ');
+      return `<section class="sp-day">
+        <header class="sp-chapter"><span class="num">${String(chapter).padStart(2, '0')}</span><h2>${ogEsc(dayName(d.day))}</h2><span class="rule"></span></header>
+        <div class="sp-rows">${body}</div>
+        <footer class="sp-wrap${rt.heavy ? ' heavy' : ''}">${G.flag}<span>${tot}${rt.heavy ? ' &middot; that&rsquo;s a lot of driving for one day' : ''}</span></footer>
+      </section>`;
+    }
+    // No coordinates for this day — fall back to a plain chapter of activities.
     const items = d.items.map((it) => byId.get(String(it.id))).filter(Boolean);
     if (!items.length) return '';
+    chapter++;
     if (!firstPhoto) firstPhoto = items[0].photo;
-    const thumb = (u) => (u && !u.includes('?') ? `${u}?im_w=240` : u);
-    const li = items.map((x) => `<li class="it">
-      ${x.photo ? `<img src="${ogEsc(thumb(x.photo))}" alt="" loading="lazy">` : '<span class="ph"></span>'}
-      <span class="tx"><b>${ogEsc(x.title)}</b><small>${[x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : '', x.duration != null ? `${Math.round(x.duration / 60 * 10) / 10}h` : ''].filter(Boolean).join(' · ')}</small></span>
-      <a class="go" href="${ogEsc(x.url)}" target="_blank" rel="noopener">Open</a></li>`).join('');
-    return `<section><h2>${ogEsc(dayName(d.day))}</h2><ul>${li}</ul></section>`;
+    return `<section class="sp-day">
+      <header class="sp-chapter"><span class="num">${String(chapter).padStart(2, '0')}</span><h2>${ogEsc(dayName(d.day))}</h2><span class="rule"></span></header>
+      <div class="sp-rows">${items.map((x) => `<div class="sp-row stop"><div class="rail"><span class="node"></span></div>
+        <div class="sp-stop"><div class="hd"><h3><a href="${ogEsc(x.url)}" target="_blank" rel="noopener">${ogEsc(x.title)}</a></h3></div>
+        <div class="fx">${[x.price != null ? `$${x.price}/${x.priceUnit === 'group' ? 'group' : 'guest'}` : '', x.duration != null ? `${Math.round(x.duration / 60 * 10) / 10}h` : ''].filter(Boolean).join(' &middot; ')}</div></div>
+        ${x.photo ? `<img class="shotm" src="${ogEsc(thumb(x.photo))}" alt="" loading="lazy" onerror="this.style.display='none'">` : ''}</div>`).join('')}</div>
+    </section>`;
   }).join('');
+
+  // The ledger band: the four numbers that decide whether a plan is sane.
+  const totalPP = routed.days.reduce((n, d) => n + (d.route?.pp || 0), 0);
+  const totalDriveMin = routed.days.reduce((n, d) => {
+    const m = /(?:(\d+)\s*hr)?\s*(?:(\d+)\s*min)?/.exec(d.route?.drive || '');
+    return n + (m ? (Number(m[1] || 0) * 60 + Number(m[2] || 0)) : 0);
+  }, 0);
+  const daysPlanned = routed.days.filter((d) => (d.route?.rows?.length || d.items?.length)).length;
+  const span = (mins) => { const h = Math.floor(mins / 60), mm = mins % 60; return h ? (mm ? `${h}h ${mm}m` : `${h}h`) : `${mm}m`; };
+  const ledger = [
+    ['Planned', String(daysPlanned), daysPlanned === 1 ? 'day' : 'days'],
+    ['Activities', String(routed.days.reduce((n, d) => n + (d.items?.length || 0), 0)), ''],
+    ['Behind the wheel', totalDriveMin ? span(totalDriveMin) : '&mdash;', ''],
+    ['Per person', totalPP ? `$${totalPP}` : '&mdash;', totalPP ? 'all in' : ''],
+  ].map(([k, v, s], i) => `<div class="cell${i === 3 ? ' accent' : ''}"><div class="k">${k}</div><div class="v">${v}${s ? `<small>${s}</small>` : ''}</div></div>`).join('');
 
   const title = `${who}'s plan for ${trip.name}`;
   const desc = `${who} put together a day-by-day plan of things to do in ${trip.destination}. See it and build your own on GroupPad.`;
+  const shareUrl = `${base}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(req.params.userId)}`;
   res.set('Cache-Control', 'public, max-age=120').send(`<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${ogEsc(title)}</title><meta name="description" content="${ogEsc(desc)}">
 <meta property="og:type" content="website"><meta property="og:title" content="${ogEsc(title)}">
 <meta property="og:description" content="${ogEsc(desc)}">
 <meta property="og:image" content="${ogEsc(ogImage(firstPhoto, base))}">
-<meta property="og:url" content="${base}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(req.params.userId)}">
+<meta property="og:url" content="${shareUrl}">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{color-scheme:dark;--bg:#121a18;--card:#182421;--line:#24322e;--tx:#eaf2ef;--mut:#9db3ac;--ac:#3fa88a}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
-.wrap{max-width:640px;margin:0 auto;padding:28px 18px 60px}
-.hd{margin-bottom:22px}.hd h1{font-size:24px;margin:0 0 4px}.hd p{margin:0;color:var(--mut);font-size:14px}
-section{margin:0 0 18px}section h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--ac);margin:0 0 8px}
-ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.it{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
-.it img,.it .ph{width:52px;height:52px;border-radius:8px;object-fit:cover;flex:none;background:#20302b}
-.tx{flex:1;min-width:0}.tx b{display:block;font-size:14.5px;font-weight:600}
-.tx small{color:var(--mut);font-size:12.5px}
-.go{flex:none;color:var(--ac);text-decoration:none;font-size:13px;font-weight:600;border:1px solid var(--line);padding:6px 11px;border-radius:8px}
-.cta{display:block;margin-top:26px;text-align:center;background:var(--ac);color:#08120f;font-weight:700;text-decoration:none;padding:13px;border-radius:12px}
-.ft{margin-top:14px;text-align:center;color:var(--mut);font-size:12px}
-.rt{gap:0}
-.rt .st{display:flex;gap:11px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px}
-.rt .st.an{background:none;border-color:transparent;padding:6px 12px}
-.rt .tm{font:600 12px/1.6 'Courier New',Courier,monospace;color:var(--ac);flex:none;min-width:52px}
-.rt .st.an .tm{color:var(--mut)}
-.rt .nm{flex:1;min-width:0;font-size:14.5px;font-weight:600}
-.rt .st.an .nm{font-weight:500;color:var(--mut)}
-.rt .nm a{color:inherit;text-decoration:none}
-.rt .nm small{display:block;font-weight:400;font-size:12.5px;color:var(--mut);margin-top:2px}
-.rt .nm small.wh{color:var(--tx);opacity:.75}
-.rt .tg{font-style:normal;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:999px;background:#1d3a30;color:#7fd6c2;margin-left:6px}
-.rt .lg{padding:6px 12px 6px 63px;font-size:12.5px;color:var(--mut)}
-.rt .sg{padding:8px 12px;border:1px dashed var(--line);border-radius:10px;font-size:13px;color:var(--mut)}
-.rt .sg b{color:var(--tx);font-weight:600}
-.rt .gp{padding:8px 12px;border:1px dashed var(--line);border-radius:10px;font-size:12.5px;color:var(--mut)}
-.wrap{margin-top:8px;padding:9px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);font-size:12.5px;color:var(--mut)}
-.wrap b{color:var(--tx)}
-.wrap.hv{border-color:#5d4a1f}
-/* Watermark. NOT the "unlicensed sample" kind — it carries a claim that is both
-   true and load-bearing: this is ONE MEMBER'S proposal, not what the group
-   decided. Same honesty rule as Scout's attribution. Kept faint enough that it
-   never fights the text it sits behind. */
+:root{color-scheme:dark;--bg:#101815;--card:#16211e;--inset:#131d1a;--line:#243430;--tx:#eaf2ef;--mut:#93a9a2;--ac:#3fa88a;--gold:#d7a12e;--warn:#d9a441;
+  --disp:'Fraunces',Georgia,serif;--sans:'Hanken Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;--mono:ui-monospace,'SF Mono',Menlo,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.6 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+/* Watermark — a CLAIM, not a brand stamp: a shared plan is one member's
+   proposal and must never read as the group's decision. */
 body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='190'%3E%3Ctext x='6' y='120' transform='rotate(-24 150 95)' font-family='system-ui,sans-serif' font-size='23' font-weight='700' fill='%23ffffff' fill-opacity='0.032'%3EGroupPad%3C/text%3E%3C/svg%3E")}
-.wrap{position:relative;z-index:1}
-.mark{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;
-  color:var(--ac);background:rgba(63,168,138,.12);border:1px solid rgba(63,168,138,.3);padding:5px 11px;border-radius:999px;margin-bottom:12px}
-.mark i{width:6px;height:6px;border-radius:50%;background:var(--ac);display:block}
-.tools{display:flex;gap:8px;justify-content:flex-end;margin-bottom:14px}
-.tools a{color:var(--mut);text-decoration:none;font-size:12.5px;border:1px solid var(--line);padding:6px 11px;border-radius:8px}
-/* Printing / PDF: ink-friendly light theme, no interactive chrome, never split a
-   day across pages. Same markup, so the PDF matches what people see on the page. */
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='190'%3E%3Ctext x='6' y='120' transform='rotate(-24 150 95)' font-family='system-ui,sans-serif' font-size='23' font-weight='700' fill='%23ffffff' fill-opacity='0.03'%3EGroupPad%3C/text%3E%3C/svg%3E")}
+.sp{position:relative;z-index:1;max-width:760px;margin:0 auto;background:var(--card);min-height:100dvh;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.tools{display:flex;gap:8px;justify-content:flex-end;padding:14px 26px 0}
+.tools button{background:none;border:1px solid var(--line);color:var(--mut);font:600 12.5px var(--sans);padding:7px 13px;border-radius:8px;cursor:pointer}
+.tools button:hover{color:var(--tx);border-color:var(--mut)}
+/* Cinematic hero, dual-gradient scrim so the type stays legible on any photo. */
+.sp-hero{position:relative;min-height:420px;display:flex;flex-direction:column;justify-content:flex-end;isolation:isolate;padding:34px 26px 30px}
+.sp-hero .shot{position:absolute;inset:0;z-index:0}
+.sp-hero .shot img{width:100%;height:100%;object-fit:cover;display:block}
+.sp-hero .shot::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,24,21,.35) 0%,rgba(16,24,21,.72) 55%,rgba(22,33,30,.98) 100%),linear-gradient(90deg,rgba(16,24,21,.55),transparent 60%)}
+.sp-hero .fallback{position:absolute;inset:0;background:var(--inset)}
+.sp-hero .inner{position:relative;z-index:1}
+.mark{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold)}
+.mark i{width:5px;height:5px;border-radius:50%;background:var(--gold);display:block}
+.sp-hero h1{font-family:var(--disp);font-size:clamp(38px,7vw,62px);line-height:1.02;letter-spacing:-.035em;font-weight:700;margin:16px 0 0}
+.byline{margin-top:18px;padding-top:14px;border-top:1px solid rgba(215,161,46,.42);font-size:13px;color:var(--mut);display:flex;gap:9px;flex-wrap:wrap}
+.byline b{color:var(--tx);font-weight:600}
+/* Ledger band */
+.sp-ledger{display:grid;grid-template-columns:repeat(4,1fr);background:var(--inset);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.sp-ledger .cell{padding:20px 18px;border-left:1px solid rgba(36,52,48,.7)}
+.sp-ledger .cell:first-child{border-left:0}
+.sp-ledger .k{font-size:9.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mut)}
+.sp-ledger .v{font-family:var(--disp);font-size:26px;font-weight:700;letter-spacing:-.03em;margin-top:8px;display:flex;align-items:baseline;gap:5px}
+.sp-ledger .v small{font-family:var(--sans);font-size:12px;font-weight:600;color:var(--mut);letter-spacing:0}
+.sp-ledger .cell.accent .v{color:var(--ac)}
+/* Chapters */
+.sp-body{padding:34px 26px 46px}
+.sp-day{margin-bottom:38px}
+.sp-chapter{display:flex;align-items:baseline;gap:13px;margin-bottom:18px}
+.sp-chapter .num{font-family:var(--disp);font-size:13px;font-weight:700;color:var(--gold);letter-spacing:.04em}
+.sp-chapter h2{font-family:var(--disp);font-size:21px;font-weight:700;letter-spacing:-.02em;margin:0;white-space:nowrap}
+.sp-chapter .rule{flex:1;height:1px;background:var(--line)}
+/* A continuous hairline rail; stops and legs alternate on it. */
+.sp-rows{position:relative}
+.sp-row{position:relative;display:grid;grid-template-columns:30px 1fr auto;gap:14px;align-items:start}
+.sp-row .rail{position:relative;align-self:stretch}
+.sp-row .rail::before{content:'';position:absolute;left:14px;top:0;bottom:0;width:1px;background:var(--line)}
+.sp-row:first-child .rail::before{top:22px}
+.sp-row:last-child .rail::before{bottom:calc(100% - 22px)}
+.sp-row .node{position:absolute;left:9px;top:19px;width:11px;height:11px;border-radius:50%;background:var(--ac);box-shadow:0 0 0 4px rgba(63,168,138,.16)}
+.sp-row.stop.anchor .node{background:var(--mut);box-shadow:none;width:8px;height:8px;left:10.5px;top:21px}
+.sp-stop{padding:13px 0 15px;min-width:0}
+.sp-stop .tm{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.02em;color:var(--ac)}
+.sp-row.stop.anchor .tm{color:var(--mut)}
+.sp-stop .hd{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-top:4px}
+.sp-stop h3{font-family:var(--disp);font-size:18px;font-weight:600;letter-spacing:-.02em;margin:0;line-height:1.25}
+.sp-row.stop.anchor h3{font-family:var(--sans);font-size:14.5px;font-weight:500;color:var(--mut)}
+.sp-stop h3 a{text-decoration:none}.sp-stop h3 a:hover{color:var(--ac)}
+.tag{font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:3px 8px;border-radius:99px}
+.tag.voted{background:rgba(63,168,138,.14);color:#7fd6c2}
+.tag.pinned{background:rgba(215,161,46,.14);color:var(--gold)}
+.sp-stop .fx{font-size:12.5px;color:var(--mut);margin-top:5px}
+/* Reasoning is a pull-quote with a gold rule, never an ASCII arrow. */
+.sp-why{position:relative;margin:11px 0 0;padding-left:13px;font-size:13.5px;line-height:1.55;color:#c9d7d2;font-style:italic}
+.sp-why::before{content:'';position:absolute;left:0;top:3px;bottom:3px;width:2px;border-radius:2px;background:rgba(215,161,46,.62)}
+.shotm{width:74px;height:74px;border-radius:10px;object-fit:cover;margin-top:14px;background:var(--inset)}
+/* The travel glyph sits ON the rail, in a circular break. */
+.sp-row.leg .rail::before{background:var(--line)}
+.leg-glyph{position:absolute;left:2px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--card);border:1px solid var(--line);color:var(--mut)}
+.leg-glyph svg{width:14px;height:14px}
+.leg-glyph.sm{width:22px;height:22px;left:4px}.leg-glyph.sm svg{width:11px;height:11px}
+.sp-leg{padding:11px 0;font-size:12.5px;color:var(--mut)}
+.sp-leg .dur{font-weight:700;color:#c9d7d2}
+.sp-leg i{color:var(--mut)}
+.sp-row.leg.long .leg-glyph{border-color:rgba(217,164,65,.5);color:var(--warn)}
+.sp-row.leg.long .sp-leg .dur{color:var(--warn)}
+.sp-note{padding:10px 0;font-size:12.5px;color:var(--mut)}
+.sp-note b{color:#c9d7d2;font-weight:600}
+.sp-note.gap{color:var(--mut)}
+.sp-wrap{display:flex;align-items:center;gap:9px;margin-top:14px;padding:11px 14px;border:1px solid var(--line);border-radius:10px;background:var(--inset);font-size:12.5px;color:var(--mut)}
+.sp-wrap svg{width:14px;height:14px;color:var(--gold);flex:none}
+.sp-wrap b{color:var(--tx);font-weight:700}
+.sp-wrap.heavy{border-color:rgba(217,164,65,.42)}
+.cta{display:block;margin:6px 0 0;text-align:center;background:var(--ac);color:#08120f;font-weight:700;text-decoration:none;padding:15px;border-radius:12px}
+.ft{margin:14px 0 0;text-align:center;color:var(--mut);font-size:11.5px;line-height:1.6}
+@media (max-width:620px){
+  .sp-hero{min-height:340px;padding:26px 18px 24px}
+  .sp-ledger{grid-template-columns:1fr 1fr}
+  .sp-ledger .cell:nth-child(3){border-left:0}
+  .sp-ledger .cell:nth-child(n+3){border-top:1px solid rgba(36,52,48,.7)}
+  .sp-body{padding:26px 18px 38px}.tools{padding:12px 18px 0}
+  .shotm{width:56px;height:56px}
+}
+/* Print is real — this is a document, not a screenshot. */
 @media print{
   :root{color-scheme:light}
-  body{background:#fff;color:#111}
-  /* Force the watermark through — browsers drop background images in print
-     unless told otherwise, and a printed plan is exactly where "this is a
-     proposal, not the decision" matters most. */
+  body{background:#fff;color:#12201c}
   body::before{-webkit-print-color-adjust:exact;print-color-adjust:exact;
     background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='190'%3E%3Ctext x='6' y='120' transform='rotate(-24 150 95)' font-family='system-ui,sans-serif' font-size='23' font-weight='700' fill='%23000000' fill-opacity='0.045'%3EGroupPad%3C/text%3E%3C/svg%3E")}
-  .mark{color:#137a5f;background:#eef7f3;border-color:#cfe6dc}
-  .wrap{max-width:none;padding:0}
-  .it{background:#fff;border-color:#dcdcdc;break-inside:avoid}
-  section{break-inside:avoid}
-  section h2{color:#137a5f}
-  .tx small{color:#555}
-  .go,.cta,.tools{display:none!important}
-  .hd p,.ft{color:#555}
+  .sp{max-width:none;background:#fff;border:0}
+  .tools{display:none}
+  .sp-hero{min-height:0;padding:0 0 16px}
+  .sp-hero .shot{position:relative;height:132px}
+  .sp-hero .shot::after{background:linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.55))}
+  .sp-hero .inner{padding:14px 0 0}
+  .sp-hero h1{font-size:34px;color:#12201c}
+  .byline{color:#5b6b66;border-top-color:#c9a24e}
+  /* These inherit the dark-theme ink and vanish on white — every bold run in
+     the document body needs an explicit print colour. */
+  .byline b,.sp-note b,.sp-leg .dur,.sp-wrap b{color:#12201c}
+  .tag.voted{background:#e4f2ec;color:#137a5f}
+  .tag.pinned{background:#f6efdc;color:#8a6a12}
+  .sp-ledger{background:#f6f3ec;border-color:#ddd6c8}
+  .sp-ledger .cell{border-left-color:#ddd6c8}
+  .sp-ledger .k{color:#6b7a75}.sp-ledger .v{color:#12201c}.sp-ledger .cell.accent .v{color:#137a5f}
+  .sp-body{padding:22px 0 0}
+  .sp-day,.sp-row,.sp-wrap,.cta{break-inside:avoid}
+  .sp-chapter h2{color:#12201c}.sp-chapter .rule{background:#ddd6c8}
+  .sp-row .rail::before,.leg-glyph{border-color:#ddd6c8}
+  .sp-row .rail::before{background:#ddd6c8}
+  .leg-glyph{background:#fff;color:#6b7a75}
+  .sp-stop h3{color:#12201c}.sp-stop .fx,.sp-leg,.sp-note{color:#5b6b66}
+  .sp-why{color:#3f4f4a}
+  .sp-wrap{background:#f6f3ec;border-color:#ddd6c8;color:#5b6b66}.sp-wrap b{color:#12201c}
+  .cta{display:none}.ft{color:#6b7a75}
 }
-</style></head><body><div class="wrap">
-${req.query.print ? '' : `<div class="tools"><a href="${base}/s/plan/${encodeURIComponent(trip.id)}/${encodeURIComponent(req.params.userId)}.pdf">Download PDF</a><a href="javascript:window.print()">Print</a></div>`}
-<div class="hd"><span class="mark"><i></i> ${ogEsc(who)}&rsquo;s idea &middot; not the group&rsquo;s decision</span><h1>${ogEsc(who)}&rsquo;s plan</h1><p>${ogEsc(trip.name)} · ${ogEsc(ogDateRange(trip.checkin, trip.checkout_5n))}</p></div>
-${sections || '<p style="color:var(--mut)">No activities picked yet.</p>'}
-${req.query.print ? '' : `<a class="cta" href="${boardHash(trip.id, '', base)}">Open the board &amp; build your own plan</a>`}
-<p class="ft">Made with GroupPad · booking happens on Airbnb</p>
-</div></body></html>`);
+</style></head><body>
+<div class="sp">
+  ${req.query.print ? '' : `<div class="tools"><button onclick="window.print()">Download PDF</button><button onclick="window.print()">Print</button></div>`}
+  <header class="sp-hero">
+    <div class="shot">${firstPhoto ? `<img src="${ogEsc(firstPhoto)}" alt="" onerror="this.style.display='none'">` : '<div class="fallback"></div>'}</div>
+    <div class="inner">
+      <span class="mark"><i></i> ${ogEsc(who)}&rsquo;s idea &middot; not the group&rsquo;s decision</span>
+      <h1>${ogEsc(who)}&rsquo;s plan</h1>
+      <div class="byline"><span><b>${ogEsc(trip.name)}</b></span><span>&middot;</span><span>${ogEsc(trip.destination || '')}</span><span>&middot;</span><span>${ogEsc(ogDateRange(trip.checkin, trip.checkout_5n))}</span></div>
+    </div>
+  </header>
+  <div class="sp-ledger">${ledger}</div>
+  <div class="sp-body">
+    ${chapters || '<p style="color:var(--mut)">No activities picked yet.</p>'}
+    ${req.query.print ? '' : `<a class="cta" href="${boardHash(trip.id, '?tab=todo', base)}">Open the board &amp; build your own plan</a>`}
+    <p class="ft">Made with GroupPad &middot; booking happens on the provider&rsquo;s site &middot; times and drives are estimates</p>
+  </div>
+</div>
+</body></html>`);
 });
 
 // ── File helpers ─────────────────────────────────────────────────────────────
