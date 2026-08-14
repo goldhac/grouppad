@@ -1,0 +1,253 @@
+/* ============================================================================
+   GroupPad — Design Tokens v2  ·  DUAL-LAYER, DUAL-THEME
+   ----------------------------------------------------------------------------
+   LAYER 1  Primitives  — raw warm values, theme-independent (--c-*). Plus the
+            theme-independent scales (radius, type, spacing, icon, motion).
+            Never referenced by components directly.
+   LAYER 2  Semantic    — resolves PER THEME. Components reference ONLY these.
+              :root, [data-theme="light"]  =  warm LIGHT
+              [data-theme="dark"]          =  warm DARK
+   Theme switches by toggling ONE attribute on <html>. Forced light/dark
+   "islands" work anywhere via the same attribute on any ancestor.
+   ============================================================================ */
+
+:root {
+  /* ======================================================================
+     LAYER 1 · PRIMITIVE PALETTE  (warm — never neutral gray, never pure black)
+     ====================================================================== */
+  /* Warm cream paper (light surfaces) */
+  --c-cream-50:  #FBF6EC;
+  --c-cream-100: #F6EFE1;
+  --c-cream-200: #F0E7D4;
+  --c-paper:     #FFFDF8;
+  --c-paper-2:   #FBF5EA;
+  --c-taupe-200: #E7DDC9;
+  --c-taupe-300: #D9CCB2;
+  --c-taupe-400: #C9B998;
+
+  /* Warm ink (light text) */
+  --c-ink-900: #1B2A29;
+  --c-ink-700: #45514F;
+  --c-ink-500: #7B847D;
+
+  /* Deep teal-charcoal (dark surfaces — warm, desaturated, never black) */
+  --c-char-900: #0F1716;
+  --c-char-850: #121B1A;
+  --c-char-800: #15201E;
+  --c-char-750: #1A2624;
+  --c-char-700: #1F2C29;
+  --c-char-650: #243230;
+  --c-char-600: #2C3936;
+  --c-char-500: #3B4844;
+  --c-char-400: #4E5C57;
+
+  /* Warm fog (dark text) */
+  --c-fog-100: #EDE7D9;
+  --c-fog-300: #B9C0B9;
+  --c-fog-500: #98A19B;
+
+  /* Brand teal (the single UI accent) */
+  --c-teal-900: #0F3D39;
+  --c-teal-800: #134E4A;
+  --c-teal-700: #1A625B;
+  --c-teal-600: #237568;
+  --c-teal-500: #2E8C7C;
+  --c-teal-400: #4FA89B;
+  --c-teal-300: #6FC2B2;
+  --c-teal-200: #A8D8CE;
+  --c-teal-100: #DBEAE6;
+  --c-teal-50:  #ECF3F1;
+
+  /* Gold (the decision signal — top-choice / official pick ONLY) */
+  --c-gold-700: #9A6E14;
+  --c-gold-600: #BE8718;
+  --c-gold-500: #D7A12E;
+  --c-gold-400: #E6BC54;
+  --c-gold-300: #F0D08A;
+  --c-gold-100: #F7EDCC;
+  --c-gold-50:  #FBF5E2;
+
+  /* Green — under budget / like (calm) */
+  --c-green-700: #1A6644; --c-green-600: #1F7A50; --c-green-400: #4FA87D;
+  --c-green-300: #7FCBA0; --c-green-100: #E4F0E7; --c-green-bd: #BFE0CB;
+  /* Amber — marginal (calm) */
+  --c-amber-700: #7A5210; --c-amber-600: #936212; --c-amber-400: #CBA85E;
+  --c-amber-300: #D9B765; --c-amber-100: #F8EDD2; --c-amber-bd: #EAD4A2;
+  /* Terracotta — over budget / dislike (the ONLY hot money color) */
+  --c-terra-700: #97331E; --c-terra-600: #B23F26; --c-terra-500: #C75636;
+  --c-terra-400: #EE8A66; --c-terra-300: #ECA088; --c-terra-100: #F8E5DD; --c-terra-bd: #EEC9BB;
+  /* Warm stone — unknown / TBD */
+  --c-stone-600: #7C766A; --c-stone-400: #A39C8C; --c-stone-300: #B3AC9D;
+  --c-stone-100: #EFE8DA; --c-stone-bd: #DFD5C0;
+  /* Indigo — community */
+  --c-indigo-600: #45579F; --c-indigo-400: #9BA8E6; --c-indigo-100: #E7EAF7; --c-indigo-bd: #CDD4F0;
+  /* Cyan — live / auto-scraped */
+  --c-cyan-700: #0C6B73; --c-cyan-600: #0E7F88; --c-cyan-400: #5FC9D2; --c-cyan-100: #DEF0F1; --c-cyan-bd: #B6E0E3;
+
+  /* ======================================================================
+     THEME-INDEPENDENT SCALES
+     ====================================================================== */
+  /* Radius — varied BY ROLE */
+  --r-xs: 6px; --r-sm: 8px; --r-md: 12px; --r-lg: 16px; --r-card: 18px; --r-xl: 22px; --r-pill: 999px;
+
+  /* Type */
+  --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --font-sans:    'Hanken Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --text-xs: 12px; --text-sm: 13px; --text-base: 14px; --text-md: 16px;
+  --text-lg: 20px; --text-xl: 24px; --text-2xl: 32px; --text-3xl: 40px; --text-4xl: 56px;
+  --lh-tight: 1.08; --lh-snug: 1.25; --lh-base: 1.55;
+
+  /* Spacing (4px base) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px;
+  --sp-6: 24px; --sp-8: 32px; --sp-10: 40px; --sp-12: 48px; --sp-16: 64px;
+
+  /* Icon system */
+  --icon-sm: 13px; --icon-md: 16px; --icon-lg: 20px;
+  --icon-stroke: 2; --icon-stroke-bold: 2.4;
+
+  /* Motion */
+  --dur-fast: 150ms; --dur-base: 200ms; --dur-slow: 280ms; --dur-lock: 440ms;
+  --ease-out:      cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-settle:   cubic-bezier(0.34, 1.32, 0.56, 1); /* gold dot "lock" beat */
+}
+
+/* ==========================================================================
+   LAYER 2 · SEMANTIC TOKENS — LIGHT
+   ========================================================================== */
+:root, [data-theme="light"] {
+  --surface:         var(--c-cream-100);
+  --surface-raised:  var(--c-paper);
+  --surface-sunken:  var(--c-cream-200);
+  --surface-inset:   var(--c-paper-2);
+  --surface-overlay: rgba(255, 253, 248, 0.86);
+  --scrim:           rgba(20, 33, 32, 0.42);
+
+  --text:        var(--c-ink-900);
+  --text-2:      var(--c-ink-700);
+  --text-muted:  var(--c-ink-500);
+  --text-on-photo: #FFFFFF;
+
+  --border:        var(--c-taupe-200);
+  --border-strong: var(--c-taupe-300);
+  --photo-border:  rgba(27, 42, 41, 0.06);
+
+  --accent:             var(--c-teal-800);
+  --accent-hover:       var(--c-teal-700);
+  --accent-active:      var(--c-teal-900);
+  --accent-fg:          var(--c-cream-100);
+  --accent-text:        var(--c-teal-700);
+  --accent-tint:        var(--c-teal-50);
+  --accent-tint-2:      var(--c-teal-100);
+  --accent-tint-border: var(--c-teal-100);
+  --ring:               rgba(19, 78, 74, 0.34);
+  --link:               var(--c-teal-700);
+
+  --official:    var(--c-teal-800);  --official-fg: var(--c-cream-100);
+  --star:        var(--c-gold-600);  --star-strong: var(--c-gold-700);
+  --star-bg:     var(--c-gold-100);  --star-border: var(--c-gold-300);
+  --gold-dot:    var(--c-gold-500);
+
+  --under:    var(--c-green-600); --under-bg:    var(--c-green-100); --under-border:    var(--c-green-bd);
+  --marginal: var(--c-amber-600); --marginal-bg: var(--c-amber-100); --marginal-border: var(--c-amber-bd);
+  --over:     var(--c-terra-600); --over-bg:     var(--c-terra-100); --over-border:     var(--c-terra-bd);
+  --unknown:  var(--c-stone-600); --unknown-bg:  var(--c-stone-100); --unknown-border:  var(--c-stone-bd);
+
+  --up:   var(--c-green-600); --up-bg:   var(--c-green-100);
+  --down: var(--c-terra-600); --down-bg: var(--c-terra-100);
+
+  --rank:          var(--c-teal-800);  --rank-fg: var(--c-cream-100);
+  --rank-soft-bg:  var(--c-teal-100);  --rank-soft-fg: var(--c-teal-800);
+  --community:     var(--c-indigo-600); --community-bg: var(--c-indigo-100); --community-border: var(--c-indigo-bd);
+  --live:          var(--c-cyan-600);   --live-bg:      var(--c-cyan-100);   --live-border:      var(--c-cyan-bd);
+
+  --danger: #BE3A28; --danger-bg: var(--c-terra-100); --danger-border: var(--c-terra-bd);
+
+  /* Elevation — LIGHT (warm-tinted, restrained) */
+  --shadow-xs:  0 1px 2px rgba(27, 42, 41, 0.05);
+  --shadow-sm:  0 1px 3px rgba(27, 42, 41, 0.07), 0 1px 2px rgba(27, 42, 41, 0.04);
+  --shadow-md:  0 6px 18px -6px rgba(27, 42, 41, 0.13);
+  --shadow-lg:  0 16px 40px -12px rgba(27, 42, 41, 0.18);
+  --shadow-pop: 0 28px 64px -16px rgba(16, 40, 38, 0.30);
+  --glow-inset: none;
+}
+
+/* ==========================================================================
+   LAYER 2 · SEMANTIC TOKENS — DARK (warm deep teal-charcoal, NOT black)
+   Teal lifted; budget retuned so money stays calm and only "over" runs hot.
+   Shadows give way to borders + inner-glow.
+   ========================================================================== */
+[data-theme="dark"] {
+  --surface:         var(--c-char-800);
+  --surface-raised:  var(--c-char-700);
+  --surface-sunken:  var(--c-char-900);
+  --surface-inset:   var(--c-char-750);
+  --surface-overlay: rgba(18, 27, 26, 0.82);
+  --scrim:           rgba(6, 12, 11, 0.66);
+
+  --text:        var(--c-fog-100);
+  --text-2:      var(--c-fog-300);
+  --text-muted:  var(--c-fog-500);
+  --text-on-photo: #FFFFFF;
+
+  --border:        var(--c-char-600);
+  --border-strong: var(--c-char-500);
+  --photo-border:  rgba(255, 255, 255, 0.10);
+
+  --accent:             var(--c-teal-600);
+  --accent-hover:       var(--c-teal-500);
+  --accent-active:      var(--c-teal-700);
+  --accent-fg:          var(--c-cream-50);
+  --accent-text:        var(--c-teal-300);
+  --accent-tint:        #18302C;
+  --accent-tint-2:      #1E3A35;
+  --accent-tint-border: #2C4A44;
+  --ring:               rgba(111, 194, 178, 0.45);
+  --link:               var(--c-teal-300);
+
+  --official:    var(--c-teal-600);  --official-fg: var(--c-cream-50);
+  --star:        var(--c-gold-400);  --star-strong: var(--c-gold-300);
+  --star-bg:     #2C2719;            --star-border: #4A3E1F;
+  --gold-dot:    var(--c-gold-400);
+
+  --under:    var(--c-green-300); --under-bg:    #16302A; --under-border:    #2B4A3E;
+  --marginal: var(--c-amber-300); --marginal-bg: #2C2818; --marginal-border: #473F22;
+  --over:     var(--c-terra-400); --over-bg:     #341F18; --over-border:     #5A3327;
+  --unknown:  var(--c-stone-400); --unknown-bg:  #24231E; --unknown-border:  #383630;
+
+  --up:   var(--c-green-300); --up-bg:   #16302A;
+  --down: var(--c-terra-400); --down-bg: #341F18;
+
+  --rank:          var(--c-teal-600);  --rank-fg: var(--c-cream-50);
+  --rank-soft-bg:  #1C3A35;  --rank-soft-fg: var(--c-teal-300);
+  --community:     var(--c-indigo-400); --community-bg: #20243C; --community-border: #343A5C;
+  --live:          var(--c-cyan-400);   --live-bg:      #112A2C; --live-border:      #1E4448;
+
+  --danger: var(--c-terra-400); --danger-bg: #341F18; --danger-border: #5A3327;
+
+  --shadow-xs:  0 0 0 1px rgba(0, 0, 0, 0.2);
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md:  0 8px 24px -10px rgba(0, 0, 0, 0.55);
+  --shadow-lg:  0 18px 44px -14px rgba(0, 0, 0, 0.62);
+  --shadow-pop: 0 30px 70px -18px rgba(0, 0, 0, 0.72);
+  --glow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--surface); color: var(--text);
+  font-family: var(--font-sans); font-size: var(--text-base); line-height: var(--lh-base);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  transition: background var(--dur-slow) var(--ease-standard), color var(--dur-slow) var(--ease-standard);
+}
+h1, h2, h3, h4 { font-family: var(--font-display); margin: 0; line-height: var(--lh-tight); letter-spacing: -0.02em; }
+.tnum { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum' 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

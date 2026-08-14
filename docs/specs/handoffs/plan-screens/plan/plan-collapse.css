@@ -1,0 +1,240 @@
+/* ============================================================================
+   GroupPad — PLAN SCREEN + PLAN MODAL  ·  collapsible, dense, usable
+   ----------------------------------------------------------------------------
+   The problem this solves: every day carries ONE real activity inside eight
+   rows of identical scaffolding (leave the house → drive → detour → stop →
+   empty-evening → drive → home). Four days ran ~2,000px to say four things.
+   Fixes: (1) a day collapses to a single summary row; (2) the house bookends
+   fold the adjoining drive into themselves; (3) gaps and detours become inline
+   notes, not boxes; (4) the three panels collapse independently.
+   Tokens only. Icons from share/share-icons.js (signature set).
+   ============================================================================ */
+
+.pl-body { margin: 0; background: var(--surface); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+.pl-shell { max-width: 1080px; margin: 0 auto; padding: 26px 22px 80px; }
+.gpi { width: 100%; height: 100%; display: block; }
+.pl-caps { font-size: 10px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+.pl-num { font-variant-numeric: tabular-nums; }
+
+/* ---------- screen head ---------- */
+.pl-head { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; padding-bottom: 16px; }
+.pl-head h1 { font-family: var(--font-display); font-size: 25px; font-weight: 700; letter-spacing: -0.03em; }
+.pl-head .sub { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
+.pl-head .sp { margin-left: auto; }
+
+/* density segmented control */
+.pl-seg { display: inline-flex; gap: 3px; background: var(--surface-sunken); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 3px; }
+.pl-seg button { border: 0; background: transparent; color: var(--text-muted); font-family: var(--font-sans); font-weight: 700; font-size: 11.5px; padding: 7px 13px; border-radius: var(--r-pill); cursor: pointer; }
+.pl-seg button.on { background: var(--surface-raised); color: var(--text); box-shadow: var(--shadow-sm); }
+
+/* ds2 buttons in panel headers + modal chrome: size the signature glyphs */
+.pl-ph .btn .g, .pl-mfoot .btn .g, .pl-strip .btn .g, .pl-head .btn .g { width: 14px; height: 14px; flex: none; }
+
+/* ============================================================================
+   PANEL — collapsible, three kinds
+   ============================================================================ */
+.pl-panel { border-radius: var(--r-lg); margin-bottom: 14px; overflow: hidden; position: relative; }
+.pl-panel::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 9%, transparent) 22%, color-mix(in srgb, var(--text) 9%, transparent) 78%, transparent); pointer-events: none; z-index: 1; }
+.pl-panel.k-group { background: var(--surface-raised); border: 1px solid var(--border-strong); box-shadow: var(--shadow-sm); }
+.pl-panel.k-scout { background: var(--accent-tint); border: 1px solid var(--accent-tint-border); }
+.pl-panel.k-mine  { background: var(--surface-inset); border: 1px solid var(--border); border-left: 3px solid color-mix(in srgb, var(--gold-dot) 42%, var(--border-strong)); }
+
+.pl-ph { display: flex; align-items: center; gap: 13px; padding: 17px 18px; cursor: pointer; user-select: none; }
+.pl-ph .mk { width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex: none; }
+.pl-ph .mk .g { width: 17px; height: 17px; }
+.k-group .pl-ph .mk { background: var(--rank-soft-bg); color: var(--rank-soft-fg); }
+.k-scout .pl-ph .mk { background: var(--surface-raised); color: var(--accent-text); box-shadow: var(--shadow-sm); }
+.k-mine  .pl-ph .mk { background: var(--surface-sunken); color: var(--text-2); }
+.pl-ph .hh { min-width: 0; flex: 1; }
+/* every pill on this screen is ds2 `.badge`. Local additions only where the
+   component has no equivalent: the two kind tints, a compact size step for the
+   stop row (ds2 has no .badge-sm), and vote/pin semantics ds2 doesn't define. */
+.pl-kind .g { width: 11px; height: 11px; }
+.badge-scout { background: var(--surface-raised); color: var(--accent-text); border-color: var(--accent-tint-border); font-weight: 700; }
+.badge-mine { background: var(--surface-sunken); color: var(--text-muted); border-color: var(--border); font-weight: 700; }
+.pl-ph .t { font-family: var(--font-display); font-size: 18px; font-weight: 700; letter-spacing: -0.025em; color: var(--text); margin-top: 7px; }
+.pl-ph .s { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
+.pl-ph .acts { display: inline-flex; align-items: center; gap: 7px; flex: none; }
+.pl-ph .chev { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); flex: none; transition: transform var(--dur-base) var(--ease-out); }
+.pl-ph .chev .g { width: 15px; height: 15px; }
+.pl-panel.open .pl-ph .chev { transform: rotate(90deg); }
+.pl-pb { padding: 0 18px 18px; }
+.pl-panel:not(.open) .pl-pb { display: none; }
+
+/* collapsed-panel digest */
+.pl-digest { display: flex; align-items: center; gap: 10px; padding: 0 18px 16px; flex-wrap: wrap; }
+.pl-panel.open .pl-digest { display: none; }
+.pl-digest .badge .g { width: 13px; height: 13px; color: var(--text-muted); }
+.pl-digest .badge b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.pl-digest .thumbs { display: inline-flex; }
+.pl-digest .thumbs img, .pl-digest .thumbs .ph { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; margin-left: -6px; border: 1.5px solid var(--surface-raised); background: var(--surface-sunken); }
+.pl-digest .thumbs :first-child { margin-left: 0; }
+
+/* ============================================================================
+   LEADERBOARD (compact)
+   ============================================================================ */
+.pl-lb { display: flex; flex-direction: column; gap: 5px; }
+.pl-lbrow { position: relative; display: flex; align-items: center; gap: 11px; padding: 8px 11px; border-radius: 10px; background: var(--surface-inset); border: 1px solid var(--border); overflow: hidden; }
+.pl-lbrow::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: var(--pct); background: var(--star-bg); }
+.pl-lbrow > * { position: relative; }
+.pl-lbrow .rk { font-size: 11.5px; font-weight: 800; color: var(--star-strong); width: 12px; }
+.pl-lbrow img, .pl-lbrow .ph { width: 34px; height: 34px; border-radius: 7px; object-fit: cover; flex: none; background: var(--surface-sunken); }
+.pl-lbrow .nm { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-lbrow .nm .you { color: var(--accent-text); font-weight: 700; }
+.pl-lbrow .nm small { display: block; font-weight: 500; font-size: 11.5px; color: var(--text-muted); }
+.pl-lbrow .tl { font-size: 11.5px; font-weight: 800; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* quorum meter = ds2 patterns.css §10 `.progress` (.ptop/.ptrack/.pfill).
+   Only the glyph sizing is local; the meter itself is the shared component. */
+.pl-pb .progress { margin: 13px 0 2px; }
+.pl-pb .progress .ptop b { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.pl-pb .progress .ptop .ico { display: inline-block; vertical-align: -3px; }
+
+/* ============================================================================
+   DAY — collapsed row  ⇄  expanded timeline
+   ============================================================================ */
+.pl-day { border-radius: 12px; background: color-mix(in srgb, var(--surface-raised) 55%, transparent); border: 1px solid color-mix(in srgb, var(--border) 85%, transparent); margin-bottom: 7px; }
+.k-mine .pl-day, .k-scout .pl-day { background: color-mix(in srgb, var(--surface-raised) 42%, transparent); }
+.pl-day.open { background: var(--surface-raised); border-color: var(--border-strong); }
+
+/* the summary row — the whole day in 56px */
+.pl-dayrow { display: grid; grid-template-columns: 22px 68px 1fr auto; align-items: center; gap: 13px; padding: 11px 14px; cursor: pointer; user-select: none; }
+.pl-dayrow .chev { color: var(--text-muted); width: 16px; height: 16px; transition: transform var(--dur-base) var(--ease-out); }
+.pl-day.open .pl-dayrow .chev { transform: rotate(90deg); }
+.pl-dayrow .date { line-height: 1.2; }
+.pl-dayrow .date .wd { display: block; font-size: 9.5px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold-dot); }
+.pl-dayrow .date .dn { display: block; font-family: var(--font-display); font-size: 15px; font-weight: 700; letter-spacing: -0.022em; color: var(--text); margin-top: 2px; white-space: nowrap; }
+.pl-dayrow .gist { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pl-dayrow .gist img, .pl-dayrow .gist .ph { width: 34px; height: 30px; border-radius: 7px; object-fit: cover; flex: none; background: var(--surface-sunken); }
+.pl-dayrow .gist .tx { min-width: 0; display: block; }
+.pl-dayrow .gist .nm { display: block; font-size: 13.5px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-dayrow .gist .mo { display: block; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.pl-dayrow .figs { grid-column: 4; justify-content: flex-end; display: flex; align-items: center; gap: 13px; font-size: 11.5px; color: var(--text-muted); white-space: nowrap; }
+.pl-dayrow .figs b { color: var(--text-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pl-dayrow .figs .money { color: var(--accent-text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pl-day.open .pl-dayrow .gist, .pl-day.open .pl-dayrow .figs .hide-open { display: none; }
+.pl-day:not(.open) .pl-dayrow .arc { display: none; }
+.pl-dayrow .arc { font-size: 11.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* the expanded body */
+.pl-daybody { padding: 2px 13px 12px; }
+.pl-day:not(.open) .pl-daybody { display: none; }
+
+/* bookend — house + the adjoining drive, folded into ONE line */
+.pl-bookend { display: flex; align-items: center; gap: 9px; padding: 7px 0; color: var(--text-muted); font-size: 12px; flex-wrap: wrap; }
+.pl-bookend .hg { width: 22px; height: 22px; border-radius: 6px; background: var(--surface-inset); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; flex: none; }
+.pl-bookend .hg .g { width: 13px; height: 13px; }
+.pl-bookend .lb { color: var(--text-2); font-weight: 600; }
+.pl-bookend .tm { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pl-bookend .drive { display: inline-flex; align-items: center; gap: 6px; }
+.pl-bookend .drive .g { width: 13px; height: 13px; opacity: 0.8; }
+.pl-bookend .drive .d { font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pl-bookend.long .drive .d { color: var(--marginal); }
+.pl-bookend .aside { font-style: italic; }
+
+/* a real stop — the only thing that gets full weight */
+.pl-stop { display: flex; gap: 13px; align-items: flex-start; padding: 11px 12px; border-radius: 11px; background: var(--surface-inset); border: 1px solid var(--border); margin: 3px 0; }
+.pl-stop .shot { position: relative; width: 78px; height: 62px; border-radius: 9px; overflow: hidden; flex: none; background: var(--surface-sunken); border: 1px solid color-mix(in srgb, var(--border) 80%, transparent); }
+.pl-stop .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pl-stop .shot .fb { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: color-mix(in srgb, var(--text) 18%, transparent); }
+.pl-stop .bd { min-width: 0; flex: 1; }
+.pl-stop .top { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.pl-stop .tm { font-size: 12px; font-weight: 700; color: var(--accent-text); font-variant-numeric: tabular-nums; flex: none; }
+.pl-stop .nm { font-family: var(--font-display); font-size: 15.5px; font-weight: 600; letter-spacing: -0.018em; line-height: 1.25; color: var(--text); }
+.pl-facts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; color: var(--text-muted); }
+.pl-facts .f { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.pl-facts .f .g { width: 12px; height: 12px; opacity: 0.85; }
+.pl-facts .f.money { color: var(--text-2); font-weight: 600; }
+.pl-facts .div { width: 1px; height: 10px; background: var(--border); }
+.pl-why { position: relative; margin-top: 8px; padding-left: 11px; font-size: 12.5px; line-height: 1.5; color: var(--text-2); font-style: italic; }
+.pl-why::before { content: ''; position: absolute; left: 0; top: 2px; bottom: 2px; width: 2px; border-radius: 2px; background: color-mix(in srgb, var(--gold-dot) 60%, transparent); }
+
+/* compact size step for the stop row */
+.pl-tag { font-size: 9px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; gap: 4px; padding: 3px 7px; white-space: nowrap; }
+.pl-tag .g { width: 10px; height: 10px; }
+.badge-up { color: var(--up); background: color-mix(in srgb, var(--up-bg) 70%, transparent); border-color: color-mix(in srgb, var(--up) 24%, transparent); }
+.badge-pinned { color: var(--accent-text); background: var(--accent-tint); border-color: var(--accent-tint-border); }
+
+/* detour — one inline line, not two rows of redundant copy */
+.pl-detour { display: flex; align-items: center; gap: 9px; padding: 6px 2px; font-size: 12px; color: var(--text-muted); }
+.pl-detour .th { width: 24px; height: 24px; border-radius: 6px; overflow: hidden; flex: none; background: var(--surface-sunken); }
+.pl-detour .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pl-detour .nm { color: var(--text-2); font-weight: 600; }
+.pl-detour .note { font-style: italic; }
+.pl-detour .add { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700; color: var(--accent-text); cursor: pointer; flex: none; }
+.pl-detour .add .g { width: 12px; height: 12px; }
+
+/* gap — an inline admission, not a boxed banner */
+.pl-gap { display: flex; align-items: center; gap: 9px; padding: 7px 2px; font-size: 12px; color: var(--text-muted); }
+.pl-gap .dsh { flex: 1; height: 1px; background: repeating-linear-gradient(90deg, var(--border-strong) 0 4px, transparent 4px 9px); }
+.pl-gap .txt { font-style: italic; white-space: nowrap; }
+.pl-gap .find { font-weight: 700; font-style: normal; color: var(--accent-text); cursor: pointer; white-space: nowrap; }
+
+/* day footer */
+.pl-wrap { display: flex; align-items: center; gap: 10px; margin-top: 9px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-muted); flex-wrap: wrap; }
+.pl-wrap .g { width: 13px; height: 13px; color: var(--gold-dot); flex: none; }
+.pl-wrap .lab { color: var(--text-2); font-weight: 600; }
+.pl-wrap .figs { margin-left: auto; display: flex; gap: 14px; }
+.pl-wrap .figs b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* plan-level footer strip */
+.pl-planfoot { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); flex-wrap: wrap; }
+.pl-planfoot .tot { display: inline-flex; align-items: center; gap: 7px; }
+.pl-planfoot .tot b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.pl-planfoot .sp { margin-left: auto; }
+
+/* ============================================================================
+   MODAL
+   ============================================================================ */
+.pl-scrim { position: fixed; inset: 0; z-index: 80; background: var(--scrim); backdrop-filter: blur(3px); opacity: 0; pointer-events: none; transition: opacity var(--dur-base) var(--ease-standard); }
+.pl-scrim.show { opacity: 1; pointer-events: auto; }
+.pl-modal { position: fixed; z-index: 81; left: 50%; top: 50%; width: min(680px, calc(100vw - 32px)); max-height: min(86vh, 860px);
+  transform: translate(-50%, -48%) scale(0.985); opacity: 0; pointer-events: none;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: 18px; box-shadow: 0 40px 90px -24px rgba(0,0,0,0.6);
+  transition: opacity var(--dur-base) var(--ease-standard), transform var(--dur-base) var(--ease-out); }
+.pl-modal.show { opacity: 1; transform: translate(-50%, -50%) scale(1); pointer-events: auto; }
+
+/* tight header — no dead space */
+.pl-mh { display: flex; align-items: center; gap: 12px; padding: 15px 16px 13px; border-bottom: 1px solid var(--border); }
+.pl-mh .mk { width: 34px; height: 34px; border-radius: 10px; background: var(--accent-tint); border: 1px solid var(--accent-tint-border); color: var(--accent-text); display: flex; align-items: center; justify-content: center; flex: none; }
+.pl-mh .mk .g { width: 18px; height: 18px; }
+.pl-mh .hh { min-width: 0; flex: 1; }
+.pl-mh .t { font-family: var(--font-display); font-size: 17px; font-weight: 700; letter-spacing: -0.022em; color: var(--text); }
+.pl-mh .s { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+.pl-x { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); display: flex; align-items: center; justify-content: center; cursor: pointer; flex: none; }
+.pl-x:hover { background: var(--surface-inset); color: var(--text); }
+.pl-x .g { width: 15px; height: 15px; }
+
+/* day jump strip — lets a 4-day plan fit one screen */
+.pl-strip { display: flex; align-items: center; gap: 7px; padding: 11px 16px; border-bottom: 1px solid var(--border); background: var(--surface-inset); overflow-x: auto; scrollbar-width: none; }
+.pl-strip::-webkit-scrollbar { display: none; }
+.pl-pill { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 12px; border-radius: 9px; cursor: pointer; flex: none;
+  background: var(--surface-raised); border: 1px solid var(--border); color: var(--text-2); font-family: var(--font-sans); }
+.pl-pill .wd { font-size: 9.5px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--text-muted); }
+.pl-pill .dn { font-size: 12.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pl-pill.on { background: var(--accent); border-color: transparent; color: var(--accent-fg); }
+.pl-pill.on .wd { color: color-mix(in srgb, var(--accent-fg) 78%, transparent); }
+.pl-pill.empty { opacity: 0.5; }
+.pl-strip .sp { margin-left: auto; }
+
+.pl-mbody { flex: 1; overflow-y: auto; padding: 12px 16px 16px; scrollbar-width: thin; }
+.pl-mfoot { display: flex; align-items: center; gap: 9px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface-inset); flex-wrap: wrap; }
+.pl-mfoot .note { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); }
+.pl-mfoot .note .g { width: 13px; height: 13px; }
+.pl-mfoot .sp { margin-left: auto; }
+
+/* ---------- responsive ---------- */
+@media (max-width: 860px) {
+  .pl-shell { padding: 18px 14px 60px; }
+  .pl-dayrow { grid-template-columns: 20px 62px 1fr; gap: 10px; }
+  .pl-dayrow .figs { grid-column: 2 / -1; padding-top: 2px; }
+  .pl-ph .acts .lbl { display: none; }
+}
+@media (max-width: 560px) {
+  .pl-stop { gap: 10px; }
+  .pl-stop .shot { width: 58px; height: 48px; }
+  .pl-dayrow .gist img, .pl-dayrow .gist .ph { display: none; }
+  .pl-modal { width: 100vw; max-height: 92vh; border-radius: 16px 16px 0 0; top: auto; bottom: 0; transform: translate(-50%, 12px); }
+  .pl-modal.show { transform: translate(-50%, 0); }
+  .pl-mfoot .btn { flex: 1; justify-content: center; }
+}

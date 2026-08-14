@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ArrowRight, ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Trophy, Users, Lock, Flag, CornerDownRight, Car, Footprints, CircleDashed, CloudOff, FilterX } from 'lucide-react';
+import { ArrowRight, ChevronRight, Home, ThumbsUp, ThumbsDown, ExternalLink, Star, Clock, RefreshCw, Compass, MapPin, UsersRound, X, ListPlus, Sparkles, CalendarDays, Bookmark, Check, Share2, FileDown, Tag, Trophy, Users, Lock, Flag, CornerDownRight, Car, Footprints, CloudOff, FilterX } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/ui/Icon';
@@ -9,7 +9,7 @@ import { SafeImg } from '@/components/ui/SafeImg';
 import { cn } from '@/lib/cn';
 import { fmtMins, expAnchor, expDistanceMi } from '@/lib/utils';
 import { track } from '@/lib/analytics';
-import type { Experience, ExpVotesMap, ListingReviews, ExpPlan, ExpDaysMap, DayRoute } from '@/types';
+import type { Experience, ExpVotesMap, ListingReviews, ExpPlan, ExpDaysMap, DayRoute, RouteRow } from '@/types';
 
 /** Per-experience tally from the exp-votes store (mirrors the homes tally shape).
  *  Exported for MobileBoard's "Things to do" view. */
@@ -423,105 +423,135 @@ export function expPlanToItinerary(plan: ExpPlan, byId: Map<string, Experience>,
  * with a "~" — we have no routing provider, and a fabricated-precise "14 min"
  * would be worse than an honest approximation.
  */
-function RoutedDay({ day, route, byId, onOpen }: { day: string | null; route: DayRoute; byId: Map<string, Experience>; onOpen: (x: Experience) => void }) {
+function RoutedDay({ day, route, byId, onOpen, open, onToggle }: { day: string | null; route: DayRoute; byId: Map<string, Experience>; onOpen: (x: Experience) => void; open: boolean; onToggle: () => void }) {
+  const rows = route.rows;
+  // House bookends absorb the drive next to them. "Leave the house 9:30a" and
+  // the 45-minute haul that follows are one thought, not two rows, and pulling
+  // them together removes four rows from every day.
+  const lead = rows[0] && 'k' in rows[0] && rows[0].k === 'anchor' ? rows[0] : null;
+  const leadLeg = lead && rows[1] && 'leg' in rows[1] ? rows[1] : null;
+  const last = rows[rows.length - 1];
+  const tail = last && 'k' in last && last.k === 'anchor' && lead !== last ? last : null;
+  const tailLeg = tail && rows[rows.length - 2] && 'leg' in rows[rows.length - 2] ? rows[rows.length - 2] : null;
+  const skip = new Set<number>();
+  if (lead) skip.add(0);
+  if (leadLeg) skip.add(1);
+  if (tail) skip.add(rows.length - 1);
+  if (tailLeg) skip.add(rows.length - 2);
+
+  // What a closed day says: the first real activity, and the numbers.
+  const firstStop = rows.find((r, i) => !skip.has(i) && 'k' in r && r.k === 'stop') as Extract<RouteRow, { k: 'anchor' | 'stop' }> | undefined;
+  const gist = firstStop ? byId.get(String(firstStop.id ?? '')) : undefined;
+  const stopCount = rows.filter((r) => 'k' in r && r.k === 'stop').length;
+  const legWords = (r: Extract<RouteRow, { leg: 'drive' | 'walk' }>) => `${r.dur} ${r.leg} · ${r.mi}`;
+
   return (
-    <div className="itin-day">
-      <div className="itin-dh">
-        <span className="d">{dayLabel(day)}</span>
-        <span className="win">out <b className="tnum">{route.win}</b></span>
-      </div>
-      <div className="itin-body">
-        <div className="itin-line">
-          {route.rows.map((row, i) => {
-            if ('leg' in row) {
-              return (
-                <div className={cn('leg', row.tight && 'tight')} key={i}>
-                  <Icon icon={row.leg === 'walk' ? Footprints : Car} className="ico ic" />
-                  <span className="dur">{row.dur} {row.leg}</span>
-                  <span>· {row.mi}</span>
-                  {row.why && <span className="why">— {row.why}</span>}
-                </div>
-              );
-            }
-            if ('suggest' in row) {
-              const x = byId.get(row.suggest.id);
-              return (
-                <div className="stop suggest" key={i}>
-                  <div className="stop-top">
-                    <span className="stop-time">&mdash;</span>
-                    {x ? (
-                      <button className="stop-name" onClick={() => onOpen(x)}>{row.suggest.n}</button>
-                    ) : (
-                      <span className="stop-name">{row.suggest.n}</span>
-                    )}
-                    <span className="stop-tag opt">on the way</span>
-                  </div>
-                  <div className="stop-facts">
-                    <span>{row.suggest.kind}</span><span className="sep">·</span><span>{row.suggest.why}</span>
-                  </div>
-                </div>
-              );
-            }
-            if ('gap' in row) {
-              // Scout admits the hole instead of inventing a stop to look
-              // complete. Do not "improve" this by auto-filling it.
-              return (
-                <div className="itin-gap" key={i}>
-                  <Icon icon={CircleDashed} className="ico" />
-                  <span>{row.gap}</span>
-                </div>
-              );
-            }
-            const x = row.id ? byId.get(row.id) : undefined;
-            return (
-              <div className={cn('stop', row.k === 'anchor' && 'anchor')} key={i}>
-                <div className="stop-top">
-                  <span className="stop-time">{row.t}</span>
-                  {x ? (
-                    <button className="stop-name" onClick={() => onOpen(x)}>{row.n}</button>
-                  ) : (
-                    <span className="stop-name">{row.n}</span>
-                  )}
-                  {row.tag === 'voted' && <span className="stop-tag voted"><Icon icon={ThumbsUp} className="ico" /> voted in</span>}
-                  {row.tag === 'pinned' && <span className="stop-tag pinned"><Icon icon={CalendarDays} className="ico" /> pinned</span>}
-                </div>
-                {row.facts && row.facts.length > 0 && (
-                  <div className="stop-facts">
-                    {row.facts.map((f, j) => (
-                      <span key={j}>
-                        {j > 0 && <span className="sep">·</span>}
-                        <span className={/\$|free/i.test(f) ? 'cost' : undefined}>{f}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {row.why && (
-                  <div className="stop-why"><Icon icon={CornerDownRight} className="ico" /><span>{row.why}</span></div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      {/* The three numbers that decide whether a day is sane. */}
-      <div className="itin-wrap">
-        <Icon icon={Flag} className="ico" />
-        {/* Full weekday, not the abbreviation — this line is the one bit of
-            plain speech in the panel and "a wrap for Tue" reads like a log. */}
-        <span className="txt">
-          That&rsquo;s a wrap for {weekdayLong(day)}
-          {route.heavy && <> &middot; <span style={{ color: 'var(--marginal)' }}>that&rsquo;s a lot of driving for one day</span></>}
+    <div className={cn('itin-day', 'pl', open && 'open')}>
+      <button className="pl-dayrow" onClick={onToggle} aria-expanded={open}>
+        <Icon icon={ChevronRight} className="ico chev" />
+        <span className="date">
+          <span className="wd">{weekdayLong(day).slice(0, 3)}</span>
+          <span className="dn">{dayLabel(day).replace(/^\w+,\s*/, '')}</span>
         </span>
-        <span className="tot">
+        <span className="gist">
+          {gist?.photo ? <img src={gist.photo} alt="" loading="lazy" /> : <span className="ph" />}
+          <span className="tx">
+            <span className="nm">{firstStop?.n || 'Nothing planned'}</span>
+            <span className="mo">{stopCount > 1 ? `+${stopCount - 1} more · ` : ''}{route.win}</span>
+          </span>
+        </span>
+        <span className="figs">
           <span><b>{route.out}</b> out</span>
-          {route.drive && (
-            <span style={route.heavy ? { color: 'var(--marginal)' } : undefined}>
-              <b style={route.heavy ? { color: 'var(--marginal)' } : undefined}>{route.drive}</b> driving
-            </span>
-          )}
-          {route.pp != null && <span className="tnum"><b>${route.pp}</b> pp{route.unpriced > 0 && ` (+${route.unpriced} unpriced)`}</span>}
+          {route.drive && <span className={cn(route.heavy && 'warn')}><b className={cn(route.heavy && 'warn')}>{route.drive}</b> driving</span>}
+          {route.pp != null && <span className="money tnum">${route.pp} pp</span>}
         </span>
-      </div>
+      </button>
+
+      {open && (
+        <>
+          <div className="itin-body">
+            {lead && (
+              <div className="pl-bookend">
+                <Icon icon={Home} className="ico" />
+                <span>
+                  Leave {lead.n.replace(/ · .*$/, '').replace(/^The /, 'the ')} <b>{lead.t}</b>
+                  {leadLeg && 'leg' in leadLeg && <> · {legWords(leadLeg)}{leadLeg.why ? ` — ${leadLeg.why}` : ''}</>}
+                </span>
+              </div>
+            )}
+            <div className="itin-line">
+              {rows.map((row, i) => {
+                if (skip.has(i)) return null;
+                if ('leg' in row) {
+                  return (
+                    <div className={cn('leg', row.tight && 'tight')} key={i}>
+                      <Icon icon={row.leg === 'walk' ? Footprints : Car} className="ico ic" />
+                      <span className="dur">{row.dur} {row.leg}</span>
+                      <span>· {row.mi}</span>
+                      {row.why && <span className="why">— {row.why}</span>}
+                    </div>
+                  );
+                }
+                if ('suggest' in row) {
+                  // One line, one Add. The old box said "on the way" three times.
+                  const x = byId.get(row.suggest.id);
+                  return (
+                    <div className="pl-note" key={i}>
+                      <span>
+                        <b>{row.suggest.n}</b> — {row.suggest.kind.toLowerCase()}, {row.suggest.why}
+                        {x && <> · <button className="lnk" style={{ background: 'none', border: 0, padding: 0, color: 'var(--link)', fontWeight: 700, cursor: 'pointer' }} onClick={() => onOpen(x)}>Look</button></>}
+                      </span>
+                    </div>
+                  );
+                }
+                if ('gap' in row) {
+                  return <div className="pl-note gap" key={i}><span>{row.gap}</span></div>;
+                }
+                const x = row.id ? byId.get(row.id) : undefined;
+                return (
+                  <div className={cn('stop', row.k === 'anchor' && 'anchor')} key={i}>
+                    <div className="stop-top">
+                      <span className="stop-time">{row.t}</span>
+                      {x ? <button className="stop-name" onClick={() => onOpen(x)}>{row.n}</button> : <span className="stop-name">{row.n}</span>}
+                      {row.tag === 'voted' && <span className="stop-tag voted"><Icon icon={ThumbsUp} className="ico" /> voted in</span>}
+                      {row.tag === 'pinned' && <span className="stop-tag pinned"><Icon icon={CalendarDays} className="ico" /> pinned</span>}
+                    </div>
+                    {row.facts && row.facts.length > 0 && (
+                      <div className="stop-facts">
+                        {row.facts.map((f, j) => (
+                          <span key={j}>{j > 0 && <span className="sep">·</span>}<span className={/\$|free/i.test(f) ? 'cost' : undefined}>{f}</span></span>
+                        ))}
+                      </div>
+                    )}
+                    {row.why && <div className="stop-why"><Icon icon={CornerDownRight} className="ico" /><span>{row.why}</span></div>}
+                  </div>
+                );
+              })}
+            </div>
+            {tail && (
+              <div className="pl-bookend">
+                <Icon icon={Home} className="ico" />
+                <span>
+                  {tailLeg && 'leg' in tailLeg && <>{legWords(tailLeg)} · </>}
+                  back at {tail.n.replace(/ · .*$/, '').toLowerCase()} <b>{tail.t}</b>
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="itin-wrap">
+            <Icon icon={Flag} className="ico" />
+            <span className="txt">
+              That&rsquo;s a wrap for {weekdayLong(day)}
+              {route.heavy && <> &middot; <span style={{ color: 'var(--marginal)' }}>that&rsquo;s a lot of driving for one day</span></>}
+            </span>
+            <span className="tot">
+              <span><b>{route.out}</b> out</span>
+              {route.drive && <span><b>{route.drive}</b> driving</span>}
+              {route.pp != null && <span className="tnum"><b>${route.pp}</b> pp{route.unpriced > 0 && ` (+${route.unpriced} unpriced)`}</span>}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -556,6 +586,24 @@ function RouteArt({ size = 132 }: { size?: number }) {
   );
 }
 
+/** Per-surface day expansion. Compact by default — the whole point is that a
+ *  four-day plan reads in one screen before you drill in. */
+function useDayCollapse(prefix: string) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const [density, setDensity] = useState<'compact' | 'full'>('compact');
+  const key = (i: number) => `${prefix}-${i}`;
+  return {
+    density,
+    isOpen: (i: number) => density === 'full' || open.has(key(i)),
+    toggle: (i: number) => setOpen((s0) => {
+      const n = new Set(s0);
+      n.has(key(i)) ? n.delete(key(i)) : n.add(key(i));
+      return n;
+    }),
+    setDensity: (d: 'compact' | 'full') => { setDensity(d); if (d === 'compact') setOpen(new Set()); },
+  };
+}
+
 /** Whole days until a shared plan link stops working. */
 const planDaysLeft = (p: ExpPlan | null) => {
   if (!p?.expires_at) return null;
@@ -584,6 +632,7 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
   onRegenerate: () => void; onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const dc = useDayCollapse('studio');
   // Rotate the line under the spinner. Ambient layer only — it carries no
   // information, it just makes a few seconds of waiting feel attended to.
   const NOTES = [
@@ -656,7 +705,7 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
                 ) : days.length ? (
                   days.map((d, i) => (
                     d.route && d.route.rows.length > 0
-                      ? <RoutedDay key={i} day={d.day} route={d.route} byId={byId} onOpen={onOpen} />
+                      ? <RoutedDay key={i} day={d.day} route={d.route} byId={byId} onOpen={onOpen} open={dc.isOpen(i)} onToggle={() => dc.toggle(i)} />
                       : (
                         <div className="xplan-day" key={i}>
                           <div className="xplan-dh">{dayLabel(d.day)}</div>
@@ -914,6 +963,8 @@ export function ExperiencesSection() {
   // needs coordinates); otherwise the switch would toggle to an empty panel.
   const hasRoute = !!plan?.days.some((d) => d.route && d.route.rows.length > 0);
   const myPlanDaysLeft = planDaysLeft(myPlan);
+  const scoutDays = useDayCollapse('scout');
+  const mineDays = useDayCollapse('mine');
 
   // Four situations that used to render as one. The important one is the error:
   // every read was caught and swallowed into an empty list, so a server outage
@@ -1124,6 +1175,12 @@ export function ExperiencesSection() {
               </div>
             </div>
             <span className="xp-acts">
+              {hasRoute && itinView === 'route' && (
+                <span className="pl-density">
+                  <button className={cn(scoutDays.density === 'compact' && 'on')} onClick={() => scoutDays.setDensity('compact')}>Compact</button>
+                  <button className={cn(scoutDays.density === 'full' && 'on')} onClick={() => scoutDays.setDensity('full')}>Full</button>
+                </span>
+              )}
               {hasRoute && (
                 <span className="itin-switch">
                   <button className={cn(itinView === 'list' && 'on')} onClick={() => setItinView('list')}>List</button>
@@ -1143,6 +1200,7 @@ export function ExperiencesSection() {
               {plan.days.map((d, i) => (
                 d.route
                   ? <RoutedDay key={i} day={d.day} route={d.route} byId={byId}
+                      open={scoutDays.isOpen(i)} onToggle={() => scoutDays.toggle(i)}
                       onOpen={(x) => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id, surface: 'scout_route' }); }} />
                   : null
               ))}
@@ -1238,6 +1296,7 @@ export function ExperiencesSection() {
               {myPlan.days.map((d, di) => (
                 d.route && d.route.rows.length > 0 ? (
                   <RoutedDay key={di} day={d.day} route={d.route} byId={byId}
+                    open={mineDays.isOpen(di)} onToggle={() => mineDays.toggle(di)}
                     onOpen={(x) => { setOpenX(x); track('experience_detail_opened', { experience_id: x.id, surface: 'my_plan_route' }); }} />
                 ) : (
                   <div className="xplan-day" key={di} style={{ animationDelay: `${di * 70}ms` }}>

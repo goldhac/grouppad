@@ -1,0 +1,264 @@
+/* ============================================================================
+   GroupPad — SKINS  ·  LAYER 2.5 (sits between semantic tokens and components)
+   ----------------------------------------------------------------------------
+   A skin re-maps ONLY the brand identity:
+     · the accent family  (--accent*, --ring, --link, --official, --rank*)
+     · the decision signal (--star*, --gold-dot)  — the "lock / top choice" pop
+     · a surface tint       (light surfaces carry the skin's material; dark
+                             surfaces get a subtle hue nudge)
+   Everything else (budget greens/ambers, radii, type, motion, shadows) is
+   inherited from tokens.css untouched — so semantics stay legible everywhere.
+
+   COMPOSES WITH THEME. Toggle two attributes on <html> (or any ancestor):
+       data-theme = light | dark
+       data-skin  = classic | tropical | coastal | sunset
+   "Tropical in dark mode" = data-theme="dark" data-skin="tropical" — just works.
+   classic == the default tokens (no overrides needed).
+   ============================================================================ */
+
+/* ==========================================================================
+   CLASSIC — warm teal + gold  (default; explicit no-op so the picker can name it)
+   ========================================================================== */
+[data-skin="classic"] { /* inherits :root / [data-theme] as-is */ }
+
+/* ==========================================================================
+   TROPICAL — turquoise + coral + sand
+   ========================================================================== */
+[data-skin="tropical"] {
+  --skin-accent: #0E7C75; --skin-decision: #EE6A45;
+  --surface:         #F4ECD8;
+  --surface-raised:  #FFFDF6;
+  --surface-sunken:  #ECE0C6;
+  --surface-inset:   #FBF3E2;
+  --surface-overlay: rgba(255, 253, 246, 0.86);
+  --border:        #E6D9BD;
+  --border-strong: #D7C6A2;
+
+  --accent: #0E7C75; --accent-hover: #0A6B65; --accent-active: #094F4B;
+  --accent-fg: #FFFDF6; --accent-text: #0C6A64;
+  --accent-tint: #E4F5F3; --accent-tint-2: #C6EAE6; --accent-tint-border: #BCE5E0;
+  --ring: rgba(14,124,117,0.34); --link: #0C6A64;
+  --official: #0E7C75; --official-fg: #FFFDF6;
+  --rank: #0E7C75; --rank-fg: #FFFDF6; --rank-soft-bg: #C6EAE6; --rank-soft-fg: #0A4D49;
+
+  --star: #E0552E; --star-strong: #B8421F; --star-bg: #FBE6DE; --star-border: #F3B6A2;
+  --gold-dot: #EE6A45;
+}
+[data-theme="dark"][data-skin="tropical"] {
+  --surface:         #13201D;
+  --surface-raised:  #1A2A26;
+  --surface-sunken:  #0D1817;
+  --surface-inset:   #16241F;
+  --surface-overlay: rgba(19, 32, 29, 0.82);
+  --border:        #2A3C36; --border-strong: #3A4E46;
+
+  --accent: #16A096; --accent-hover: #1FB3AA; --accent-active: #12807A;
+  --accent-fg: #06201D; --accent-text: #6FD6CC;
+  --accent-tint: #103230; --accent-tint-2: #16403C; --accent-tint-border: #235550;
+  --ring: rgba(111,214,204,0.45); --link: #6FD6CC;
+  --official: #16A096; --official-fg: #06201D;
+  --rank: #16A096; --rank-fg: #06201D; --rank-soft-bg: #16403C; --rank-soft-fg: #8BDBD5;
+
+  --star: #F2876B; --star-strong: #F4A48E; --star-bg: #3A2018; --star-border: #5E3325;
+  --gold-dot: #F2876B;
+}
+
+/* ==========================================================================
+   COASTAL — slate-blue + steel + chrome  (cool; brass decision pop)
+   ========================================================================== */
+[data-skin="coastal"] {
+  --skin-accent: #3A5A7D; --skin-decision: #C9A24E;
+  --surface:         #ECEFF3;
+  --surface-raised:  #FCFDFE;
+  --surface-sunken:  #E1E7EE;
+  --surface-inset:   #F4F6F9;
+  --surface-overlay: rgba(252, 253, 254, 0.86);
+  --scrim:           rgba(22, 32, 44, 0.42);
+  --border:        #D7DDE7; --border-strong: #C3CBD8;
+  --photo-border:  rgba(30, 42, 56, 0.07);
+
+  --text: #1E2A38; --text-2: #46566B; --text-muted: #7C8798;
+
+  --accent: #3A5A7D; --accent-hover: #2F4A68; --accent-active: #243B54;
+  --accent-fg: #FCFDFE; --accent-text: #3A5A7D;
+  --accent-tint: #EAF0F6; --accent-tint-2: #D5E1EE; --accent-tint-border: #CBD9E8;
+  --ring: rgba(58,90,125,0.34); --link: #3A5A7D;
+  --official: #3A5A7D; --official-fg: #FCFDFE;
+  --rank: #3A5A7D; --rank-fg: #FCFDFE; --rank-soft-bg: #D5E1EE; --rank-soft-fg: #243B54;
+
+  --star: #B98E3C; --star-strong: #8F6B27; --star-bg: #F3ECDC; --star-border: #E0CDA0;
+  --gold-dot: #C9A24E;
+}
+[data-theme="dark"][data-skin="coastal"] {
+  --surface:         #161C24;
+  --surface-raised:  #1E2630;
+  --surface-sunken:  #10151B;
+  --surface-inset:   #1A222B;
+  --surface-overlay: rgba(22, 30, 40, 0.82);
+  --scrim:           rgba(6, 10, 16, 0.66);
+  --border:        #2C3744; --border-strong: #3C4856;
+  --photo-border:  rgba(255, 255, 255, 0.10);
+
+  --text: #E6ECF3; --text-2: #B4C0CE; --text-muted: #8593A2;
+
+  --accent: #5E84AD; --accent-hover: #6F93BB; --accent-active: #4E6E92;
+  --accent-fg: #0C141D; --accent-text: #A6C2DF;
+  --accent-tint: #16202C; --accent-tint-2: #1C2A3A; --accent-tint-border: #2A3D52;
+  --ring: rgba(166,194,223,0.45); --link: #A6C2DF;
+  --official: #5E84AD; --official-fg: #0C141D;
+  --rank: #5E84AD; --rank-fg: #0C141D; --rank-soft-bg: #1C2A3A; --rank-soft-fg: #AFC4DC;
+
+  --star: #D7B86A; --star-strong: #E6CE92; --star-bg: #2A2515; --star-border: #463D20;
+  --gold-dot: #D7B86A;
+}
+
+/* ==========================================================================
+   SUNSET — terracotta + amber + dusk
+   ========================================================================== */
+[data-skin="sunset"] {
+  --skin-accent: #C0512F; --skin-decision: #E1A33C;
+  --surface:         #F6EAE4;
+  --surface-raised:  #FFFAF6;
+  --surface-sunken:  #EFDCD2;
+  --surface-inset:   #FBF0EA;
+  --surface-overlay: rgba(255, 250, 246, 0.86);
+  --scrim:           rgba(44, 26, 22, 0.42);
+  --border:        #E8D6CC; --border-strong: #DAC2B5;
+  --photo-border:  rgba(46, 36, 34, 0.07);
+
+  --text: #2E2422; --text-2: #5C4A45; --text-muted: #8A736C;
+
+  --accent: #C0512F; --accent-hover: #A8431F; --accent-active: #8A3318;
+  --accent-fg: #FFF6F1; --accent-text: #B0431F;
+  --accent-tint: #FBE9E0; --accent-tint-2: #F6D3C4; --accent-tint-border: #F2C9B7;
+  --ring: rgba(192,81,47,0.32); --link: #B0431F;
+  --official: #C0512F; --official-fg: #FFF6F1;
+  --rank: #C0512F; --rank-fg: #FFF6F1; --rank-soft-bg: #F6D3C4; --rank-soft-fg: #8A3318;
+
+  --star: #CE8E2C; --star-strong: #9A6717; --star-bg: #F9EDD0; --star-border: #ECD296;
+  --gold-dot: #E1A33C;
+}
+[data-theme="dark"][data-skin="sunset"] {
+  --surface:         #1F1820;
+  --surface-raised:  #281E29;
+  --surface-sunken:  #150F16;
+  --surface-inset:   #241B25;
+  --surface-overlay: rgba(31, 24, 32, 0.82);
+  --scrim:           rgba(12, 8, 13, 0.66);
+  --border:        #3A2E3C; --border-strong: #4C3D4E;
+  --photo-border:  rgba(255, 255, 255, 0.09);
+
+  --text: #F0E6E4; --text-2: #C8B6B6; --text-muted: #9C8888;
+
+  --accent: #D9663E; --accent-hover: #E67A53; --accent-active: #B8512C;
+  --accent-fg: #1A0F0B; --accent-text: #F0A488;
+  --accent-tint: #2E1B16; --accent-tint-2: #3A231C; --accent-tint-border: #4E2F25;
+  --ring: rgba(240,164,136,0.4); --link: #F0A488;
+  --official: #D9663E; --official-fg: #1A0F0B;
+  --rank: #D9663E; --rank-fg: #1A0F0B; --rank-soft-bg: #3A231C; --rank-soft-fg: #F0A488;
+
+  --star: #E6BC54; --star-strong: #F0D08A; --star-bg: #2E2516; --star-border: #4C3E22;
+  --gold-dot: #E6BC54;
+}
+
+/* ==========================================================================
+   PINK GIRL SUMMER — rosé fuchsia + marigold + blush
+   ========================================================================== */
+[data-skin="pinksummer"] {
+  --skin-accent: #C0397E; --skin-decision: #ECB446;
+  --surface:         #FBEAF1;
+  --surface-raised:  #FFFAFC;
+  --surface-sunken:  #F4DCE8;
+  --surface-inset:   #FDF1F6;
+  --surface-overlay: rgba(255, 250, 252, 0.86);
+  --scrim:           rgba(46, 22, 36, 0.42);
+  --border:        #F0D6E2; --border-strong: #E6BFD3;
+  --photo-border:  rgba(46, 22, 36, 0.07);
+
+  --text: #2E1A26; --text-2: #5C3F4E; --text-muted: #8E7080;
+
+  --accent: #C0397E; --accent-hover: #A82E6E; --accent-active: #8C2459;
+  --accent-fg: #FFF7FB; --accent-text: #B23476;
+  --accent-tint: #FBE3F0; --accent-tint-2: #F6CFE3; --accent-tint-border: #F2C4DC;
+  --ring: rgba(192,57,126,0.32); --link: #B23476;
+  --official: #C0397E; --official-fg: #FFF7FB;
+  --rank: #C0397E; --rank-fg: #FFF7FB; --rank-soft-bg: #F6CFE3; --rank-soft-fg: #8C2459;
+
+  --star: #D2902A; --star-strong: #A66A18; --star-bg: #FBEFD5; --star-border: #EDD49C;
+  --gold-dot: #ECB446;
+}
+[data-theme="dark"][data-skin="pinksummer"] {
+  --surface:         #1E1620;
+  --surface-raised:  #281D28;
+  --surface-sunken:  #150E16;
+  --surface-inset:   #241A25;
+  --surface-overlay: rgba(30, 22, 32, 0.82);
+  --scrim:           rgba(12, 6, 11, 0.66);
+  --border:        #3A2C3A; --border-strong: #4C3B4C;
+  --photo-border:  rgba(255, 255, 255, 0.09);
+
+  --text: #F2E6EC; --text-2: #CCB4C2; --text-muted: #9E8492;
+
+  --accent: #E368A6; --accent-hover: #EE7FB6; --accent-active: #C0397E;
+  --accent-fg: #1F0B16; --accent-text: #F4A8CE;
+  --accent-tint: #2E1422; --accent-tint-2: #3A1A2C; --accent-tint-border: #4E2740;
+  --ring: rgba(244,168,206,0.4); --link: #F4A8CE;
+  --official: #E368A6; --official-fg: #1F0B16;
+  --rank: #E368A6; --rank-fg: #1F0B16; --rank-soft-bg: #3A1A2C; --rank-soft-fg: #F4A8CE;
+
+  --star: #ECC265; --star-strong: #F2D592; --star-bg: #2E2614; --star-border: #4C3F20;
+  --gold-dot: #ECC265;
+}
+
+/* ==========================================================================
+   FOREST — deep pine + copper on oat
+   ========================================================================== */
+[data-skin="forest"] {
+  --skin-accent: #2F5D3A; --skin-decision: #B9722E;
+  --surface:         #EEF1E6;
+  --surface-raised:  #FBFCF6;
+  --surface-sunken:  #E2E7D6;
+  --surface-inset:   #F5F8EE;
+  --surface-overlay: rgba(251, 252, 246, 0.86);
+  --scrim:           rgba(20, 30, 22, 0.42);
+  --border:        #DCE2CE; --border-strong: #C6CFB4;
+  --photo-border:  rgba(22, 33, 24, 0.07);
+
+  --text: #1B2A1E; --text-2: #45513F; --text-muted: #78826E;
+
+  --accent: #2F5D3A; --accent-hover: #274E30; --accent-active: #1E3D26;
+  --accent-fg: #F7FAF1; --accent-text: #2C5636;
+  --accent-tint: #E8F1E5; --accent-tint-2: #D2E4CE; --accent-tint-border: #C8DEC3;
+  --ring: rgba(47,93,58,0.32); --link: #2C5636;
+  --official: #2F5D3A; --official-fg: #F7FAF1;
+  --rank: #2F5D3A; --rank-fg: #F7FAF1; --rank-soft-bg: #D2E4CE; --rank-soft-fg: #1E3D26;
+
+  --star: #A9651F; --star-strong: #834B12; --star-bg: #F6E9D8; --star-border: #E4C49C;
+  --gold-dot: #B9722E;
+}
+[data-theme="dark"][data-skin="forest"] {
+  --surface:         #151C16;
+  --surface-raised:  #1D261E;
+  --surface-sunken:  #101610;
+  --surface-inset:   #1A231B;
+  --surface-overlay: rgba(21, 28, 22, 0.82);
+  --scrim:           rgba(6, 11, 7, 0.66);
+  --border:        #2B372C; --border-strong: #3B493C;
+  --photo-border:  rgba(255, 255, 255, 0.09);
+
+  --text: #E8EFE4; --text-2: #B6C2B2; --text-muted: #869185;
+
+  --accent: #4E8C5A; --accent-hover: #5C9E68; --accent-active: #3E7449;
+  --accent-fg: #0C140D; --accent-text: #8FCB99;
+  --accent-tint: #16281A; --accent-tint-2: #1C3421; --accent-tint-border: #2A4830;
+  --ring: rgba(143,203,153,0.42); --link: #8FCB99;
+  --official: #4E8C5A; --official-fg: #0C140D;
+  --rank: #4E8C5A; --rank-fg: #0C140D; --rank-soft-bg: #1C3421; --rank-soft-fg: #8FCB99;
+
+  --star: #D79A55; --star-strong: #E6B87F; --star-bg: #2C2317; --star-border: #4A3A22;
+  --gold-dot: #D79A55;
+}
+
+/* Smooth the cross-fade when skin/theme flips */
+[data-skin] body,
+body { transition: background var(--dur-slow) var(--ease-standard), color var(--dur-slow) var(--ease-standard); }

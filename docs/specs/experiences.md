@@ -733,3 +733,34 @@ isolated plan can never be served from the itinerary-aware cache or vice versa.
 
 **Deep-linking**: the board now honours `?tab=todo`, so an email or shared link
 can land on the things to do instead of the homes grid.
+
+---
+
+## 4l. Days collapse (Plan-screens handoff, screen 2 — SHIPPED 2026-08-13)
+
+The routed day was right and too long. Every day carried **one** real activity
+inside eight rows of identical scaffolding — leave the house → drive → detour →
+activity → empty-evening notice → drive → home — so four days ran ~2,000px to
+convey four things, and nothing collapsed.
+
+* **A closed day is one 64px row**: gold weekday, date, thumbnail, the first
+  activity ("+1 more"), then time-out / driving / per-person right-aligned.
+  Measured on the real board: **3 days in 192px**, expandable in place.
+* **House bookends absorb their adjoining drive.** "Leave the house **9:30a** ·
+  ~45 min drive · 26.3 mi — a long haul" is one muted line instead of an anchor
+  row plus a leg row. Four fewer rows per day.
+* **Detours and gaps became inline notes**, not boxes. The old "ON THE WAY /
+  right on the way / optional" triple said one thing three times.
+* **Compact / Full** drives every day at once, per surface (the studio, Scout's
+  panel and My plan each keep their own state).
+
+`.figs` carries an explicit `grid-column: 4` — without it, hiding `.gist` on
+open reflows the figures into track 3 and the price jumps across the row. The
+≤860px override stacks it deliberately.
+
+Handoff preserved at `docs/specs/handoffs/plan-screens/`.
+
+**Not yet ported from that handoff:** the premium share page (editorial hero,
+ledger band, chapter numerals, real print CSS), the icon registry (`GP_ICONS` /
+`GP_TRAVEL` — our share page still uses 🚗/🚶 emoji, which that spec bans), and
+panel-level collapse with digests.
