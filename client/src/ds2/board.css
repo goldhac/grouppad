@@ -917,3 +917,32 @@ body { background: var(--surface); }
 .pl-density { display: inline-flex; gap: 3px; background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: var(--r-pill); padding: 3px; }
 .pl-density button { border: 0; background: transparent; color: var(--text-2); font-family: var(--font-sans); font-weight: 700; font-size: 11.5px; padding: 6px 12px; border-radius: var(--r-pill); cursor: pointer; }
 .pl-density button.on { background: var(--accent); color: var(--accent-fg); }
+
+/* ── Studio modal: navigable without scrolling ──────────────────────────────
+   A four-day plan in a dialog means hunting. The pill strip jumps straight to
+   a day and Expand/Collapse all works the whole set. (Plan-screens handoff,
+   "The modal".) */
+.pl-pills { display: flex; gap: 6px; overflow-x: auto; padding: 10px 20px; border-bottom: 1px solid var(--border); flex: none; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.pl-pills::-webkit-scrollbar { display: none; }
+.pl-pill { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 12px; border-radius: 9px; cursor: pointer; flex: none; background: var(--surface-inset); border: 1px solid var(--border); color: var(--text); }
+.pl-pill .wd { font-size: 9.5px; font-weight: 700; letter-spacing: 0.11em; text-transform: uppercase; color: var(--text-muted); }
+.pl-pill .dn { font-size: 12.5px; font-weight: 700; }
+.pl-pill.on { background: var(--accent); border-color: transparent; color: var(--accent-fg); }
+.pl-pill.on .wd { color: color-mix(in srgb, var(--accent-fg) 78%, transparent); }
+.pl-pill .n { font-size: 9.5px; font-weight: 600; color: var(--text-muted); }
+.pl-pill.on .n { color: color-mix(in srgb, var(--accent-fg) 70%, transparent); }
+
+/* The header was carrying dead space above a scrolling body. */
+.xstudio-h { padding: 15px 20px 13px; }
+.xstudio-h .t { font-size: 17px; }
+
+/* Under 560px a centred dialog fights the keyboard and the thumb — it becomes
+   a bottom sheet, and the footer buttons go full width. */
+@media (max-width: 560px) {
+  .dx-modalwrap:has(.xstudio) { align-items: flex-end; padding: 0; }
+  .dx-modal:has(.xstudio) { max-width: none; border-radius: var(--r-xl) var(--r-xl) 0 0; }
+  .xstudio { max-height: 92dvh; }
+  .xstudio-f { flex-wrap: wrap; }
+  .xstudio-f .btn, .xstudio-f .xlife { width: 100%; justify-content: center; }
+  .xstudio-f .sp { display: none; }
+}

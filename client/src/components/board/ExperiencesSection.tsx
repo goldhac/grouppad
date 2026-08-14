@@ -423,7 +423,7 @@ export function expPlanToItinerary(plan: ExpPlan, byId: Map<string, Experience>,
  * with a "~" — we have no routing provider, and a fabricated-precise "14 min"
  * would be worse than an honest approximation.
  */
-function RoutedDay({ day, route, byId, onOpen, open, onToggle }: { day: string | null; route: DayRoute; byId: Map<string, Experience>; onOpen: (x: Experience) => void; open: boolean; onToggle: () => void }) {
+function RoutedDay({ day, route, byId, onOpen, open, onToggle, domId }: { day: string | null; route: DayRoute; byId: Map<string, Experience>; onOpen: (x: Experience) => void; open: boolean; onToggle: () => void; domId?: string }) {
   const rows = route.rows;
   // House bookends absorb the drive next to them. "Leave the house 9:30a" and
   // the 45-minute haul that follows are one thought, not two rows, and pulling
@@ -446,7 +446,7 @@ function RoutedDay({ day, route, byId, onOpen, open, onToggle }: { day: string |
   const legWords = (r: Extract<RouteRow, { leg: 'drive' | 'walk' }>) => `${r.dur} ${r.leg} · ${r.mi}`;
 
   return (
-    <div className={cn('itin-day', 'pl', open && 'open')}>
+    <div className={cn('itin-day', 'pl', open && 'open')} id={domId}>
       <button className="pl-dayrow" onClick={onToggle} aria-expanded={open}>
         <Icon icon={ChevronRight} className="ico chev" />
         <span className="date">
@@ -592,14 +592,28 @@ function useDayCollapse(prefix: string) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [density, setDensity] = useState<'compact' | 'full'>('compact');
   const key = (i: number) => `${prefix}-${i}`;
+  const isOpen = (i: number) => density === 'full' || open.has(key(i));
   return {
     density,
-    isOpen: (i: number) => density === 'full' || open.has(key(i)),
+    isOpen,
+    openCount: (n: number) => Array.from({ length: n }, (_, i) => isOpen(i)).filter(Boolean).length,
     toggle: (i: number) => setOpen((s0) => {
       const n = new Set(s0);
       n.has(key(i)) ? n.delete(key(i)) : n.add(key(i));
       return n;
     }),
+    /** Jump to a day from the pill strip: open it and scroll it into view. */
+    jump: (i: number) => {
+      setDensity('compact');
+      setOpen(new Set([key(i)]));
+      requestAnimationFrame(() => {
+        document.getElementById(`${prefix}-day-${i}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      });
+    },
+    setAll: (n: number, on: boolean) => {
+      setDensity('compact');
+      setOpen(on ? new Set(Array.from({ length: n }, (_, i) => key(i))) : new Set());
+    },
     setDensity: (d: 'compact' | 'full') => { setDensity(d); if (d === 'compact') setOpen(new Set()); },
   };
 }
@@ -691,6 +705,25 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
                 <button className="iconbtn" onClick={onClose} aria-label="Close"><Icon icon={X} className="ico" /></button>
               </div>
 
+              {!generating && days.length > 1 && (
+                <div className="pl-pills">
+                  {days.map((d, i) => (
+                    <button key={i} className={cn('pl-pill', dc.isOpen(i) && 'on')} onClick={() => dc.jump(i)}>
+                      <span className="wd">{weekdayLong(d.day).slice(0, 3)}</span>
+                      <span className="dn">{dayLabel(d.day).replace(/^\w+,\s*\w+\s*/, '')}</span>
+                      <span className="n">{d.items.length} thing{d.items.length === 1 ? '' : 's'}</span>
+                    </button>
+                  ))}
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ marginLeft: 'auto', flex: 'none' }}
+                    onClick={() => dc.setAll(days.length, dc.openCount(days.length) < days.length)}
+                  >
+                    {dc.openCount(days.length) === days.length ? 'Collapse all' : 'Expand all'}
+                  </button>
+                </div>
+              )}
+
               <div className="xstudio-b">
                 {generating ? (
                   <div className="xgen">
@@ -705,7 +738,7 @@ function PlanStudio({ plan, generating, count, shareUrl, pdfUrl, byId, onOpen, o
                 ) : days.length ? (
                   days.map((d, i) => (
                     d.route && d.route.rows.length > 0
-                      ? <RoutedDay key={i} day={d.day} route={d.route} byId={byId} onOpen={onOpen} open={dc.isOpen(i)} onToggle={() => dc.toggle(i)} />
+                      ? <RoutedDay key={i} domId={`studio-day-${i}`} day={d.day} route={d.route} byId={byId} onOpen={onOpen} open={dc.isOpen(i)} onToggle={() => dc.toggle(i)} />
                       : (
                         <div className="xplan-day" key={i}>
                           <div className="xplan-dh">{dayLabel(d.day)}</div>
