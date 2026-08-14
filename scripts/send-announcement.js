@@ -28,8 +28,13 @@ const ARG = process.argv.slice(2);
 const has = (f) => ARG.includes(f);
 const val = (f) => { const i = ARG.indexOf(f); return i >= 0 ? ARG[i + 1] : null; };
 
-const SEND = has('--send') || !!val('--only');
+const SEND = has('--send') || !!val('--only') || !!val('--sample');
 const ONLY = val('--only');
+// --sample goes to ANY address, account or not, so you can proof it in a real
+// inbox before it touches the list. Its unsubscribe link carries no real token
+// (the endpoint answers "link expired"), because a sample must never hand out
+// a working opt-out key belonging to somebody else.
+const SAMPLE = val('--sample');
 const HTML_FILE = val('--html') || path.join(__dirname, '..', 'docs', 'emails', '07-early-access-scout.html');
 const SUBJECT = val('--subject') || 'You were here first — and Scout just learned to plan your day';
 const DATA_DIR = process.env.PIPELINE_DATA_DIR || path.join(__dirname, '..', 'data');
@@ -93,15 +98,21 @@ async function main() {
     process.exit(1);
   }
 
-  let list = recipients();
-  const skipped = list.filter((r) => r.skipped);
-  list = list.filter((r) => !r.skipped);
-  if (ONLY) list = list.filter((r) => r.email.toLowerCase() === ONLY.toLowerCase());
+  let list, skipped = [];
+  if (SAMPLE) {
+    list = [{ email: SAMPLE, name: 'sample', unsub: 'sample-not-a-real-token' }];
+  } else {
+    list = recipients();
+    skipped = list.filter((r) => r.skipped);
+    list = list.filter((r) => !r.skipped);
+    if (ONLY) list = list.filter((r) => r.email.toLowerCase() === ONLY.toLowerCase());
+  }
 
-  console.log(`\n${SEND ? (ONLY ? 'TEST SEND' : 'LIVE SEND') : 'DRY RUN'} — "${SUBJECT}"`);
+  console.log(`\n${SEND ? (SAMPLE ? 'SAMPLE' : ONLY ? 'TEST SEND' : 'LIVE SEND') : 'DRY RUN'} — "${SUBJECT}"`);
   console.log(`  from      : ${FROM}`);
   console.log(`  template  : ${path.relative(process.cwd(), HTML_FILE)}`);
   console.log(`  recipients: ${list.length}${skipped.length ? `  (${skipped.length} unsubscribed, skipped)` : ''}`);
+  if (SAMPLE) console.log('  note      : sample — the unsubscribe link is inert, and nobody on the list is touched');
   if (!KEY && SEND) { console.error('\nRESEND_API_KEY is not set — nothing sent.'); process.exit(1); }
   if (!list.length) { console.log('\nNobody to send to.'); return; }
 
@@ -119,8 +130,12 @@ async function main() {
     await new Promise((res) => setTimeout(res, GAP_MS));
   }
 
-  if (SEND) console.log(`\nsent ${ok}${failed ? `, ${failed} failed` : ''}`);
-  else console.log(`\nNothing was sent. Re-run with --only <your email> to test, then --send.`);
+  if (!SEND) {
+    console.log('\nNothing was sent. Re-run with --sample <your email> to proof it, then --send.');
+    return;
+  }
+  console.log(`\nsent ${ok}${failed ? `, ${failed} failed` : ''}`);
+  if (SAMPLE || ONLY) console.log('The list was NOT mailed. Run --send when you are happy with it.');
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
