@@ -946,3 +946,23 @@ body { background: var(--surface); }
   .xstudio-f .btn, .xstudio-f .xlife { width: 100%; justify-content: center; }
   .xstudio-f .sp { display: none; }
 }
+
+/* ── Panels collapse independently ──────────────────────────────────────────
+   Three panels always fully open made the Plan view taller than it needed to
+   be even after days collapsed. A closed panel shows a DIGEST rather than
+   nothing — a closed box that says nothing is worse than the open one.
+   (Plan-screens handoff, "the four moves" #4.) */
+.xp-h.pl-ph { cursor: pointer; }
+.xp-h .pchev { width: 16px; height: 16px; color: var(--text-muted); flex: none; align-self: center; transition: transform var(--dur-base) var(--ease-out); }
+.xp.open .xp-h .pchev { transform: rotate(90deg); }
+/* Header actions must not toggle the panel they sit in — the handoff calls this
+   out explicitly, and in React it is a stopPropagation on the actions wrapper. */
+.xp-acts { cursor: default; }
+
+.pl-digest { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.pl-digest .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--surface-inset); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 5px 11px; }
+.pl-digest .badge b { font-weight: 700; color: var(--text); }
+.pl-digest .thumbs { display: inline-flex; margin-left: auto; }
+.pl-digest .thumbs img, .pl-digest .thumbs .ph { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; margin-left: -6px; border: 1.5px solid var(--surface-raised); background: var(--surface-sunken); }
+.pl-digest .thumbs :first-child { margin-left: 0; }
+.xp.k-scout .pl-digest .badge { background: var(--surface-raised); border-color: var(--accent-tint-border); }

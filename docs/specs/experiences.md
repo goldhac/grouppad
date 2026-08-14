@@ -815,3 +815,28 @@ landed:
 
 Still desktop-only: the plan studio modal and the collapsible routed day. Mobile
 shows the flat plan list.
+
+---
+
+## 4o. Panels collapse independently (SHIPPED 2026-08-13)
+
+The last structural piece of the plan-screens handoff. Days collapsed, but the
+three panels were always fully open, so Plan was still taller than it needed to
+be.
+
+Each panel now collapses on its own, and a **closed panel shows a digest rather
+than nothing** — a closed box that says nothing is worse than the open one:
+
+* the group's answer → `4 in the running · 4 of 14 voted`
+* Scout's proposal → `2 days · 3 activities · $125 pp`
+* yours → `N days · N activities · N days left`
+
+…each with up to five stacked thumbnails. Measured: the group panel 393px → 149px,
+Scout 280px → 150px.
+
+**The trap the handoff calls out is real.** Its event-delegation note says
+explicit actions must be checked *before* the row/panel toggles they are nested
+inside, "otherwise a header button collapses its own panel". In React that is a
+`stopPropagation` on `.xp-acts` — without it, "Re-plan", "Compact/Full" and
+"Add to trip plan" would all close the panel they live in. Verified: clicking
+Re-plan leaves the panel open.

@@ -586,6 +586,25 @@ function RouteArt({ size = 132 }: { size?: number }) {
   );
 }
 
+/** What a collapsed panel says instead of nothing. */
+function PanelDigest({ facts, photos }: { facts: string[]; photos: (string | null | undefined)[] }) {
+  const shots = photos.filter(Boolean).slice(0, 5) as string[];
+  return (
+    <div className="pl-digest">
+      {facts.map((f, i) => {
+        // "4 days" / "$253 pp" — bold the figure, mute the unit.
+        const m = /^(\S+)\s+(.*)$/.exec(f);
+        return <span className="badge" key={i}>{m ? <><b>{m[1]}</b> {m[2]}</> : f}</span>;
+      })}
+      {shots.length > 0 && (
+        <span className="thumbs">
+          {shots.map((src, i) => <img key={i} src={src} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /** Per-surface day expansion. Compact by default — the whole point is that a
  *  four-day plan reads in one screen before you drill in. */
 function useDayCollapse(prefix: string) {
@@ -826,6 +845,10 @@ export function ExperiencesSection() {
   // of the birthday dinner is the obvious failure. Turn it off when the
   // itinerary is stale and you want a clean slate.
   const [isolated, setIsolated] = useState(false);
+  // Panels collapse independently. Open by default — Plan is a dedicated view
+  // now, so nothing is hidden until someone chooses to hide it.
+  const [panels, setPanels] = useState({ group: true, scout: true, mine: true });
+  const togglePanel = (k: 'group' | 'scout' | 'mine') => setPanels((p) => ({ ...p, [k]: !p[k] }));
   useEffect(() => {
     if (!tripId || !user) return;
     let dead = false;
@@ -1099,8 +1122,9 @@ export function ExperiencesSection() {
       <div className="xplan-view">
       {/* KIND 1 — the group's answer. Solid and authoritative: this is what the
           group decided, as opposed to what a machine proposed. */}
-      <div className="xp k-group">
-        <div className="xp-h">
+      <div className={cn('xp', 'k-group', panels.group && 'open')}>
+        <div className="xp-h pl-ph" onClick={() => togglePanel('group')}>
+          <Icon icon={ChevronRight} className="ico pchev" />
           <div className="mk"><Icon icon={Trophy} className="ico" /></div>
           <div className="hh">
             <span className="xp-kind"><Icon icon={Users} className="ico" /> The group&rsquo;s answer</span>
@@ -1112,7 +1136,7 @@ export function ExperiencesSection() {
             </div>
           </div>
           {groupList.length > 0 && (
-            <span className="xp-acts">
+            <span className="xp-acts" onClick={(e) => e.stopPropagation()}>
               {itinerary.text?.trim() && (
                 <label className="xitin" title="Your trip itinerary is what the organizer posted. Scout works around it unless you turn this off.">
                   <input type="checkbox" checked={!isolated} onChange={(e) => setIsolated(!e.target.checked)} />
@@ -1131,7 +1155,15 @@ export function ExperiencesSection() {
           )}
         </div>
 
-        {groupList.length === 0 ? (
+        {!panels.group ? (
+          <PanelDigest
+            facts={[
+              `${groupList.length} in the running`,
+              `${voterCount} of ${split} voted`,
+            ]}
+            photos={groupList.slice(0, 5).map((x) => x.photo)}
+          />
+        ) : groupList.length === 0 ? (
           // N = 0 is a teaching state, not an empty box: the first vote is the
           // moment that decides whether voting feels alive or embarrassing, so
           // name what one vote actually does.
@@ -1183,11 +1215,11 @@ export function ExperiencesSection() {
 
         {/* The denominator, out loud. A bar nobody can size against a total is
             just a decoration. */}
-        <div className="xlb-quorum">
+        {panels.group && <div className="xlb-quorum">
           <Icon icon={Users} className="ico" />
           <span><b className="tnum">{voterCount}</b> of {split} have voted</span>
           <span className="track"><span className="fill" style={{ width: `${Math.min(100, (voterCount / Math.max(1, split)) * 100)}%` }} /></span>
-        </div>
+        </div>}
       </div>
 
       {/* Scout's day-by-day plan — attributed, and only saved to the trip plan
@@ -1196,8 +1228,9 @@ export function ExperiencesSection() {
           so a member can always tell a machine opinion from a group decision,
           and the button that writes to the shared itinerary stays owner-only. */}
       {plan && plan.days.length > 0 && (
-        <div className="xp k-scout">
-          <div className="xp-h">
+        <div className={cn('xp', 'k-scout', panels.scout && 'open')}>
+          <div className="xp-h pl-ph" onClick={() => togglePanel('scout')}>
+            <Icon icon={ChevronRight} className="ico pchev" />
             <div className="mk"><Icon icon={Sparkles} className="ico" /></div>
             <div className="hh">
               <span className="xp-kind"><Icon icon={Sparkles} className="ico" /> Scout · proposal</span>
@@ -1207,7 +1240,7 @@ export function ExperiencesSection() {
                 {planCost && planCost.counted > 0 && <> · ~<b className="tnum">${planCost.perPerson}</b>/person all in{planCost.missing > 0 && ` (+${planCost.missing} unpriced)`}</>}
               </div>
             </div>
-            <span className="xp-acts">
+            <span className="xp-acts" onClick={(e) => e.stopPropagation()}>
               {hasRoute && itinView === 'route' && (
                 <span className="pl-density">
                   <button className={cn(scoutDays.density === 'compact' && 'on')} onClick={() => scoutDays.setDensity('compact')}>Compact</button>
@@ -1228,7 +1261,16 @@ export function ExperiencesSection() {
             </span>
           </div>
 
-          {hasRoute && itinView === 'route' ? (
+          {!panels.scout ? (
+            <PanelDigest
+              facts={[
+                `${plan.days.length} ${plan.days.length === 1 ? 'day' : 'days'}`,
+                `${plan.days.reduce((n, d) => n + d.items.length, 0)} activities`,
+                ...(planCost && planCost.counted > 0 ? [`$${planCost.perPerson} pp`] : []),
+              ]}
+              photos={plan.days.flatMap((d) => d.items.map((it) => byId.get(it.id)?.photo))}
+            />
+          ) : hasRoute && itinView === 'route' ? (
             <div className="xplan">
               {plan.days.map((d, i) => (
                 d.route
@@ -1272,8 +1314,9 @@ export function ExperiencesSection() {
           like it speaks for the group. This panel is also what turns pick mode
           on, which is why selecting for Scout could leave the photo. */}
       {user && (saved.size > 0 || picked.size > 0 || myPlan) && (
-        <div className="xp k-mine">
-          <div className="xp-h">
+        <div className={cn('xp', 'k-mine', panels.mine && 'open')}>
+          <div className="xp-h pl-ph" onClick={() => togglePanel('mine')}>
+            <Icon icon={ChevronRight} className="ico pchev" />
             <div className="mk"><Icon icon={Bookmark} className="ico" /></div>
             <div className="hh">
               <span className="xp-kind"><Icon icon={Lock} className="ico" /> Private to you</span>
@@ -1293,7 +1336,7 @@ export function ExperiencesSection() {
                 )}
               </div>
             </div>
-            <div className="xp-acts">
+            <div className="xp-acts" onClick={(e) => e.stopPropagation()}>
               {/* Picking happens against the items, so this jumps to them. */}
               <button
                 className="btn btn-ghost btn-sm"
@@ -1321,7 +1364,16 @@ export function ExperiencesSection() {
               )}
             </div>
           </div>
-          {myPlan && myPlan.days.length > 0 && (
+          {!panels.mine ? (
+            <PanelDigest
+              facts={[
+                ...(myPlan ? [`${myPlan.days.length} ${myPlan.days.length === 1 ? 'day' : 'days'}`, `${myPlan.days.reduce((n, d) => n + d.items.length, 0)} activities`] : [`${saved.size} saved`]),
+                ...(myPlanDaysLeft != null ? [`${myPlanDaysLeft} days left`] : []),
+              ]}
+              photos={myPlan ? myPlan.days.flatMap((d) => d.items.map((it) => byId.get(it.id)?.photo)) : [...saved].map((id) => byId.get(id)?.photo)}
+            />
+          ) : null}
+          {panels.mine && myPlan && myPlan.days.length > 0 && (
             <div className="xplan">
               {/* Your plan is the one you actually walk, so it gets the routed
                   day too — same rendering as the group's, from the same server
