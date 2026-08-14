@@ -792,3 +792,26 @@ Print caught two defects worth remembering: `.byline b` and `.sp-note b`
 inherited the dark-theme ink and vanished on white. **Every bold run in the body
 needs an explicit print colour** — inheriting is what makes text disappear on
 paper.
+
+---
+
+## 4n. Mobile catches up (SHIPPED 2026-08-13)
+
+The Phase-1 handoff scoped mobile out, so it had drifted a long way behind. What
+landed:
+
+* **The same leaderboard bug was still live on mobile** — support measured
+  against the current leader, so the first vote filled the row. Now `net ÷ party`
+  with the quorum line. Verified: 3/14, 2/14, 1/14 render as visibly short bars.
+* **The card**: one photo overlay (Save) instead of two near-identical circles,
+  one urgency ribbon, the `N of 14 would go` denominator, a pinned-day chip.
+  Selecting for Scout became a mode, as on desktop.
+* **Browse | Plan** as a segmented control — the native pattern on both
+  platforms, so it ported unchanged.
+* **A selection bar** that clears the bottom nav (`--gp-tabbar` + safe-area).
+* **`?tab=` deep-linking**, which mobile did not honour at all. Without it the
+  announcement email dropped phone readers on Homes — the one surface the email
+  is not about.
+
+Still desktop-only: the plan studio modal and the collapsible routed day. Mobile
+shows the flat plan list.

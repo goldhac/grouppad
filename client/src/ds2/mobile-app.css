@@ -1454,3 +1454,29 @@ html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidd
 /* detail-sheet section labels (amenities / reviews) */
 .gp-mobile .d-seclabel { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 9px; }
 .gp-mobile .d-seclabel .ico { width: 13px; height: 13px; color: var(--accent-text); }
+
+/* ── To-do parity with the desktop tab ──────────────────────────────────────
+   Mobile carried the old card: two near-identical photo overlays, no urgency
+   badge, no denominator — and a leaderboard measured against the current
+   leader, so the first vote filled the row. */
+.gp-mobile .mcard .xrib { position: absolute; left: 10px; top: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: var(--r-pill); backdrop-filter: blur(6px); white-space: nowrap; }
+.gp-mobile .mcard .xrib .ico { width: 12px; height: 12px; }
+.gp-mobile .mcard .xrib.save { background: var(--under-bg); color: var(--under); border: 1px solid var(--under-border); }
+.gp-mobile .mcard .xrib.group { background: var(--surface-overlay); color: var(--text-2); border: 1px solid var(--photo-border); }
+
+/* Selection is a mode, so it can be unmistakable instead of a second circle. */
+.gp-mobile .mcard .pickbox { position: absolute; left: 10px; bottom: 10px; z-index: 3; width: 28px; height: 28px; border-radius: var(--r-xs); border: 2px solid var(--surface-raised); background: var(--surface-overlay); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; color: transparent; }
+.gp-mobile .mcard .pickbox .ico { width: 16px; height: 16px; stroke-width: 3; }
+.gp-mobile .mcard.picked .pickbox { background: var(--accent); border-color: var(--surface-raised); color: var(--accent-fg); }
+.gp-mobile .mcard.pickmode.picked { outline: 2px solid var(--accent); outline-offset: -2px; }
+.gp-mobile .mcard.pickmode .save { opacity: 0.4; }
+
+.gp-mobile .mcard .xsupport { font-size: 12px; font-weight: 600; color: var(--up); }
+.gp-mobile .mcard .xsupport span { color: var(--text-muted); font-weight: 500; }
+.gp-mobile .mcard .xpin { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; color: var(--accent-text); background: var(--accent-tint); border: 1px solid var(--accent-tint-border); padding: 3px 8px; border-radius: var(--r-pill); }
+.gp-mobile .mcard .xpin .ico { width: 11px; height: 11px; }
+
+.gp-mobile .fchip.xpick.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+
+/* The selection bar clears the bottom nav rather than hiding under it. */
+.gp-mobile .xpickbar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--gp-tabbar, 64px) + 12px + env(safe-area-inset-bottom, 0px)); z-index: 40; width: auto; max-width: calc(100vw - 24px); }

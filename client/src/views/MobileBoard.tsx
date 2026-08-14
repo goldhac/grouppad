@@ -6,6 +6,7 @@ import {
   BadgeCheck, MessageSquare, Plus, Sparkles, Swords, Users,
   HelpCircle, Minus, TrendingUp, Send, Lock, X, Info, Scale, UserPlus, RotateCw, Pencil,
   Compass, ThumbsUp, ThumbsDown, ExternalLink, MapPin, MoreHorizontal, Share2,
+  Tag, UsersRound, CalendarDays,
 } from 'lucide-react';
 import { useApp, isDeadListing } from '@/store/AppContext';
 import { api } from '@/lib/api';
@@ -25,7 +26,7 @@ import { fmt, fmtMins, netVotes, expAnchor, expDistanceMi } from '@/lib/utils';
 import { cn } from '@/lib/cn';
 import { expTally, ExpPrice, ExperienceModal, expGroupList, EXP_VIBES, expMatchesVibe } from '@/components/board/ExperiencesSection';
 import { track } from '@/lib/analytics';
-import type { Listing, Experience, ExpPlan } from '@/types';
+import type { Listing, Experience, ExpPlan, ExpDaysMap } from '@/types';
 
 type View = 'home' | 'shortlist' | 'decision' | 'chat' | 'saved' | 'todo';
 
@@ -51,13 +52,23 @@ export function MobileBoard() {
     toggleFavorite, toggleFinalPick, setDecision, openDetail, requireSignIn, postCaveat,
     approveCaveat, deleteCaveat, saveItinerary,
     submitListing, toast, selected, toggleSelect, clearSelection, startOnboarding,
-    experiences, expVotes, expPending, castExpVote, refreshExperiences,
+    experiences, expVotes, expPending, castExpVote, refreshExperiences, tripId,
   } = useApp();
   const compare = useCompare();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   useMobileShellLock();
   const [view, setView] = useState<View>('home');
+  // Honour ?tab= the same way the desktop board does. Without this the
+  // announcement email's deep link drops phone readers on Homes, which is the
+  // one surface the email isn't about.
+  const tabParam = searchParams.get('tab');
+  useEffect(() => {
+    const map: Record<string, View> = { todo: 'todo', shortlist: 'shortlist', saved: 'saved', decision: 'decision', discussion: 'chat', all: 'home' };
+    if (tabParam && map[tabParam]) setView(map[tabParam]);
+    // Arrival only — after that the tab bar owns it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabParam]);
   const isGuest = !!trip && !trip.isMember && !trip.isOwner;
   const joinThisTrip = () => {
     if (!user) { openAuth('join this trip'); return; }
@@ -87,6 +98,18 @@ export function MobileBoard() {
   const [myExpPlan, setMyExpPlan] = useState<ExpPlan | null>(null);
   const [expPlanning, setExpPlanning] = useState(false);
   const [expSavedOnly, setExpSavedOnly] = useState(false);
+  // Selecting for Scout is a mode, not a permanent second button on the photo.
+  const [expPickMode, setExpPickMode] = useState(false);
+  // Browse (scan and vote) vs Plan (commit to a sequence) — the same split the
+  // desktop tab got, as a segmented control because that is the native pattern.
+  const [expView, setExpView] = useState<'browse' | 'plan'>('browse');
+  const [expDayPins, setExpDayPins] = useState<ExpDaysMap>({});
+  useEffect(() => {
+    if (!tripId) return;
+    let dead = false;
+    api.expDays(tripId).then((m) => { if (!dead) setExpDayPins(m || {}); }).catch(() => {});
+    return () => { dead = true; };
+  }, [tripId, expOpen]); // re-read when the dialog closes — a pin may have changed
   useEffect(() => {
     if (!trip || !user) return;
     let dead = false;
@@ -419,7 +442,14 @@ export function MobileBoard() {
   //    select-for-Scout, my own plan, share + PDF. Sharing a plan into the group
   //    chat is a phone behaviour above all, so it must live here. ──────────────
   const expLeaders = expGroupList(experiences, expVotes, user?.id ?? null);
-  const expTopNet = Math.max(1, ...expLeaders.map((x) => expTally(expVotes, x.id, user?.id ?? null).net));
+  // Support is measured against the PARTY, never the current leader — measuring
+  // against the leader made the first vote fill the row 100%, which teaches
+  // people the number is fake. Same fix as the desktop tab.
+  const expVoterCount = useMemo(() => {
+    const who = new Set<string>();
+    for (const byUser of Object.values(expVotes)) for (const uid of Object.keys(byUser)) who.add(uid);
+    return who.size;
+  }, [expVotes]);
   const expById = new Map(experiences.map((x) => [x.id, x]));
   const toggleExpSave = async (id: string) => {
     if (!trip || !requireSignIn('save this')) return;
@@ -475,8 +505,18 @@ export function MobileBoard() {
         )}
       </div>
       <div className="sec-sub">near {trip?.destination} · vote for what you&rsquo;d actually do — booking happens on Airbnb</div>
+      <div className="xseg" role="tablist" aria-label="Things to do view" style={{ margin: '10px 0 0' }}>
+        <button role="tab" aria-selected={expView === 'browse'} className={cn(expView === 'browse' && 'on')} onClick={() => setExpView('browse')}>
+          <Icon icon={Compass} className="ico" /> Browse <span className="n tnum">{sortedExp.length}</span>
+        </button>
+        <button role="tab" aria-selected={expView === 'plan'} className={cn(expView === 'plan' && 'on')}
+          onClick={() => { setExpView('plan'); track('experiences_view', { view: 'plan', surface: 'mobile' }); }}>
+          <Icon icon={CalendarDays} className="ico" /> Plan
+          {expView !== 'plan' && myExpPlan?.days.length ? <span className="dot" /> : null}
+        </button>
+      </div>
       {/* Vibe chips (Phase 4) — horizontally scrollable, same fchips row idiom. */}
-      {expVibesAvail.length > 1 && (
+      {expView === 'browse' && expVibesAvail.length > 1 && (
         <div className="fchips" style={{ marginTop: 8 }}>
           <button className={cn('fchip', !expVibe && !expSavedOnly && 'on')} onClick={() => { setExpVibe(null); setExpSavedOnly(false); }}>All {experiences.length}</button>
           {user && expSaved.size > 0 && (
@@ -489,11 +529,17 @@ export function MobileBoard() {
               {v.label} {v.n}
             </button>
           ))}
+          {user && (
+            <button className={cn('fchip', 'xpick', expPickMode && 'on')}
+              onClick={() => { setExpPickMode((v) => !v); if (!expPickMode) track('experiences_pickmode_on', { surface: 'mobile' }); }}>
+              <Icon icon={Check} className="ico" /> {expPickMode ? 'Done picking' : 'Test out a plan'}
+            </button>
+          )}
         </div>
       )}
       {/* Live leaderboard: liked experiences ranked by net likes, reordering as
           votes land. Same beat as the desktop tab (and the homes top-choice board). */}
-      {expLeaders.length > 0 && (
+      {expView === 'plan' && expLeaders.length > 0 && (
         <div className="xlb" style={{ marginTop: 10 }}>
           <div className="xlb-head">
             <span className="xlb-title">Top of the list</span>
@@ -506,21 +552,26 @@ export function MobileBoard() {
                 <li key={x.id}>
                   <button
                     className={cn('xlb-row', i === 0 && 'lead')}
-                    style={{ ['--pct' as string]: `${Math.round((tl.net / expTopNet) * 100)}%` }}
+                    style={{ ['--pct' as string]: `${Math.max(0, Math.min(100, (tl.net / Math.max(1, split)) * 100)).toFixed(1)}%` }}
                     onClick={() => { setExpOpen(x); track('experience_detail_opened', { experience_id: x.id, surface: 'leaderboard_mobile' }); }}
                   >
                     <span className="xlb-rk">{i + 1}</span>
                     {x.photo ? <img className="xlb-thumb" src={x.photo} alt="" loading="lazy" /> : <span className="xlb-thumb" />}
                     <span className="xlb-main"><span className="xlb-name">{x.title}</span></span>
-                    <span className="xlb-likes">{tl.net}</span>
+                    <span className="xlb-likes tnum">{tl.net} <small>of {split}</small></span>
                   </button>
                 </li>
               );
             })}
           </ol>
+          <div className="xlb-quorum">
+            <Icon icon={Users} className="ico" />
+            <span><b className="tnum">{expVoterCount}</b> of {split} have voted</span>
+            <span className="track"><span className="fill" style={{ width: `${Math.min(100, (expVoterCount / Math.max(1, split)) * 100)}%` }} /></span>
+          </div>
         </div>
       )}
-      {user && (expSaved.size > 0 || expPicked.size > 0 || myExpPlan) && (
+      {expView === 'plan' && user && (expSaved.size > 0 || expPicked.size > 0 || myExpPlan) && (
         <div className="ai-card" style={{ marginTop: 10 }}>
           <div className="ah">
             <div className="sp"><Icon icon={Bookmark} className="ico" /></div>
@@ -572,7 +623,7 @@ export function MobileBoard() {
         </div>
       )}
 
-      {sortedExp.length ? (
+      {expView === 'browse' && (sortedExp.length ? (
         <div className="list" style={{ marginTop: 8 }}>
           {sortedExp.map((x) => {
             const tl = expTally(expVotes, x.id, user?.id ?? null);
@@ -580,24 +631,33 @@ export function MobileBoard() {
             return (
               <article
                 key={x.id}
-                className="mcard"
+                className={cn('mcard', expPickMode && 'pickmode', expPicked.has(x.id) && 'picked')}
                 role="button"
                 tabIndex={0}
-                onClick={() => { setExpOpen(x); track('experience_detail_opened', { experience_id: x.id, surface: 'mobile' }); }}
+                onClick={() => {
+                  if (expPickMode) { setExpPicked((s0) => { const n = new Set(s0); n.has(x.id) ? n.delete(x.id) : n.add(x.id); return n; }); return; }
+                  setExpOpen(x); track('experience_detail_opened', { experience_id: x.id, surface: 'mobile' });
+                }}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setExpOpen(x); track('experience_detail_opened', { experience_id: x.id, surface: 'mobile' }); } }}
               >
                 <div className="ph">
                   <MobilePhotoCarousel photos={x.photo ? [x.photo] : []} alt={x.title}>
-                    <button className={cn('save', expPicked.has(x.id) && 'on')} style={{ right: 52 }}
-                      onClick={(e) => { e.stopPropagation(); setExpPicked((s0) => { const n = new Set(s0); n.has(x.id) ? n.delete(x.id) : n.add(x.id); return n; }); }}
-                      aria-label={expPicked.has(x.id) ? 'Selected for Scout' : 'Select for Scout to plan'}>
-                      <Icon icon={Check} className="ico" />
-                    </button>
+                    {/* One urgency badge, never metadata — same budget as desktop. */}
+                    {x.originalPrice != null && x.price != null && x.originalPrice > x.price ? (
+                      <span className="xrib save"><Icon icon={Tag} className="ico" /> Save ${x.originalPrice - x.price}</span>
+                    ) : x.priceUnit === 'group' ? (
+                      <span className="xrib group"><Icon icon={UsersRound} className="ico" /> Group rate</span>
+                    ) : null}
+                    {/* Save is the only overlay. Selecting for Scout is a MODE — two
+                        near-identical circles was the desktop bug too. */}
                     <button className={cn('save', expSaved.has(x.id) && 'on')}
                       onClick={(e) => { e.stopPropagation(); void toggleExpSave(x.id); }}
                       aria-label={expSaved.has(x.id) ? 'Saved to your list' : 'Save to your list'}>
                       <Icon icon={Bookmark} className="ico" />
                     </button>
+                    {expPickMode && (
+                      <span className={cn('pickbox', expPicked.has(x.id) && 'on')} aria-hidden="true"><Icon icon={Check} className="ico" /></span>
+                    )}
                   </MobilePhotoCarousel>
                 </div>
                 <div className="info">
@@ -612,9 +672,16 @@ export function MobileBoard() {
                       mi != null ? `${mi} mi from ${expAnch!.label}` : null,
                     ].filter(Boolean).join(' · ') || 'Experience'}
                   </div>
+                  {expDayPins[x.id] && (
+                    <span className="xpin" style={{ marginTop: 6 }}>
+                      <Icon icon={CalendarDays} className="ico" /> Pinned
+                    </span>
+                  )}
                   <div className="pr">
                     <ExpPrice x={x} split={split} />
                   </div>
+                  {/* Name the denominator, so support can't read as consensus. */}
+                  {tl.net > 0 && <div className="xsupport tnum" style={{ marginTop: 4 }}>{tl.net} <span>of {split} would go</span></div>}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }} onClick={(e) => e.stopPropagation()}>
                     <button className={cn('btn btn-sm', tl.mine === 'up' ? 'btn-primary' : 'btn-ghost')} onClick={() => { void castExpVote(x.id, 'up'); track('experience_voted', { experience_id: x.id, dir: 'up' }); }} aria-label="Want to do this">
                       <Icon icon={ThumbsUp} className="ico" /> {tl.up}
@@ -641,6 +708,16 @@ export function MobileBoard() {
             <><h3>Nothing here yet</h3><p>We couldn&rsquo;t find things to do for this trip yet.</p>
               <button className="btn btn-primary" onClick={() => void refreshExperiences()}><Icon icon={RotateCw} className="ico" /> Look for things to do</button></>
           )}
+        </div>
+      ))}
+      {expPickMode && expView === 'browse' && (
+        <div className="xpickbar">
+          <span className="cnt tnum">{expPicked.size} <span>selected</span></span>
+          {expPicked.size > 0 && <button className="lnk" onClick={() => setExpPicked(new Set())}>Clear</button>}
+          <button className="btn btn-primary btn-sm" disabled={expPlanning || expPicked.size === 0}
+            onClick={async () => { await buildMyExpPlan(); setExpPickMode(false); setExpView('plan'); }}>
+            <Icon icon={Sparkles} className="ico" /> Generate plan
+          </button>
         </div>
       )}
       {expOpen && (
