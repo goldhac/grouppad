@@ -21,6 +21,8 @@ import { ItineraryCard } from '@/components/board/ItineraryCard';
 import { MobilePhotoCarousel } from '@/components/MobilePhotoCarousel';
 import { ExperienceStates, expListState } from '@/components/board/ExperienceStates';
 import { markScrolling, useDeliberateTap } from '@/lib/tap';
+import { useSheet } from '@/lib/useSheet';
+import { useFocusTrap } from '@/lib/useFocusTrap';
 import { type Filters, readFilters, writeFilters, DEFAULT_FILTERS } from '@/components/board/FilterBar';
 import { useMobileShellLock } from '@/lib/useIsMobile';
 import { Icon } from '@/components/ui/Icon';
@@ -117,6 +119,13 @@ export function MobileBoard() {
   const [expReview, setExpReview] = useState(false);
   const [expShareSheet, setExpShareSheet] = useState(false);
   const [expLinkBusy, setExpLinkBusy] = useState(false);
+  // Each overlay gets the three things `aria-modal` promises: focus stays in,
+  // Escape gets out, focus returns to the launcher. The two sheets also get the
+  // downward drag their grabber has been advertising.
+  const filterSheet = useSheet(expSheet, () => setExpSheet(false));
+  const shareSheet = useSheet(expShareSheet, () => setExpShareSheet(false));
+  const reviewRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(reviewRef, expReview, () => setExpReview(false));
   // Selecting for Scout is a mode, not a permanent second button on the photo.
   const [expPickMode, setExpPickMode] = useState(false);
   // Browse (scan and vote) vs Plan (commit to a sequence) — the same split the
@@ -706,6 +715,14 @@ export function MobileBoard() {
         </div>
       )}
 
+      {/* A screen-reader-only running commentary for the states that otherwise
+          only change visually. Kept out of the visual layout entirely. */}
+      <span className="sr-only" aria-live="polite">
+        {expPlanning ? 'Scout is planning your days.'
+          : expPending ? 'Looking for things to do.'
+          : expFailed ? 'Could not load things to do. Your votes are safe.'
+          : ''}
+      </span>
       {expView === 'browse' && (sortedExp.length ? (
         <div className="list" style={{ marginTop: 8 }}>
           {sortedExp.map((x) => {
@@ -771,7 +788,13 @@ export function MobileBoard() {
                     pick mode: you're choosing, not judging. */}
                 {!expPickMode && (
                   <div className="xm-vote" onClick={(e) => e.stopPropagation()}>
-                    <span className="xm-tally">
+                    {/* HIG patterns/feedback.md: feedback has to reach people
+                        "whether they silence their device, look away from the
+                        screen, or use VoiceOver". The number and the leaderboard
+                        order both move when you vote, and neither said so.
+                        `polite` rather than `assertive` — it's a confirmation,
+                        not an interruption. */}
+                    <span className="xm-tally" aria-live="polite" aria-atomic="true">
                       <span className={cn('n tnum', tl.net > 0 && 'pos')}>{tl.net > 0 ? `+${tl.net}` : tl.net}</span>
                       <span className="l">of {split} would go</span>
                     </span>
@@ -822,7 +845,7 @@ export function MobileBoard() {
       )}
       {expSheet && (
         <div className="xm-scrim" role="dialog" aria-modal="true" aria-label="Filter things to do" onClick={() => setExpSheet(false)}>
-          <div className="xm-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="xm-sheet" onClick={(e) => e.stopPropagation()} {...filterSheet.sheet}>
             <div className="xm-grab" aria-hidden="true" />
             <div className="xm-shead">
               <h3>Narrow it down</h3>
@@ -877,7 +900,7 @@ export function MobileBoard() {
           <div className="xm-sumrow"><span className="l">{l}</span><span className="v tnum">{v}</span></div>
         );
         return (
-          <div className="xm-full" role="dialog" aria-modal="true" aria-label="Build a plan">
+          <div className="xm-full" role="dialog" aria-modal="true" aria-label="Build a plan" ref={reviewRef} tabIndex={-1}>
             <div className="xm-fullhead">
               <button className="xm-back" onClick={() => setExpReview(false)} aria-label="Back"><Icon icon={ChevronLeft} className="ico" /></button>
               <h3>Build a plan</h3>
@@ -966,7 +989,7 @@ export function MobileBoard() {
         };
         return (
           <div className="xm-scrim" role="dialog" aria-modal="true" aria-label="Share your plan" onClick={() => setExpShareSheet(false)}>
-            <div className="xm-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="xm-sheet" onClick={(e) => e.stopPropagation()} {...shareSheet.sheet}>
               <div className="xm-grab" aria-hidden="true" />
               <div className="xm-shead"><h3>{off ? 'Link is off' : 'Share your plan'}</h3></div>
               <div className="xm-sbody">
@@ -1191,17 +1214,28 @@ export function MobileBoard() {
         </div>
 
         {cmpBar}
-        {/* Selecting for Scout REPLACES the nav rather than floating above it.
-            The five destinations all leave Browse, and leaving mid-selection
-            silently discards the picks — so while you're choosing, the only
-            things in the thumb zone are the count, Clear, and Generate. */}
-        <div className={cn('mb-nav', expSelecting && 'is-hidden')} aria-hidden={expSelecting}>
+        {/* HIG, tab-bars.md: "Use a tab bar to support navigation, not to provide
+            actions." Add used to sit in the centre slot with the loudest
+            treatment in the bar, so the one thing that wasn't a destination read
+            as the most important one. It's a floating action now — same reach,
+            same thumb position, no longer occupying a tab.
+
+            The bar also stays VISIBLE during selection. It used to be hidden,
+            on the reasoning that leaving Browse mid-selection would discard the
+            picks — but `expPicked` lives in this component and nothing resets it
+            on a view change, so that never happened. Hiding it cost the HIG's
+            "people can forget which area of the app they're in" for nothing. */}
+        {view === 'home' && !expSelecting && (
+          <button className="nav-fab" onClick={openAdd} aria-label="Add a listing">
+            <Icon icon={Plus} className="ico" />
+          </button>
+        )}
+        <div className="mb-nav">
           {navItem('home', Home, 'Homes')}
           {navItem('shortlist', Star, 'Shortlist', shortlist.length)}
-          <div className="nav-add" onClick={openAdd}><div className="fab"><Icon icon={Plus} className="ico" /></div><div className="lab">Add</div></div>
-          {/* "To do" is a primary destination now — it lives here rather than as
-              a squeezed icon in the top bar. Decision keeps its slot; Chat + the
-              rest moved to the More sheet so this row stays at five. */}
+          {/* "To do" is a primary destination — it lives here rather than as a
+              squeezed icon in the top bar. Chat + the rest are in the More
+              sheet, which is what the HIG prefers over a sixth overflow tab. */}
           {navItem('todo', Compass, 'To do')}
           {navItem('decision', BadgeCheck, 'Decision')}
         </div>
