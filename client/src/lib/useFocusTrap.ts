@@ -31,7 +31,11 @@ export function useFocusTrap(
     const launcher = document.activeElement as HTMLElement | null;
     // Move focus in, so the first Tab starts inside the dialog rather than
     // continuing through the page behind it.
-    if (root.tabIndex >= -1) root.focus({ preventScroll: true });
+    // Only when the caller opted in with an explicit tabIndex. `root.tabIndex`
+    // reads -1 for any plain div, so testing it tells you nothing — the four
+    // desktop modals pass an un-focusable scrim and must keep their existing
+    // behaviour, which is to leave focus where it was.
+    if (root.hasAttribute('tabindex')) root.focus({ preventScroll: true });
     const list = () => Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null);
 
     const onKey = (e: KeyboardEvent) => {
