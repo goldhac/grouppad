@@ -1889,5 +1889,5 @@ html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidd
    stays on screen instead of being pushed out by the stops above it. */
 .gp-mobile .ln-pair .media .d1-day { padding: 14px; gap: 6px; }
 .gp-mobile .ln-pair .media .d1-day .dh b { font-size: 0.875rem; }
-.gp-mobile .ln-pair .media .d1-day .stop { padding: 6px 8px; }
-.gp-mobile .ln-pair .media .d1-day .stop .n { font-size: 0.75rem; }
+.gp-mobile .ln-pair .media .d1-day .dstop { padding: 6px 8px; }
+.gp-mobile .ln-pair .media .d1-day .dstop .n { font-size: 0.75rem; }

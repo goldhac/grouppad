@@ -28,11 +28,11 @@ function RoutedDayMini() {
   return (
     <div className="d1-day" aria-hidden>
       <div className="dh"><b>Monday</b><span>Aug 18 · $170 pp</span></div>
-      <div className="leg"><Icon icon={Car} className="ico" /> Leave the house 9:30a · 35 min, 21.4 mi</div>
-      <div className="stop"><span className="t">10:05a</span><span className="n">Venice Beach skate lesson</span><span className="v">Voted in</span></div>
-      <div className="leg"><Icon icon={Car} className="ico" /> 20 min · 9.1 mi — back inland</div>
-      <div className="stop"><span className="t">11:55a</span><span className="n">Downtown taco crawl</span><span className="v">8 of 14</span></div>
-      <div className="gap"><b>Nothing after 4:10p.</b> Scout says so rather than filling it.</div>
+      <div className="dleg"><Icon icon={Car} className="ico" /> Leave the house 9:30a · 35 min, 21.4 mi</div>
+      <div className="dstop"><span className="t">10:05a</span><span className="n">Venice Beach skate lesson</span><span className="v">Voted in</span></div>
+      <div className="dleg"><Icon icon={Car} className="ico" /> 20 min · 9.1 mi — back inland</div>
+      <div className="dstop"><span className="t">11:55a</span><span className="n">Downtown taco crawl</span><span className="v">8 of 14</span></div>
+      <div className="dgap"><b>Nothing after 4:10p.</b> Scout says so rather than filling it.</div>
     </div>
   );
 }

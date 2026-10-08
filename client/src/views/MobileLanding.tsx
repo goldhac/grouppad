@@ -85,10 +85,10 @@ export function MobileLanding() {
                 {'day' in p && p.day ? (
                   <div className="d1-day" aria-hidden>
                     <div className="dh"><b>Monday</b><span>Aug 18 · $170 pp</span></div>
-                    <div className="leg"><Icon icon={Car} className="ico" /> Leave the house 9:30a · 35 min</div>
-                    <div className="stop"><span className="t">10:05a</span><span className="n">Venice skate lesson</span><span className="v">Voted in</span></div>
-                    <div className="stop"><span className="t">11:55a</span><span className="n">Taco crawl</span><span className="v">8 of 14</span></div>
-                    <div className="gap"><b>Nothing after 4:10p.</b> Named, not filled.</div>
+                    <div className="dleg"><Icon icon={Car} className="ico" /> Leave the house 9:30a · 35 min</div>
+                    <div className="dstop"><span className="t">10:05a</span><span className="n">Venice skate lesson</span><span className="v">Voted in</span></div>
+                    <div className="dstop"><span className="t">11:55a</span><span className="n">Taco crawl</span><span className="v">8 of 14</span></div>
+                    <div className="dgap"><b>Nothing after 4:10p.</b> Named, not filled.</div>
                   </div>
                 ) : <img src={IMG(p.img)} alt="" />}
                 {p.float && <div className="float"><div className="lbl">Per person</div><div className="v tnum">$359</div></div>}
