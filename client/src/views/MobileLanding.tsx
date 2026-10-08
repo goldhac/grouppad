@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Compass, Moon, Sun, LayoutGrid, ThumbsUp, Sparkles, Lock, Users, Swords, Clapperboard } from 'lucide-react';
+import { Plus, Compass, Car, Moon, Sun, LayoutGrid, ThumbsUp, Sparkles, Lock, Users, Swords, Clapperboard } from 'lucide-react';
 import { Icon } from '@/components/ui/Icon';
 import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { useApp } from '@/store/AppContext';
@@ -21,6 +21,8 @@ const PAIRS = [
   { tag: 'Per person', icon: Users, title: "See what you'd actually pay.", body: "Nobody wants to do the math at 1am. Every home shows the all-in total and your share of it, and both update the moment someone joins or drops out.", img: '1600566753086-00f18fb6b3ea', float: true },
   { tag: 'Meet Scout', icon: Swords, title: 'Torn between two? Ask Scout.', body: 'Put two homes side by side and Scout weighs the price, the drive, and what your group has planned, then makes the call and shows its reasoning.', img: '1600585152220-90363fe7e115', float: false },
   { tag: 'Walkthrough', icon: Clapperboard, title: 'Walk through a place before you commit.', body: "For each home, GroupPad pulls the best rooms into a short video tour, so the group gets a real feel for it before anyone spends a dollar on flights.", img: '1600047509807-ba8f99d2cdde', float: false },
+  // No photo on purpose: the thing worth showing is the ordered day itself.
+  { tag: 'Things to do', icon: Compass, title: "Then work out what you'll actually do.", body: 'Once the place is locked, the board fills with things to do near it — pulled in, never invented. Vote on those the same way, and Scout orders each day around the drives. When an evening has nothing in it, it says so instead of filling it.', img: '', float: false, day: true },
 ];
 
 export function MobileLanding() {
@@ -79,7 +81,18 @@ export function MobileLanding() {
 
           {PAIRS.map((p, i) => (
             <section className="ln-pair" key={i}>
-              <div className="media"><img src={IMG(p.img)} alt="" />{p.float && <div className="float"><div className="lbl">Per person</div><div className="v tnum">$359</div></div>}</div>
+              <div className="media">
+                {'day' in p && p.day ? (
+                  <div className="d1-day" aria-hidden>
+                    <div className="dh"><b>Monday</b><span>Aug 18 · $170 pp</span></div>
+                    <div className="leg"><Icon icon={Car} className="ico" /> Leave the house 9:30a · 35 min</div>
+                    <div className="stop"><span className="t">10:05a</span><span className="n">Venice skate lesson</span><span className="v">Voted in</span></div>
+                    <div className="stop"><span className="t">11:55a</span><span className="n">Taco crawl</span><span className="v">8 of 14</span></div>
+                    <div className="gap"><b>Nothing after 4:10p.</b> Named, not filled.</div>
+                  </div>
+                ) : <img src={IMG(p.img)} alt="" />}
+                {p.float && <div className="float"><div className="lbl">Per person</div><div className="v tnum">$359</div></div>}
+              </div>
               <span className="tag"><Icon icon={p.icon} className="ico" /> {p.tag}</span>
               <h3>{p.title}</h3>
               <p>{p.body}</p>

@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Plus, Compass, Sparkles, Users, Swords, Clapperboard, ArrowRight, LayoutGrid, ThumbsUp, Lock } from 'lucide-react';
+import { Plus, Compass, Car, Sparkles, Users, Swords, Clapperboard, ArrowRight, LayoutGrid, ThumbsUp, Lock } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { MobileLanding } from '@/views/MobileLanding';
@@ -20,6 +20,22 @@ const LOOP = [
   { icon: <Icon icon={Lock} className="ico" />, h: 'Lock it in', p: 'Everyone picks their favorite. Whoever set up the trip makes it official, and the back-and-forth is done.' },
   { icon: <Icon icon={Compass} className="ico" />, h: 'Then plan the days', p: 'Once the place is settled, the same board fills with things to do near it. Vote on those the same way, and Scout lays each day out in order — with the drives in between, and the gaps named rather than filled.' },
 ];
+
+/** The routed day, in miniature — the media for the Things-to-do slide.
+ *  Content mirrors what the feature actually produces: ordered stops, the
+ *  drives folded in as asides, and the evening gap named rather than filled. */
+function RoutedDayMini() {
+  return (
+    <div className="d1-day" aria-hidden>
+      <div className="dh"><b>Monday</b><span>Aug 18 · $170 pp</span></div>
+      <div className="leg"><Icon icon={Car} className="ico" /> Leave the house 9:30a · 35 min, 21.4 mi</div>
+      <div className="stop"><span className="t">10:05a</span><span className="n">Venice Beach skate lesson</span><span className="v">Voted in</span></div>
+      <div className="leg"><Icon icon={Car} className="ico" /> 20 min · 9.1 mi — back inland</div>
+      <div className="stop"><span className="t">11:55a</span><span className="n">Downtown taco crawl</span><span className="v">8 of 14</span></div>
+      <div className="gap"><b>Nothing after 4:10p.</b> Scout says so rather than filling it.</div>
+    </div>
+  );
+}
 
 export function LandingView() {
   const { user, openAuth, startOnboarding } = useApp();
@@ -146,6 +162,13 @@ export function LandingView() {
               <source src="/landing-tour.mp4" type="video/mp4" />
             </video>
           }
+        />
+        <FeaturePair
+          flip
+          tag="Things to do" tagIcon={Compass}
+          title="Then work out what you'll actually do."
+          body="Once the place is locked, the board fills with things to do near it — pulled in, never invented. The group votes on those the same way, and Scout orders each day around the drives, starting and ending at the house. When an evening has nothing in it, it says so instead of filling it."
+          media={<RoutedDayMini />}
         />
       </div>
 

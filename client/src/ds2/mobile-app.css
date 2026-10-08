@@ -1884,3 +1884,10 @@ html.gp-mobile-active, html.gp-mobile-active body { height: 100%; overflow: hidd
 .gp-mobile .nav-item { min-width: 0; }
 /* Nav labels shrink-to-fit rather than overflowing the bar when type is large. */
 .gp-mobile .nav-item .lab { overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+/* The routed-day miniature in a phone-width pair: tighter box, so the gap line
+   stays on screen instead of being pushed out by the stops above it. */
+.gp-mobile .ln-pair .media .d1-day { padding: 14px; gap: 6px; }
+.gp-mobile .ln-pair .media .d1-day .dh b { font-size: 0.875rem; }
+.gp-mobile .ln-pair .media .d1-day .stop { padding: 6px 8px; }
+.gp-mobile .ln-pair .media .d1-day .stop .n { font-size: 0.75rem; }
