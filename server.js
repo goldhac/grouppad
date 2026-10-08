@@ -4892,8 +4892,19 @@ app.get('/api/admin/trips', requireAdmin, (req, res) => {
 // Spawn the trip-scoped rental search (pipeline.js in TRIP_ID mode) for a newly
 // created trip. Writes a .searching marker immediately so the client's status
 // poll is accurate from t=0; pipeline.js clears it when the run finishes.
+// Detached pipeline children each drive their own Chromium, so they sit OUTSIDE
+// the in-process `_scrapeSem`. Several signups in the same minute would spawn a
+// browser each and OOM the single instance. A counter is enough — this is not a
+// job queue, and a refused search isn't lost: the board's Refresh re-runs it.
+let _tripSearches = 0;
+const MAX_TRIP_SEARCHES = Math.max(1, Number(process.env.MAX_CONCURRENT_TRIP_SEARCHES ?? 3));
+
 function spawnTripSearch(tripId, maxItems, notify = false) {
   if (tripId === LA_TRIP_ID) return false;
+  if (_tripSearches >= MAX_TRIP_SEARCHES) {
+    console.warn(`[trip-search] refused for ${tripId} — ${_tripSearches} already running`);
+    return false;
+  }
   // Decided or past → stop updating. (Airbnb discovery is self-hosted so no Apify
   // key is required; the actor is only a fallback.)
   const t = getTrip(tripId);
@@ -4906,8 +4917,18 @@ function spawnTripSearch(tripId, maxItems, notify = false) {
   const env = { ...process.env, TRIP_ID: tripId, APIFY_TOKEN: getApifyToken() };
   if (maxItems) env.TRIP_SEARCH_MAX = String(maxItems);
   const child = spawn('node', ['pipeline.js'], { cwd: __dirname, env, detached: true, stdio: 'ignore' });
-  // Notify members of fresh homes on a *refresh* (not the initial create search).
-  if (notify) child.on('exit', (code) => { if (code === 0) notifyFreshHomes(tripId); });
+  _tripSearches++;
+  // Release on BOTH paths. `exit` doesn't fire if the spawn itself fails (ENOENT,
+  // EAGAIN), and a counter that only ever goes up would refuse every search
+  // after the third — turning a transient failure into a permanent one.
+  let released = false;
+  const release = () => { if (!released) { released = true; _tripSearches = Math.max(0, _tripSearches - 1); } };
+  child.on('error', (e) => { release(); console.error(`[trip-search] spawn failed for ${tripId}:`, e.message); });
+  child.on('exit', (code) => {
+    release();
+    // Notify members of fresh homes on a *refresh* (not the initial create search).
+    if (notify && code === 0) notifyFreshHomes(tripId);
+  });
   child.unref();
   console.log(`[trip-search] spawned for ${tripId} (cap ${maxItems || 'default'})`);
   return true;
@@ -4943,11 +4964,18 @@ app.post('/api/trips', requireAuth, rateLimit({ windowMs: 3600000, max: 12 }), (
   // inform the reference points, and so AI compare has it from the start.
   const itinText = String(itinerary || '').slice(0, 8000).trim();
   if (itinText) saveItinerary({ text: itinText, updated_at: new Date().toISOString() }, trip.id);
-  // Kick off a capped rental search for the new trip — but only if Apify isn't
-  // near its limit (background; never blocks trip creation).
-  apifyGuard('a new trip search')
-    .then(ok => { if (ok) spawnTripSearch(trip.id, Number(process.env.TRIP_SEARCH_MAX) || 10); })
-    .catch(() => {});
+  // Kick off a capped rental search for the new trip (background; never blocks
+  // trip creation).
+  //
+  // Deliberately NOT gated on Apify credit any more. Airbnb discovery is
+  // self-hosted and free (pipeline.js `AIRBNB_DISCOVERY` defaults to
+  // 'selfhost'); only VRBO needs Apify, and pipeline.js already skips VRBO when
+  // there's no token. The old guard meant that once the Apify keys passed 85%,
+  // every new signup silently got an empty board — the free search that would
+  // have worked was never even attempted, and the failure was swallowed by a
+  // bare `.catch`. Losing VRBO on a dry month is a degraded result; losing the
+  // whole search is a broken first impression.
+  spawnTripSearch(trip.id, Number(process.env.TRIP_SEARCH_MAX) || 10);
   res.json(tripView(trip, req.user));
 });
 
