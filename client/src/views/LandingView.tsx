@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Plus, Sparkles, Users, Swords, Clapperboard, ArrowRight, LayoutGrid, ThumbsUp, Lock } from 'lucide-react';
+import { Plus, Compass, Sparkles, Users, Swords, Clapperboard, ArrowRight, LayoutGrid, ThumbsUp, Lock } from 'lucide-react';
 import { useApp } from '@/store/AppContext';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { MobileLanding } from '@/views/MobileLanding';
@@ -18,6 +18,7 @@ const LOOP = [
   { icon: <Icon icon={ThumbsUp} className="ico" />, h: 'Vote, and see what it really costs', p: 'Thumbs up the ones you like. Each home shows the all-in total and what that works out to per person, updated as people join.' },
   { icon: <ScoutMark className="ico" />, h: 'Ask Scout when you cannot decide', p: 'Put two homes head to head, or hand Scout the whole shortlist. It looks at price, distance, and your plans, then tells you which one it would book and why.' },
   { icon: <Icon icon={Lock} className="ico" />, h: 'Lock it in', p: 'Everyone picks their favorite. Whoever set up the trip makes it official, and the back-and-forth is done.' },
+  { icon: <Icon icon={Compass} className="ico" />, h: 'Then plan the days', p: 'Once the place is settled, the same board fills with things to do near it. Vote on those the same way, and Scout lays each day out in order — with the drives in between, and the gaps named rather than filled.' },
 ];
 
 export function LandingView() {
@@ -97,7 +98,7 @@ export function LandingView() {
         <div className="d1-demo-head">
           <div className="l">
             <div className="d1-chapno">01 · HOW IT WORKS</div>
-            <h2 className="d1-h2 rv">Four steps from "no idea" to booked.</h2>
+            <h2 className="d1-h2 rv">From "no idea" to a planned trip.</h2>
           </div>
           <span className="try rv"><Icon icon={Sparkles} className="ico" /> Live demo · click around</span>
         </div>

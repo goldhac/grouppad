@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Moon, Sun, LayoutGrid, ThumbsUp, Sparkles, Lock, Users, Swords, Clapperboard } from 'lucide-react';
+import { Plus, Compass, Moon, Sun, LayoutGrid, ThumbsUp, Sparkles, Lock, Users, Swords, Clapperboard } from 'lucide-react';
 import { Icon } from '@/components/ui/Icon';
 import { SignatureIcon } from '@/components/ui/SignatureIcon';
 import { useApp } from '@/store/AppContext';
@@ -15,6 +15,7 @@ const LOOP = [
   { icon: ThumbsUp, h: 'Vote, and see what it really costs', p: 'Thumbs up the ones you like. Each home shows the all-in total and what that works out to per person, updated as people join.' },
   { icon: 'scout' as const, h: 'Ask Scout when you cannot decide', p: 'Put two homes head to head, or hand Scout the whole shortlist. It weighs price, distance, and your plans, then makes the call.' },
   { icon: Lock, h: 'Lock it in', p: 'Everyone picks their favorite. Whoever set up the trip makes it official, and the back-and-forth is done.' },
+  { icon: Compass, h: 'Then plan the days', p: 'Once the place is settled, the same board fills with things to do near it. Vote on those the same way, and Scout lays each day out in order — with the drives in between.' },
 ];
 const PAIRS = [
   { tag: 'Per person', icon: Users, title: "See what you'd actually pay.", body: "Nobody wants to do the math at 1am. Every home shows the all-in total and your share of it, and both update the moment someone joins or drops out.", img: '1600566753086-00f18fb6b3ea', float: true },
@@ -66,8 +67,8 @@ export function MobileLanding() {
 
           <section className="ln-sec" ref={howRef as React.RefObject<HTMLElement>}>
             <div className="ln-chapno">01 · How it works</div>
-            <h2 className="ln-h2">Four steps from "no idea" to booked.</h2>
-            <span className="ln-try"><Icon icon={Sparkles} className="ico" /> The whole flow in four steps</span>
+            <h2 className="ln-h2">From "no idea" to a planned trip.</h2>
+            <span className="ln-try"><Icon icon={Sparkles} className="ico" /> The whole flow, start to finish</span>
             <div className="ln-loop">
               {LOOP.map((l, i) => (
                 <div className="ln-loopitem" key={i}><span className="ix">{l.icon === 'scout' ? <SignatureIcon name="scout" className="ico" /> : <Icon icon={l.icon} className="ico" />}</span><div><h4>{l.h}</h4><p>{l.p}</p></div></div>
